@@ -34,10 +34,10 @@ import { cn } from "@/lib/utils";
 import { ROLE_LABEL, useLauncher } from "@/lib/launcher-context";
 
 const NAV = [
-  { to: "/", label: "Launcher", icon: LayoutGrid },
-  { to: "/organisations", label: "Organisations", icon: Building2 },
-  { to: "/users", label: "Users", icon: Users },
-  { to: "/settings", label: "Settings", icon: Cog },
+  { to: "/" as const, label: "Launcher", icon: LayoutGrid, disabled: false },
+  { to: "/organisations", label: "Organisations", icon: Building2, disabled: true },
+  { to: "/users", label: "Users", icon: Users, disabled: true },
+  { to: "/settings", label: "Settings", icon: Cog, disabled: true },
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -62,17 +62,26 @@ export function AppShell({ children }: { children: ReactNode }) {
         <nav className="flex-1 space-y-1 px-3 py-4">
           {NAV.map((item) => {
             const active = pathname === item.to;
+            const cls = cn(
+              "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+              active
+                ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
+              item.disabled && "cursor-not-allowed opacity-50 hover:bg-transparent",
+            );
+            if (item.disabled) {
+              return (
+                <button key={item.to} type="button" className={cls} disabled>
+                  <item.icon className="h-4 w-4" />
+                  <span className="flex-1 text-left">{item.label}</span>
+                  <span className="rounded bg-sidebar-accent/60 px-1.5 py-0.5 text-[9px] uppercase tracking-widest">
+                    Soon
+                  </span>
+                </button>
+              );
+            }
             return (
-              <Link
-                key={item.to}
-                to={item.to}
-                className={cn(
-                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                  active
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
-                )}
-              >
+              <Link key={item.to} to="/" className={cls}>
                 <item.icon className="h-4 w-4" />
                 {item.label}
               </Link>
