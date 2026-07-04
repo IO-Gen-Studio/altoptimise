@@ -3,6 +3,7 @@ import { Lock, Shield } from "lucide-react";
 
 import { BuildingsPanel } from "@/components/admin/BuildingsPanel";
 import { CsvIngestion } from "@/components/admin/CsvIngestion";
+import { MeterRegistryPanel } from "@/components/admin/MeterRegistryPanel";
 import { OrganisationsPanel } from "@/components/admin/OrganisationsPanel";
 import { ScheduleSettings } from "@/components/admin/ScheduleSettings";
 import { SchemaLabelsEditor } from "@/components/admin/SchemaLabelsEditor";
@@ -56,10 +57,12 @@ function AdminPage() {
             <TabsList>
               <TabsTrigger value="orgs">Organisations</TabsTrigger>
               <TabsTrigger value="buildings">Buildings</TabsTrigger>
+              <TabsTrigger value="meters">Meters</TabsTrigger>
               <TabsTrigger value="data">Data Update</TabsTrigger>
             </TabsList>
             <TabsContent value="orgs"><OrganisationsPanel /></TabsContent>
             <TabsContent value="buildings"><BuildingsPanel /></TabsContent>
+            <TabsContent value="meters"><MeterRegistryPanel /></TabsContent>
             <TabsContent value="data" className="space-y-4">
               <CsvIngestion />
               <ScheduleSettings />

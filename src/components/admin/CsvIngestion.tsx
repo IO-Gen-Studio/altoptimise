@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useBuildings, useConsumption, useIngestionSettings, useOrganisations } from "@/lib/data-store";
+import { useBuildings, useConsumption, useIngestionSettings, useMeterOverrides, useOrganisations } from "@/lib/data-store";
 import { cn } from "@/lib/utils";
 import { parseCsv, pivotRows, type ParsedCsv } from "@/lib/csv-parser";
 
@@ -17,6 +17,7 @@ export function CsvIngestion() {
   const [orgId, setOrgId] = useState<string>("");
   const { buildings, addBuilding } = useBuildings(orgId);
   const { bulkInsertConsumption } = useConsumption();
+  const { overrides } = useMeterOverrides(orgId);
   const { markSynced } = useIngestionSettings();
   const [parsed, setParsed] = useState<ParsedCsv | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
@@ -47,10 +48,15 @@ export function CsvIngestion() {
 
   const confirmImport = () => {
     if (!parsed || !orgId) return;
-    const rows = pivotRows(parsed, orgId, buildings);
+    const rows = pivotRows(parsed, orgId, buildings, overrides);
     const n = bulkInsertConsumption(rows);
     markSynced();
-    toast.success(`Imported ${n} daily consumption records`);
+    const applied = overrides.length
+      ? rows.filter((r) => overrides.some((o) => o.raw_meter_name === r.meter_name)).length
+      : 0;
+    toast.success(
+      `Imported ${n} daily records${applied ? ` — ${applied} row(s) reconciled via meter overrides` : ""}`,
+    );
     setParsed(null);
     setFileName(null);
   };
