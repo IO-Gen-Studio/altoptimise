@@ -49,7 +49,7 @@ const Ctx = createContext<LauncherCtx | null>(null);
 
 export function LauncherProvider({ children }: { children: ReactNode }) {
   const [personaId, setPersonaId] = useState("sa");
-  const [orgId, setOrgId] = useState("factory-a");
+  const [orgId, setOrgId] = useState("haven-holidays");
   const { organisations } = useOrganisations();
 
   const value = useMemo<LauncherCtx>(() => {
