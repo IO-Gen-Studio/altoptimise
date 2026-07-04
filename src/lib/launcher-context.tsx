@@ -19,9 +19,9 @@ export interface Persona {
 }
 
 export const ORGS: Org[] = [
-  { id: "factory-a", name: "Factory A", location: "Manchester, UK" },
-  { id: "corporate-hq", name: "Corporate HQ", location: "London, UK" },
-  { id: "warehouse-north", name: "Warehouse North", location: "Leeds, UK" },
+  { id: "haven-holidays", name: "Haven Holidays", location: "Manchester, UK" },
+  { id: "methodist-schools", name: "Methodist Independent School's Trust", location: "London, UK" },
+  { id: "io-gen", name: "IO-Gen", location: "Leeds, UK" },
 ];
 
 export const PERSONAS: Persona[] = [
@@ -49,7 +49,7 @@ const Ctx = createContext<LauncherCtx | null>(null);
 
 export function LauncherProvider({ children }: { children: ReactNode }) {
   const [personaId, setPersonaId] = useState("sa");
-  const [orgId, setOrgId] = useState("factory-a");
+  const [orgId, setOrgId] = useState("haven-holidays");
   const { organisations } = useOrganisations();
 
   const value = useMemo<LauncherCtx>(() => {
