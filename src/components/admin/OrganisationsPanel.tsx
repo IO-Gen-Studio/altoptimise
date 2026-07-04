@@ -59,7 +59,7 @@ export function OrganisationsPanel() {
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="org-loc">Location (optional)</Label>
-                  <Input id="org-loc" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Manchester, UK" />
+                  <Input id="org-loc" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="United Kingdom" />
                 </div>
               </div>
               <DialogFooter>
