@@ -27,9 +27,31 @@ export interface ConsumptionRow {
   variable_category: string;
   interval_date: string; // YYYY-MM-DD
   half_hourly_values: (number | null)[]; // 48 slots
+  meter_display_name?: string | null;
 }
 
 export type SchemaLabels = Record<string, string>;
+
+export interface MeterOverride {
+  raw_meter_name: string;
+  organization_id: string;
+  custom_display_name: string | null;
+  assigned_building_id: string | null;
+  calibrated_meter_factor: number | null;
+  updated_at: string;
+}
+
+export interface MeterRegistryRow {
+  raw_meter_name: string;
+  utility_category: string;
+  custom_display_name: string | null;
+  effective_building_id: string | null;
+  effective_building_name: string;
+  effective_meter_factor: number;
+  csv_meter_factor: number;
+  has_override: boolean;
+  row_count: number;
+}
 
 export interface IngestionSettings {
   scheduled_time: string; // "HH:mm"
@@ -67,6 +89,7 @@ interface State {
   consumption: ConsumptionRow[];
   schemaLabels: SchemaLabels;
   ingestion: IngestionSettings;
+  meterOverrides: MeterOverride[];
 }
 
 const STORAGE_KEY = "optimise:store:v1";
@@ -78,6 +101,7 @@ function loadState(): State {
     consumption: [],
     schemaLabels: DEFAULT_LABELS,
     ingestion: { scheduled_time: "10:00", last_synced_at: null, source_url: "" },
+    meterOverrides: [],
   };
   if (typeof window === "undefined") return base;
   try {
@@ -90,6 +114,7 @@ function loadState(): State {
       consumption: parsed.consumption ?? [],
       schemaLabels: { ...base.schemaLabels, ...(parsed.schemaLabels ?? {}) },
       ingestion: { ...base.ingestion, ...(parsed.ingestion ?? {}) },
+      meterOverrides: parsed.meterOverrides ?? [],
     };
   } catch {
     return base;
@@ -121,6 +146,8 @@ interface StoreCtx {
   setSchemaLabel: (key: string, label: string) => void;
   setIngestion: (patch: Partial<IngestionSettings>) => void;
   markSynced: () => void;
+  upsertMeterOverride: (o: Omit<MeterOverride, "updated_at">) => { reconciledRows: number };
+  deleteMeterOverride: (rawName: string, orgId: string) => { reconciledRows: number };
 }
 
 const Ctx = createContext<StoreCtx | null>(null);
@@ -184,6 +211,45 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
       setState((s) => ({ ...s, ingestion: { ...s.ingestion, ...patch } })),
     markSynced: () =>
       setState((s) => ({ ...s, ingestion: { ...s.ingestion, last_synced_at: new Date().toISOString() } })),
+    upsertMeterOverride: (o) => {
+      let reconciled = 0;
+      setState((s) => {
+        const others = s.meterOverrides.filter(
+          (m) => !(m.raw_meter_name === o.raw_meter_name && m.organization_id === o.organization_id),
+        );
+        const next: MeterOverride = { ...o, updated_at: new Date().toISOString() };
+        const consumption = s.consumption.map((c) => {
+          if (c.organization_id !== o.organization_id || c.meter_name !== o.raw_meter_name) return c;
+          reconciled++;
+          return {
+            ...c,
+            building_id: next.assigned_building_id ?? c.building_id,
+            meter_factor: next.calibrated_meter_factor ?? c.meter_factor,
+            meter_display_name: next.custom_display_name,
+          };
+        });
+        return { ...s, meterOverrides: [...others, next], consumption };
+      });
+      return { reconciledRows: reconciled };
+    },
+    deleteMeterOverride: (rawName, orgId) => {
+      let reconciled = 0;
+      setState((s) => {
+        const consumption = s.consumption.map((c) => {
+          if (c.organization_id !== orgId || c.meter_name !== rawName) return c;
+          reconciled++;
+          return { ...c, meter_display_name: null };
+        });
+        return {
+          ...s,
+          meterOverrides: s.meterOverrides.filter(
+            (m) => !(m.raw_meter_name === rawName && m.organization_id === orgId),
+          ),
+          consumption,
+        };
+      });
+      return { reconciledRows: reconciled };
+    },
   }), [state]);
 
   return <Ctx.Provider value={api}>{children}</Ctx.Provider>;
@@ -223,4 +289,59 @@ export function useIngestionSettings() {
 export function useConsumption() {
   const { state, bulkInsertConsumption } = useDataStore();
   return { consumption: state.consumption, bulkInsertConsumption };
+}
+
+export function useMeterOverrides(orgId?: string) {
+  const { state, upsertMeterOverride, deleteMeterOverride } = useDataStore();
+  const overrides = useMemo(
+    () => (orgId ? state.meterOverrides.filter((m) => m.organization_id === orgId) : state.meterOverrides),
+    [state.meterOverrides, orgId],
+  );
+  const getOverride = useCallback(
+    (rawName: string) =>
+      overrides.find((m) => m.raw_meter_name === rawName) ?? null,
+    [overrides],
+  );
+  return { overrides, upsertMeterOverride, deleteMeterOverride, getOverride };
+}
+
+export function useMeterRegistry(orgId?: string): MeterRegistryRow[] {
+  const { state } = useDataStore();
+  return useMemo(() => {
+    if (!orgId) return [];
+    const buildings = state.buildings.filter((b) => b.organization_id === orgId);
+    const buildingsById = new Map(buildings.map((b) => [b.id, b] as const));
+    const overridesByRaw = new Map(
+      state.meterOverrides
+        .filter((m) => m.organization_id === orgId)
+        .map((m) => [m.raw_meter_name, m] as const),
+    );
+    const groups = new Map<string, { rows: ConsumptionRow[]; category: string; csvFactor: number }>();
+    for (const c of state.consumption) {
+      if (c.organization_id !== orgId) continue;
+      const key = c.meter_name;
+      if (!key) continue;
+      const existing = groups.get(key);
+      if (existing) existing.rows.push(c);
+      else groups.set(key, { rows: [c], category: c.variable_category, csvFactor: c.meter_factor });
+    }
+    const out: MeterRegistryRow[] = [];
+    for (const [raw, g] of groups) {
+      const o = overridesByRaw.get(raw);
+      const effectiveBuildingId = o?.assigned_building_id ?? g.rows[0]?.building_id ?? null;
+      const effectiveBuilding = effectiveBuildingId ? buildingsById.get(effectiveBuildingId) : null;
+      out.push({
+        raw_meter_name: raw,
+        utility_category: g.category,
+        custom_display_name: o?.custom_display_name ?? null,
+        effective_building_id: effectiveBuildingId,
+        effective_building_name: effectiveBuilding?.custom_display_name ?? "Unassigned",
+        effective_meter_factor: o?.calibrated_meter_factor ?? g.csvFactor,
+        csv_meter_factor: g.csvFactor,
+        has_override: !!o,
+        row_count: g.rows.length,
+      });
+    }
+    return out.sort((a, b) => a.raw_meter_name.localeCompare(b.raw_meter_name));
+  }, [state.consumption, state.buildings, state.meterOverrides, orgId]);
 }
