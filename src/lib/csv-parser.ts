@@ -1,6 +1,6 @@
 import Papa from "papaparse";
 
-import type { ConsumptionRow, Building } from "./data-store";
+import type { ConsumptionRow, Building, MeterOverride } from "./data-store";
 
 export const TIMESTAMP_RE = /^(\d{4}-\d{2}-\d{2}) (\d{2}):(\d{2})$/;
 
@@ -55,13 +55,20 @@ export function pivotRows(
   parsed: ParsedCsv,
   orgId: string,
   buildings: Building[],
+  overrides: MeterOverride[] = [],
 ): Omit<ConsumptionRow, "id">[] {
   const out: Omit<ConsumptionRow, "id">[] = [];
   const matchMap = new Map(buildings.map((b) => [b.csv_matched_name, b.id]));
+  const overrideMap = new Map(overrides.map((o) => [o.raw_meter_name, o]));
 
   for (const row of parsed.rows) {
     const orgUnit = row["OrganizationalUnits.Name"] ?? "";
-    const buildingId = matchMap.get(orgUnit) ?? null;
+    const rawMeter = row["Meters.Name"] ?? "";
+    const override = overrideMap.get(rawMeter) ?? null;
+    const csvFactor = Number(row["Meters.Meterfactor"] ?? "1") || 1;
+    const buildingId = override?.assigned_building_id ?? matchMap.get(orgUnit) ?? null;
+    const meterFactor = override?.calibrated_meter_factor ?? csvFactor;
+    const meterDisplayName = override?.custom_display_name ?? null;
 
     // Group timestamps by date
     const perDate = new Map<string, (number | null)[]>();
@@ -80,13 +87,14 @@ export function pivotRows(
         organization_id: orgId,
         building_id: buildingId,
         original_org_unit_name: orgUnit,
-        meter_name: row["Meters.Name"] ?? "",
-        meter_factor: Number(row["Meters.Meterfactor"] ?? "1") || 1,
+        meter_name: rawMeter,
+        meter_factor: meterFactor,
         variable_code: row["Variables.Code"] ?? "",
         variable_name: row["Variables.Name"] ?? "",
         variable_category: row["Variables.Category"] ?? "",
         interval_date: date,
         half_hourly_values: values,
+        meter_display_name: meterDisplayName,
       });
     }
   }
