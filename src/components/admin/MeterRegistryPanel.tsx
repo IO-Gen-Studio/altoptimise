@@ -34,7 +34,7 @@ export function MeterRegistryPanel() {
       <CardContent className="p-6">
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h2 className="text-base font-semibold">Meter registry</h2>
+            <h2 className="text-base font-semibold">Meter Management</h2>
             <p className="text-xs text-muted-foreground">
               All unique meters discovered from ingested CSVs. Overrides persist across future uploads.
             </p>
