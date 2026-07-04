@@ -1,83 +1,81 @@
-# Data Infrastructure & Organisation Administration Engine
+# Meter Registry + Non-Destructive Reconciliation Layer
 
-Build a client-side mock of the multi-tenant data platform (organisations, buildings, consumption data), plus an Admin Settings area with CSV ingestion and scheduling. All state lives in a mock store (localStorage-backed) mirroring a Supabase/PostgreSQL schema — no backend required for this prototype pass. Cloud can be enabled later without changing the UI shape.
+Extend the existing admin engine with a **Meter Overrides** persistence layer, a **Meter Registry** management screen, and a **reconciliation pipeline** so user-edited meter names, building assignments, and calibration factors survive every future CSV upload.
 
-## 1. Data layer (mock store, Supabase-shaped)
+The Organisations, Buildings, and CSV upload surfaces already exist and stay as-is — this pass adds the meter layer on top and rewires ingestion to consult it.
 
-New module `src/lib/data-store.ts` — a typed in-memory + localStorage store exposing hooks:
+## 1. Data layer additions (`src/lib/data-store.tsx`)
 
-- `useOrganisations()` — list/create/update/delete
-- `useBuildings(orgId)` — list/create/update/delete
-- `useConsumptionData(filters)` — list/insert (bulk)
-- `useSchemaLabels()` — global display-name overrides for CSV structural fields
-- `useIngestionSettings()` — schedule time, last sync timestamp
-- `useDataActions()` — `ingestCsv(file, orgId)`, `syncNow()`
-
-Tables (TypeScript types matching Postgres columns):
+New table + hook, matching a Supabase-shaped row:
 
 ```text
-organisations         (id, organization_name, created_at)
-buildings             (id, organization_id, custom_display_name, csv_matched_name, created_at)
-consumption_data      (id, organization_id, building_id|null,
-                       original_org_unit_name, meter_name, meter_factor,
-                       variable_code, variable_name, variable_category,
-                       interval_date, half_hourly_values: number[48])
-schema_labels         (field_key, display_name)   e.g. "Variables.Category" → "Utility Type"
-ingestion_settings    (id=singleton, scheduled_time "HH:mm", last_synced_at)
+meter_overrides (
+  raw_meter_name        TEXT PK,       -- exact CSV "Meters.Name"
+  organization_id       UUID FK,       -- scopes the override
+  custom_display_name   TEXT,          -- user-defined friendly label
+  assigned_building_id  UUID FK NULL,  -- permanent building reassignment
+  calibrated_meter_factor NUMERIC NULL,-- override for Meters.Meterfactor
+  updated_at            TIMESTAMPTZ
+)
 ```
 
-The existing `ORGS` constant in `launcher-context.tsx` becomes a seed for the store; `LauncherProvider` reads live orgs from `useOrganisations()` so the navbar switcher updates instantly when admins add one.
+Hook: `useMeterOverrides(orgId?)` → `{ overrides, upsertOverride, deleteOverride, getOverride(rawName) }`. Persisted alongside existing state under `optimise:store:v1` (bump nothing — additive field).
 
-## 2. Admin Settings route
+Derived selector `useMeterRegistry(orgId)` returns one row per unique `raw_meter_name` seen in `consumption` for that org, joined with its override (if any) and its currently-effective building. Shape:
 
-New route `src/routes/admin.tsx` (accessible only to `super_admin`; other roles see a "no access" panel). Uses `AppShell` for consistent chrome. Three tabs via `Tabs`:
+```ts
+{ raw_meter_name, utility_category, custom_display_name, effective_building_id, effective_building_name, effective_meter_factor, has_override }
+```
 
-**a. Organisations** — data grid of organisations with "Add Organisation" dialog (name field). Row actions: rename, delete (with confirm). New rows appear immediately in the top navbar org switcher.
+## 2. Reconciliation pipeline (`src/lib/csv-parser.ts` → `pivotRows`)
 
-**b. Buildings / Assets** — org picker at top; grid of buildings for the selected org. "Add Building" dialog with `custom_display_name` and `csv_matched_name` (with helper text: "exact string from CSV OrganizationalUnits.Name"). Edit/delete actions. Shows a small "linked CSV rows: N" count per building.
+Rewrite `pivotRows` to accept `overrides: MeterOverride[]` and apply this per-row pipeline:
 
-**c. Data Update Dashboard** — the ingestion panel (below).
+1. Read `raw = row["Meters.Name"]`.
+2. Look up `override = overridesByRaw.get(raw)`.
+3. If found:
+   - `building_id = override.assigned_building_id` (ignore CSV `OrganizationalUnits.Name`).
+   - `meter_factor = override.calibrated_meter_factor ?? Number(row["Meters.Meterfactor"])`.
+   - Store `override.custom_display_name` as the display name on the consumption row (new optional field `meter_display_name`).
+4. If not found: existing fallback — match `OrganizationalUnits.Name` → `buildings.csv_matched_name`, use CSV `Meters.Meterfactor`, leave display name null (registry will show raw name).
 
-## 3. CSV Ingestion Panel
+`CsvIngestion.confirmImport` passes `overrides` into `pivotRows`. The match summary panel additionally shows an "N meter override(s) applied" badge computed from the row set.
 
-Component `src/components/admin/CsvIngestion.tsx`:
+## 3. Meter Registry screen (new tab under `/admin`)
 
-- **Organisation selector** (required) — must be chosen before parsing.
-- **Drag-and-drop uploader** (native input + drop zone; parse with `papaparse` — add via `bun add papaparse @types/papaparse`).
-- **Preview grid** — first ~20 rows in a `Table`, using the multi-column half-hourly layout (fixed left columns: OrganizationalUnits.Name, Meters.Name, Variables.Category, …; scrollable timestamp columns).
-- **Match summary** — for each unique `OrganizationalUnits.Name`, show ✓ matched building (via `csv_matched_name`) or ⚠ unmatched with a quick "Create building from this name" shortcut.
-- **Confirm import** — pivots each row into `consumption_data` rows keyed by `interval_date`, storing the 48 half-hourly values as a `number[]`. Sets `last_synced_at`.
-- **Schema label editor** — table of detected structural fields (`OrganizationalUnits.Name`, `Meters.Name`, `Meters.Meterfactor`, `Variables.Code`, `Variables.Name`, `Variables.Category`) with editable "Display name" inputs → written to `schema_labels`. Mini-apps read via `useSchemaLabels()` so renaming "Variables.Category" → "Utility Type" propagates everywhere.
+Add a fourth tab **"Meters"** in `src/routes/admin.tsx` with a new component `src/components/admin/MeterRegistryPanel.tsx`.
 
-**Scheduler section:**
+Layout:
+- Org picker at top (mirrors Buildings tab).
+- Search input filtering by raw name / display name.
+- Data table columns: **Raw Meter Name** (mono), **Custom Display Name**, **Utility Category** (badge), **Assigned Building** (name), **Meter Factor** (numeric, shows override in bold + tiny "was X" if changed), **Actions** (Edit).
+- Empty state: "No meters discovered yet — upload a CSV in the Data Update tab."
 
-- Time input (`<input type="time">`) defaulting to `10:00`, persisted to `ingestion_settings.scheduled_time`.
-- "Last Successfully Updated" timestamp display (relative + absolute).
-- **Sync Now** button — simulates a fetch by re-running the last ingestion (or shows a toast "no source configured" if none). In this prototype the "automated link" is a placeholder URL field; actual scheduling is documented as "runs server-side once Cloud is enabled".
+Edit dialog (`MeterOverrideDialog`):
+- **Custom display name** — free text.
+- **Assigned building** — Select populated with all buildings in the active org (cross-building mobility).
+- **Calibrated meter factor** — numeric input with amber inline warning: *"Altering this factor permanently scales all calculated metrics for this meter."*
+- **Reset to CSV defaults** button (deletes the override row).
+- Save calls `upsertOverride({...})`, then triggers a one-shot **re-reconciliation** of existing consumption rows for that `raw_meter_name` in this org (updates `building_id`, `meter_factor`, `meter_display_name` on the already-imported rows so historical charts reflect the move immediately). Toast: *"Meter reassigned — N historical records updated."*
 
-## 4. Navigation & access
+## 4. Wiring
 
-- Add "Admin Settings" link in `AppShell` header (visible only to `super_admin`).
-- Route guards in `admin.tsx` render a friendly denied state for other roles.
-- The launcher home (`/`) continues to work unchanged; org switcher now sources from the store.
+- `admin.tsx` gains the `<TabsTrigger value="meters">Meters</TabsTrigger>` + `<TabsContent>` block.
+- `ConsumptionRow` type gains optional `meter_display_name?: string | null`.
+- Existing mini-apps that read consumption keep working; they can opt-in to `meter_display_name ?? meter_name` when displaying labels (out of scope for this plan — no mini-app UI changes here).
 
 ## Technical notes
 
-- No Lovable Cloud enable in this pass — pure client mock so the prototype stays self-contained. The store's shape mirrors Supabase tables 1:1 so wiring real Postgres later is a drop-in swap of the hooks' internals.
-- CSV parsing: `papaparse` streaming with header row; timestamp columns detected by regex `^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$` and grouped by date into 48-slot arrays (missing slots → `null`).
-- Persistence: `localStorage` under `optimise:store:v1` with a version key for future migrations.
-- All new UI uses existing shadcn primitives (Tabs, Dialog, Table, Input, Button, Select, Badge, Card) — no new design tokens.
+- Pure client mock, same `localStorage` store. Schema mirrors Supabase 1:1 so a later Cloud enablement is a hook-body swap.
+- `raw_meter_name` is treated as globally unique in this prototype; scoping is by `organization_id` filter in the hook (matches how real RLS would apply).
+- Re-reconciliation on override save is O(consumption rows for that raw name) — fine for prototype volumes; documented as a `pg_notify` / server job in the production port.
+- No backend, no new deps, no design tokens — reuses shadcn `Dialog`, `Table`, `Select`, `Input`, `Badge`.
 
-## Files to add / edit
+## Files
 
-- add `src/lib/data-store.ts` (types, store, hooks)
-- add `src/lib/csv-parser.ts` (parse + pivot helpers)
-- add `src/routes/admin.tsx` (tabbed admin shell + guard)
-- add `src/components/admin/OrganisationsPanel.tsx`
-- add `src/components/admin/BuildingsPanel.tsx`
-- add `src/components/admin/CsvIngestion.tsx`
-- add `src/components/admin/SchemaLabelsEditor.tsx`
-- add `src/components/admin/ScheduleSettings.tsx`
-- edit `src/lib/launcher-context.tsx` (source orgs from store; keep personas)
-- edit `src/components/launcher/AppShell.tsx` (Admin Settings nav link for super_admin)
-- edit `package.json` (`papaparse`, `@types/papaparse`)
+- edit `src/lib/data-store.tsx` — add `MeterOverride` type, state slice, `useMeterOverrides`, `useMeterRegistry`, `meter_display_name` on `ConsumptionRow`, re-reconcile action.
+- edit `src/lib/csv-parser.ts` — extend `pivotRows` signature to accept overrides + apply pipeline.
+- edit `src/components/admin/CsvIngestion.tsx` — pass overrides into `pivotRows`, surface applied-override count.
+- add `src/components/admin/MeterRegistryPanel.tsx`.
+- add `src/components/admin/MeterOverrideDialog.tsx`.
+- edit `src/routes/admin.tsx` — add "Meters" tab.
