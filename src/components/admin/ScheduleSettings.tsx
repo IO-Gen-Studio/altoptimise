@@ -14,7 +14,7 @@ export function ScheduleSettings() {
     <Card>
       <CardContent className="space-y-5 p-6">
         <div>
-          <h2 className="text-base font-semibold">Automated ingestion</h2>
+          <h2 className="text-base font-semibold">Scheduled data upload</h2>
           <p className="text-xs text-muted-foreground">
             Configure the daily fetch schedule and source URL. Runs server-side once Cloud is enabled.
           </p>
