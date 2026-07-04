@@ -19,7 +19,7 @@ export interface Persona {
 }
 
 export const ORGS: Org[] = [
-  { id: "haven-holidays", name: "Haven Holidays", location: "Manchester, UK" },
+  { id: "haven-holidays", name: "Haven Holidays", location: "United Kingdom" },
   { id: "methodist-schools", name: "Methodist Independent School's Trust", location: "London, UK" },
   { id: "io-gen", name: "IO-Gen", location: "Leeds, UK" },
 ];

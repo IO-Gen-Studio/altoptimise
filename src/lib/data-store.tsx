@@ -78,7 +78,7 @@ const DEFAULT_LABELS: SchemaLabels = {
 };
 
 const SEED_ORGS: Organisation[] = [
-  { id: "haven-holidays", organization_name: "Haven Holidays", location: "Manchester, UK", created_at: new Date().toISOString() },
+  { id: "haven-holidays", organization_name: "Haven Holidays", location: "United Kingdom", created_at: new Date().toISOString() },
   { id: "methodist-schools", organization_name: "Methodist Independent School's Trust", location: "London, UK", created_at: new Date().toISOString() },
   { id: "io-gen", organization_name: "IO-Gen", location: "Leeds, UK", created_at: new Date().toISOString() },
 ];
