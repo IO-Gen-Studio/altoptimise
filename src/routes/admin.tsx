@@ -1,0 +1,73 @@
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { Lock, Shield } from "lucide-react";
+
+import { BuildingsPanel } from "@/components/admin/BuildingsPanel";
+import { CsvIngestion } from "@/components/admin/CsvIngestion";
+import { OrganisationsPanel } from "@/components/admin/OrganisationsPanel";
+import { ScheduleSettings } from "@/components/admin/ScheduleSettings";
+import { SchemaLabelsEditor } from "@/components/admin/SchemaLabelsEditor";
+import { AppShell } from "@/components/launcher/AppShell";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ROLE_LABEL, useLauncher } from "@/lib/launcher-context";
+
+export const Route = createFileRoute("/admin")({
+  component: AdminPage,
+});
+
+function AdminPage() {
+  const { persona } = useLauncher();
+  const isSuper = persona.role === "super_admin";
+
+  return (
+    <AppShell>
+      <div className="mx-auto max-w-7xl px-4 py-8 md:px-8">
+        <header className="mb-6 flex items-start gap-3">
+          <div className="grid h-11 w-11 place-items-center rounded-xl bg-primary/10">
+            <Shield className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Admin Settings</h1>
+            <p className="text-sm text-muted-foreground">
+              Manage organisations, buildings, data ingestion and global schema labels.
+            </p>
+          </div>
+        </header>
+
+        {!isSuper ? (
+          <Card className="border-dashed">
+            <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
+              <div className="grid h-12 w-12 place-items-center rounded-full bg-muted">
+                <Lock className="h-5 w-5 text-muted-foreground" />
+              </div>
+              <h2 className="text-lg font-semibold">Super Admin required</h2>
+              <p className="max-w-sm text-sm text-muted-foreground">
+                Your role ({ROLE_LABEL[persona.role]}) doesn't include admin settings. Switch persona
+                using the top-right menu to try again.
+              </p>
+              <Button asChild size="sm" variant="outline" className="mt-2">
+                <Link to="/">Return to launcher</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
+          <Tabs defaultValue="orgs" className="space-y-4">
+            <TabsList>
+              <TabsTrigger value="orgs">Organisations</TabsTrigger>
+              <TabsTrigger value="buildings">Buildings</TabsTrigger>
+              <TabsTrigger value="data">Data Update</TabsTrigger>
+            </TabsList>
+            <TabsContent value="orgs"><OrganisationsPanel /></TabsContent>
+            <TabsContent value="buildings"><BuildingsPanel /></TabsContent>
+            <TabsContent value="data" className="space-y-4">
+              <CsvIngestion />
+              <ScheduleSettings />
+              <SchemaLabelsEditor />
+            </TabsContent>
+          </Tabs>
+        )}
+      </div>
+    </AppShell>
+  );
+}

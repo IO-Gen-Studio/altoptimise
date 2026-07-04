@@ -33,11 +33,14 @@ import {
 import { cn } from "@/lib/utils";
 import { ROLE_LABEL, useLauncher } from "@/lib/launcher-context";
 
-const NAV = [
-  { to: "/" as const, label: "Launcher", icon: LayoutGrid, disabled: false },
-  { to: "/organisations", label: "Organisations", icon: Building2, disabled: true },
-  { to: "/users", label: "Users", icon: Users, disabled: true },
-  { to: "/settings", label: "Settings", icon: Cog, disabled: true },
+type NavItem = { to: "/" | "/admin"; label: string; icon: typeof LayoutGrid; disabled?: boolean; superOnly?: boolean };
+const NAV: NavItem[] = [
+  { to: "/", label: "Launcher", icon: LayoutGrid },
+  { to: "/admin", label: "Admin Settings", icon: Cog, superOnly: true },
+];
+const NAV_DISABLED = [
+  { label: "Users", icon: Users },
+  { label: "Reports", icon: Building2 },
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -60,33 +63,36 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
 
         <nav className="flex-1 space-y-1 px-3 py-4">
-          {NAV.map((item) => {
+          {NAV.filter((i) => !i.superOnly || persona.role === "super_admin").map((item) => {
             const active = pathname === item.to;
             const cls = cn(
               "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
               active
                 ? "bg-sidebar-accent text-sidebar-accent-foreground"
                 : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
-              item.disabled && "cursor-not-allowed opacity-50 hover:bg-transparent",
             );
-            if (item.disabled) {
-              return (
-                <button key={item.to} type="button" className={cls} disabled>
-                  <item.icon className="h-4 w-4" />
-                  <span className="flex-1 text-left">{item.label}</span>
-                  <span className="rounded bg-sidebar-accent/60 px-1.5 py-0.5 text-[9px] uppercase tracking-widest">
-                    Soon
-                  </span>
-                </button>
-              );
-            }
             return (
-              <Link key={item.to} to="/" className={cls}>
+              <Link key={item.to} to={item.to} className={cls}>
                 <item.icon className="h-4 w-4" />
                 {item.label}
               </Link>
             );
           })}
+          {NAV_DISABLED.map((item) => (
+            <button
+              key={item.label}
+              type="button"
+              disabled
+              className={cn(
+                "flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-sidebar-foreground/50",
+                "cursor-not-allowed",
+              )}
+            >
+              <item.icon className="h-4 w-4" />
+              <span className="flex-1 text-left">{item.label}</span>
+              <span className="rounded bg-sidebar-accent/60 px-1.5 py-0.5 text-[9px] uppercase tracking-widest">Soon</span>
+            </button>
+          ))}
         </nav>
 
         <div className="border-t border-sidebar-border p-3">

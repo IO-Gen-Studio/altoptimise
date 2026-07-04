@@ -1,5 +1,7 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 
+import { useOrganisations, type Organisation } from "./data-store";
+
 export type Role = "super_admin" | "data_analyst" | "viewer";
 
 export interface Org {
@@ -48,14 +50,22 @@ const Ctx = createContext<LauncherCtx | null>(null);
 export function LauncherProvider({ children }: { children: ReactNode }) {
   const [personaId, setPersonaId] = useState("sa");
   const [orgId, setOrgId] = useState("factory-a");
+  const { organisations } = useOrganisations();
 
   const value = useMemo<LauncherCtx>(() => {
     const persona = PERSONAS.find((p) => p.id === personaId) ?? PERSONAS[0];
-    const org = ORGS.find((o) => o.id === orgId) ?? ORGS[0];
-    return { persona, setPersonaId, org, setOrgId, orgs: ORGS, personas: PERSONAS };
-  }, [personaId, orgId]);
+    const orgs: Org[] = organisations.length
+      ? organisations.map(toOrg)
+      : ORGS;
+    const org = orgs.find((o) => o.id === orgId) ?? orgs[0];
+    return { persona, setPersonaId, org, setOrgId, orgs, personas: PERSONAS };
+  }, [personaId, orgId, organisations]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+}
+
+function toOrg(o: Organisation): Org {
+  return { id: o.id, name: o.organization_name, location: o.location ?? "" };
 }
 
 export function useLauncher() {
