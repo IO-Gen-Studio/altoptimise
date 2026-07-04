@@ -55,7 +55,7 @@ export function OrganisationsPanel() {
               <div className="space-y-3 py-2">
                 <div className="space-y-1.5">
                   <Label htmlFor="org-name">Organisation name</Label>
-                  <Input id="org-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Factory Alpha" />
+                  <Input id="org-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Haven Holidays" />
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="org-loc">Location (optional)</Label>
