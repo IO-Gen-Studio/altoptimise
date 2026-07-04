@@ -23,7 +23,7 @@ export const ORGS: Org[] = [
 ];
 
 export const PERSONAS: Persona[] = [
-  { id: "sa", name: "Alex Rivera", role: "super_admin", email: "alex@optimise.io", initials: "AR" },
+  { id: "sa", name: "Jed Rivera", role: "super_admin", email: "jed@optimise.io", initials: "JR" },
   { id: "da", name: "Priya Patel", role: "data_analyst", email: "priya@optimise.io", initials: "PP" },
   { id: "vw", name: "Jamie Chen", role: "viewer", email: "jamie@optimise.io", initials: "JC" },
 ];
