@@ -29,13 +29,21 @@ export function CsvIngestion() {
       toast.error("Select an organisation before uploading");
       return;
     }
+    const tId = toast.loading(`Parsing ${file.name}…`);
     try {
       const result = await parseCsv(file);
       setParsed(result);
       setFileName(file.name);
-      toast.success(`Parsed ${result.rows.length} rows across ${result.timestampColumns.length} intervals`);
+      if (result.timestampColumns.length === 0) {
+        toast.warning("No half-hourly timestamp columns detected — check the file format", { id: tId });
+      } else {
+        toast.success(
+          `Parsed ${result.rows.length} rows across ${result.timestampColumns.length} intervals`,
+          { id: tId },
+        );
+      }
     } catch (e) {
-      toast.error(`Failed to parse CSV: ${(e as Error).message}`);
+      toast.error(`Failed to parse CSV: ${(e as Error).message}`, { id: tId });
     }
   }, [orgId]);
 
@@ -48,17 +56,27 @@ export function CsvIngestion() {
 
   const confirmImport = () => {
     if (!parsed || !orgId) return;
-    const rows = pivotRows(parsed, orgId, buildings, overrides);
-    const n = bulkInsertConsumption(rows);
-    markSynced();
-    const applied = overrides.length
-      ? rows.filter((r) => overrides.some((o) => o.raw_meter_name === r.meter_name)).length
-      : 0;
-    toast.success(
-      `Imported ${n} daily records${applied ? ` — ${applied} row(s) reconciled via meter overrides` : ""}`,
-    );
-    setParsed(null);
-    setFileName(null);
+    const tId = toast.loading("Importing data…");
+    try {
+      const rows = pivotRows(parsed, orgId, buildings, overrides);
+      const n = bulkInsertConsumption(rows);
+      markSynced();
+      const applied = overrides.length
+        ? rows.filter((r) => overrides.some((o) => o.raw_meter_name === r.meter_name)).length
+        : 0;
+      if (n === 0) {
+        toast.warning("No records imported — no timestamp columns matched", { id: tId });
+      } else {
+        toast.success(
+          `Imported ${n} daily records${applied ? ` — ${applied} row(s) reconciled via meter overrides` : ""}`,
+          { id: tId },
+        );
+      }
+      setParsed(null);
+      setFileName(null);
+    } catch (e) {
+      toast.error(`Import failed: ${(e as Error).message}`, { id: tId });
+    }
   };
 
   const matchMap = new Map(buildings.map((b) => [b.csv_matched_name, b]));
