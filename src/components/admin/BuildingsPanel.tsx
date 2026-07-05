@@ -88,9 +88,9 @@ export function BuildingsPanel() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Display name</TableHead>
-              <TableHead>CSV matched name</TableHead>
-              <TableHead>Linked CSV rows</TableHead>
+              <TableHead>Display Name</TableHead>
+              <TableHead>Matched Name</TableHead>
+              <TableHead>Linked CSV Rows</TableHead>
               <TableHead className="w-10" />
             </TableRow>
           </TableHeader>
