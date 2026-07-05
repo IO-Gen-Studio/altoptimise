@@ -36,7 +36,7 @@ import { ROLE_LABEL, useLauncher } from "@/lib/launcher-context";
 type NavItem = { to: "/" | "/admin"; label: string; icon: typeof LayoutGrid; disabled?: boolean; superOnly?: boolean };
 const NAV: NavItem[] = [
   { to: "/", label: "Launcher", icon: LayoutGrid },
-  { to: "/admin", label: "Admin Settings", icon: Cog, superOnly: true },
+  { to: "/admin", label: "Settings", icon: Cog, superOnly: true },
 ];
 const NAV_DISABLED = [
   { label: "Users", icon: Users },
