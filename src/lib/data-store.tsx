@@ -385,3 +385,20 @@ export function useMeterRegistry(orgId?: string): MeterRegistryRow[] {
     return out.sort((a, b) => a.raw_meter_name.localeCompare(b.raw_meter_name));
   }, [state.consumption, state.buildings, state.meterOverrides, orgId]);
 }
+
+const DAY_ORDER: Record<Weekday, number> = {
+  mon: 0, tue: 1, wed: 2, thu: 3, fri: 4, sat: 5, sun: 6,
+};
+
+export function useSchedules(buildingId?: string) {
+  const { state, addSchedules, updateSchedule, deleteSchedule } = useDataStore();
+  const schedules = useMemo(() => {
+    const list = buildingId
+      ? state.schedules.filter((s) => s.building_id === buildingId)
+      : state.schedules;
+    return [...list].sort(
+      (a, b) => DAY_ORDER[a.day] - DAY_ORDER[b.day] || a.from.localeCompare(b.from),
+    );
+  }, [state.schedules, buildingId]);
+  return { schedules, addSchedules, updateSchedule, deleteSchedule };
+}
