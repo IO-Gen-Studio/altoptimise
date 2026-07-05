@@ -127,7 +127,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-64">
-              <DropdownMenuLabel>Switch organisation</DropdownMenuLabel>
+              <DropdownMenuLabel>Switch Organisation</DropdownMenuLabel>
               <DropdownMenuRadioGroup value={org.id} onValueChange={setOrgId}>
                 {orgs.map((o) => (
                   <DropdownMenuRadioItem key={o.id} value={o.id}>
