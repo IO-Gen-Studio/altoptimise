@@ -1,6 +1,7 @@
 import { Plus, Trash2, Warehouse } from "lucide-react";
 import { useState } from "react";
 
+import { EditBuildingDialog } from "@/components/admin/EditBuildingDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -15,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useBuildings, useConsumption, useOrganisations } from "@/lib/data-store";
+import { useBuildings, useConsumption, useOrganisations, type Building } from "@/lib/data-store";
 
 export function BuildingsPanel() {
   const { organisations } = useOrganisations();
@@ -25,6 +26,7 @@ export function BuildingsPanel() {
   const [open, setOpen] = useState(false);
   const [display, setDisplay] = useState("");
   const [match, setMatch] = useState("");
+  const [editing, setEditing] = useState<Building | null>(null);
 
   const linkedCount = (bid: string) => consumption.filter((c) => c.building_id === bid).length;
 
@@ -94,7 +96,11 @@ export function BuildingsPanel() {
           </TableHeader>
           <TableBody>
             {buildings.map((b) => (
-              <TableRow key={b.id}>
+              <TableRow
+                key={b.id}
+                className="cursor-pointer"
+                onClick={() => setEditing(b)}
+              >
                 <TableCell className="font-medium">
                   <div className="flex items-center gap-2">
                     <Warehouse className="h-4 w-4 text-primary" /> {b.custom_display_name}
@@ -102,7 +108,7 @@ export function BuildingsPanel() {
                 </TableCell>
                 <TableCell><code className="rounded bg-muted px-1.5 py-0.5 text-xs">{b.csv_matched_name}</code></TableCell>
                 <TableCell>{linkedCount(b.id)}</TableCell>
-                <TableCell>
+                <TableCell onClick={(e) => e.stopPropagation()}>
                   <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive"
                     onClick={() => { if (confirm(`Delete building ${b.custom_display_name}?`)) deleteBuilding(b.id); }}>
                     <Trash2 className="h-4 w-4" />
@@ -119,6 +125,12 @@ export function BuildingsPanel() {
             )}
           </TableBody>
         </Table>
+        {editing && (
+          <EditBuildingDialog
+            building={editing}
+            onOpenChange={(o) => !o && setEditing(null)}
+          />
+        )}
       </CardContent>
     </Card>
   );
