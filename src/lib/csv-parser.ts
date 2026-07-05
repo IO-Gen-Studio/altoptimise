@@ -2,7 +2,21 @@ import Papa from "papaparse";
 
 import type { ConsumptionRow, Building, MeterOverride } from "./data-store";
 
-export const TIMESTAMP_RE = /^(\d{4}-\d{2}-\d{2}) (\d{2}):(\d{2})$/;
+// Accepts either ISO "YYYY-MM-DD HH:MM" or UK "DD/MM/YYYY H:MM" (hour may be 1 or 2 digits).
+export const TIMESTAMP_RE =
+  /^(?:(\d{4})-(\d{2})-(\d{2})|(\d{1,2})\/(\d{1,2})\/(\d{4})) (\d{1,2}):(\d{2})$/;
+
+function parseTimestamp(col: string): { date: string; hh: string; mm: string } | null {
+  const m = TIMESTAMP_RE.exec(col);
+  if (!m) return null;
+  let y: string, mo: string, d: string;
+  if (m[1]) {
+    y = m[1]; mo = m[2]; d = m[3];
+  } else {
+    d = m[4].padStart(2, "0"); mo = m[5].padStart(2, "0"); y = m[6];
+  }
+  return { date: `${y}-${mo}-${d}`, hh: m[7].padStart(2, "0"), mm: m[8] };
+}
 
 export const STRUCTURAL_FIELDS = [
   "OrganizationalUnits.Name",
@@ -73,9 +87,9 @@ export function pivotRows(
     // Group timestamps by date
     const perDate = new Map<string, (number | null)[]>();
     for (const col of parsed.timestampColumns) {
-      const m = TIMESTAMP_RE.exec(col);
-      if (!m) continue;
-      const [, date, hh, mm] = m;
+      const t = parseTimestamp(col);
+      if (!t) continue;
+      const { date, hh, mm } = t;
       if (!perDate.has(date)) perDate.set(date, new Array(48).fill(null));
       const raw = row[col];
       const val = raw === "" || raw == null ? null : Number(raw);
