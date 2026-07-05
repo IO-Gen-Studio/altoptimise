@@ -12,6 +12,7 @@ export interface Building {
   organization_id: string;
   custom_display_name: string;
   csv_matched_name: string;
+  address?: string;
   created_at: string;
 }
 
@@ -53,6 +54,23 @@ export interface MeterRegistryRow {
   row_count: number;
 }
 
+export type Weekday = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
+
+export const WEEKDAYS: Weekday[] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+export const WEEKDAY_LABEL: Record<Weekday, string> = {
+  mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat", sun: "Sun",
+};
+
+export interface Schedule {
+  id: string;
+  building_id: string;
+  name: string;
+  day: Weekday;
+  from: string; // "HH:mm"
+  to: string;   // "HH:mm"
+  created_at: string;
+}
+
 export interface IngestionSettings {
   scheduled_time: string; // "HH:mm"
   last_synced_at: string | null;
@@ -90,6 +108,7 @@ interface State {
   schemaLabels: SchemaLabels;
   ingestion: IngestionSettings;
   meterOverrides: MeterOverride[];
+  schedules: Schedule[];
 }
 
 const STORAGE_KEY = "optimise:store:v1";
@@ -102,6 +121,7 @@ function loadState(): State {
     schemaLabels: DEFAULT_LABELS,
     ingestion: { scheduled_time: "10:00", last_synced_at: null, source_url: "" },
     meterOverrides: [],
+    schedules: [],
   };
   if (typeof window === "undefined") return base;
   try {
@@ -115,6 +135,7 @@ function loadState(): State {
       schemaLabels: { ...base.schemaLabels, ...(parsed.schemaLabels ?? {}) },
       ingestion: { ...base.ingestion, ...(parsed.ingestion ?? {}) },
       meterOverrides: parsed.meterOverrides ?? [],
+      schedules: parsed.schedules ?? [],
     };
   } catch {
     return base;
@@ -148,6 +169,9 @@ interface StoreCtx {
   markSynced: () => void;
   upsertMeterOverride: (o: Omit<MeterOverride, "updated_at">) => { reconciledRows: number };
   deleteMeterOverride: (rawName: string, orgId: string) => { reconciledRows: number };
+  addSchedules: (entries: Omit<Schedule, "id" | "created_at">[]) => Schedule[];
+  updateSchedule: (id: string, patch: Partial<Omit<Schedule, "id" | "created_at" | "building_id">>) => void;
+  deleteSchedule: (id: string) => void;
 }
 
 const Ctx = createContext<StoreCtx | null>(null);
@@ -250,6 +274,22 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
       });
       return { reconciledRows: reconciled };
     },
+    addSchedules: (entries) => {
+      const created: Schedule[] = entries.map((e) => ({
+        ...e,
+        id: uid(),
+        created_at: new Date().toISOString(),
+      }));
+      setState((s) => ({ ...s, schedules: [...s.schedules, ...created] }));
+      return created;
+    },
+    updateSchedule: (id, patch) =>
+      setState((s) => ({
+        ...s,
+        schedules: s.schedules.map((sc) => (sc.id === id ? { ...sc, ...patch } : sc)),
+      })),
+    deleteSchedule: (id) =>
+      setState((s) => ({ ...s, schedules: s.schedules.filter((sc) => sc.id !== id) })),
   }), [state]);
 
   return <Ctx.Provider value={api}>{children}</Ctx.Provider>;
