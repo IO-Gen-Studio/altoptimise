@@ -231,18 +231,26 @@ interface ScheduleForm {
   days: Weekday[];
   from: string;
   to: string;
+  months: number[];
 }
 
-const emptyForm: ScheduleForm = { id: null, name: "", days: [], from: "09:00", to: "17:00" };
+const emptyForm: ScheduleForm = { id: null, name: "", days: [], from: "09:00", to: "17:00", months: [] };
 
 function SchedulesTab({ building }: { building: Building }) {
   const { schedules, addSchedules, updateSchedule, deleteSchedule } = useSchedules(building.id);
+  const { buildings } = useBuildings(building.organization_id);
   const [form, setForm] = useState<ScheduleForm>(emptyForm);
 
   const toggleDay = (d: Weekday) =>
     setForm((f) => ({
       ...f,
       days: f.days.includes(d) ? f.days.filter((x) => x !== d) : [...f.days, d],
+    }));
+
+  const toggleMonth = (m: number) =>
+    setForm((f) => ({
+      ...f,
+      months: f.months.includes(m) ? f.months.filter((x) => x !== m) : [...f.months, m],
     }));
 
   const submit = () => {
@@ -254,9 +262,16 @@ function SchedulesTab({ building }: { building: Building }) {
       toast.error("'From' time must be before 'To' time");
       return;
     }
+    const months = form.months.length ? [...form.months].sort((a, b) => a - b) : undefined;
     if (form.id) {
       // edit mode: keep the single row but retarget its day to the first selected
-      updateSchedule(form.id, { name: form.name.trim(), day: form.days[0], from: form.from, to: form.to });
+      updateSchedule(form.id, {
+        name: form.name.trim(),
+        day: form.days[0],
+        from: form.from,
+        to: form.to,
+        months,
+      });
       const extras = form.days.slice(1);
       if (extras.length) {
         addSchedules(
@@ -266,6 +281,7 @@ function SchedulesTab({ building }: { building: Building }) {
             day,
             from: form.from,
             to: form.to,
+            months,
           })),
         );
       }
@@ -278,6 +294,7 @@ function SchedulesTab({ building }: { building: Building }) {
           day,
           from: form.from,
           to: form.to,
+          months,
         })),
       );
       toast.success(`Added ${form.days.length} schedule block(s)`);
@@ -286,22 +303,25 @@ function SchedulesTab({ building }: { building: Building }) {
   };
 
   const startEdit = (s: Schedule) =>
-    setForm({ id: s.id, name: s.name, days: [s.day], from: s.from, to: s.to });
+    setForm({ id: s.id, name: s.name, days: [s.day], from: s.from, to: s.to, months: s.months ?? [] });
 
-  const copyToDays = (s: Schedule, targets: Weekday[]) => {
-    const filtered = targets.filter((d) => d !== s.day);
+  const copyToBuildings = (s: Schedule, targetIds: string[]) => {
+    const filtered = targetIds.filter((id) => id !== building.id);
     if (!filtered.length) return;
     addSchedules(
-      filtered.map((day) => ({
-        building_id: building.id,
+      filtered.map((bid) => ({
+        building_id: bid,
         name: s.name,
-        day,
+        day: s.day,
         from: s.from,
         to: s.to,
+        months: s.months,
       })),
     );
-    toast.success(`Copied to ${filtered.length} day(s)`);
+    toast.success(`Copied to ${filtered.length} building(s)`);
   };
+
+  const otherBuildings = buildings.filter((b) => b.id !== building.id);
 
   return (
     <div className="space-y-6 py-2">
@@ -350,6 +370,32 @@ function SchedulesTab({ building }: { building: Building }) {
             </div>
             <p className="text-xs text-muted-foreground">Select multiple days to apply the same hours to each.</p>
           </div>
+          <div className="space-y-1.5 md:col-span-2">
+            <Label>Month(s)</Label>
+            <div className="flex flex-wrap gap-1.5">
+              {MONTHS.map((m) => {
+                const active = form.months.includes(m);
+                return (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => toggleMonth(m)}
+                    className={cn(
+                      "rounded-md border px-2.5 py-1 text-xs font-medium transition-colors",
+                      active
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-input bg-background hover:bg-accent",
+                    )}
+                  >
+                    {MONTH_LABEL[m]}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Leave empty to apply year-round, or pick specific months (e.g. summer hours).
+            </p>
+          </div>
           <div className="space-y-1.5">
             <Label htmlFor="sch-from">From</Label>
             <Input id="sch-from" type="time" value={form.from} onChange={(e) => setForm({ ...form, from: e.target.value })} />
@@ -385,9 +431,17 @@ function SchedulesTab({ building }: { building: Building }) {
                   <span className="text-sm text-muted-foreground">
                     {s.from} – {s.to}
                   </span>
+                  <span className="text-xs text-muted-foreground">
+                    {s.months && s.months.length
+                      ? s.months.map((m) => MONTH_LABEL[m]).join(", ")
+                      : "All year"}
+                  </span>
                 </div>
                 <div className="flex items-center gap-1">
-                  <CopyToDaysPopover schedule={s} onCopy={(targets) => copyToDays(s, targets)} />
+                  <CopyToBuildingsPopover
+                    buildings={otherBuildings}
+                    onCopy={(targets) => copyToBuildings(s, targets)}
+                  />
                   <Button
                     variant="ghost"
                     size="icon"
