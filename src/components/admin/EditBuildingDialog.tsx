@@ -226,7 +226,7 @@ function MetersTab({ building }: { building: Building }) {
 }
 
 interface ScheduleForm {
-  id: string | null;
+  originalName: string | null;
   name: string;
   days: Weekday[];
   from: string;
@@ -234,12 +234,31 @@ interface ScheduleForm {
   months: number[];
 }
 
-const emptyForm: ScheduleForm = { id: null, name: "", days: [], from: "09:00", to: "17:00", months: [] };
+const emptyForm: ScheduleForm = { originalName: null, name: "", days: [], from: "09:00", to: "17:00", months: [] };
 
 function SchedulesTab({ building }: { building: Building }) {
   const { schedules, addSchedules, updateSchedule, deleteSchedule } = useSchedules(building.id);
+  const { state } = useDataStore();
   const { buildings } = useBuildings(building.organization_id);
   const [form, setForm] = useState<ScheduleForm>(emptyForm);
+
+  // Group schedules by name (description)
+  const groups = useMemo(() => {
+    const map = new Map<string, Schedule[]>();
+    for (const s of schedules) {
+      const list = map.get(s.name) ?? [];
+      list.push(s);
+      map.set(s.name, list);
+    }
+    return Array.from(map.entries()).map(([name, items]) => ({
+      name,
+      items,
+      days: Array.from(new Set(items.map((i) => i.day))),
+      from: items[0].from,
+      to: items[0].to,
+      months: items[0].months ?? [],
+    }));
+  }, [schedules]);
 
   const toggleDay = (d: Weekday) =>
     setForm((f) => ({
@@ -263,62 +282,70 @@ function SchedulesTab({ building }: { building: Building }) {
       return;
     }
     const months = form.months.length ? [...form.months].sort((a, b) => a - b) : undefined;
-    if (form.id) {
-      // edit mode: keep the single row but retarget its day to the first selected
-      updateSchedule(form.id, {
-        name: form.name.trim(),
-        day: form.days[0],
-        from: form.from,
-        to: form.to,
-        months,
-      });
-      const extras = form.days.slice(1);
-      if (extras.length) {
-        addSchedules(
-          extras.map((day) => ({
-            building_id: building.id,
-            name: form.name.trim(),
-            day,
-            from: form.from,
-            to: form.to,
-            months,
-          })),
-        );
-      }
-      toast.success("Schedule updated");
-    } else {
+    const name = form.name.trim();
+    if (form.originalName) {
+      // Replace the entire group across this building
+      const existing = state.schedules.filter(
+        (s) => s.building_id === building.id && s.name === form.originalName,
+      );
+      existing.forEach((s) => deleteSchedule(s.id));
       addSchedules(
         form.days.map((day) => ({
           building_id: building.id,
-          name: form.name.trim(),
+          name,
           day,
           from: form.from,
           to: form.to,
           months,
         })),
       );
-      toast.success(`Added ${form.days.length} schedule block(s)`);
+      toast.success("Schedule updated");
+    } else {
+      addSchedules(
+        form.days.map((day) => ({
+          building_id: building.id,
+          name,
+          day,
+          from: form.from,
+          to: form.to,
+          months,
+        })),
+      );
+      toast.success(`Added schedule for ${form.days.length} day(s)`);
     }
     setForm(emptyForm);
   };
 
-  const startEdit = (s: Schedule) =>
-    setForm({ id: s.id, name: s.name, days: [s.day], from: s.from, to: s.to, months: s.months ?? [] });
+  const startEditGroup = (g: typeof groups[number]) =>
+    setForm({
+      originalName: g.name,
+      name: g.name,
+      days: g.days,
+      from: g.from,
+      to: g.to,
+      months: g.months,
+    });
 
-  const copyToBuildings = (s: Schedule, targetIds: string[]) => {
+  const deleteGroup = (g: typeof groups[number]) => {
+    g.items.forEach((i) => deleteSchedule(i.id));
+    toast.success(`Removed schedule "${g.name}"`);
+  };
+
+  const copyGroupToBuildings = (g: typeof groups[number], targetIds: string[]) => {
     const filtered = targetIds.filter((id) => id !== building.id);
     if (!filtered.length) return;
-    addSchedules(
-      filtered.map((bid) => ({
+    const entries = filtered.flatMap((bid) =>
+      g.items.map((i) => ({
         building_id: bid,
-        name: s.name,
-        day: s.day,
-        from: s.from,
-        to: s.to,
-        months: s.months,
+        name: g.name,
+        day: i.day,
+        from: i.from,
+        to: i.to,
+        months: i.months,
       })),
     );
-    toast.success(`Copied to ${filtered.length} building(s)`);
+    addSchedules(entries);
+    toast.success(`Copied "${g.name}" to ${filtered.length} building(s)`);
   };
 
   const otherBuildings = buildings.filter((b) => b.id !== building.id);
@@ -328,9 +355,9 @@ function SchedulesTab({ building }: { building: Building }) {
       <div className="rounded-lg border bg-muted/30 p-4">
         <div className="mb-3 flex items-center justify-between">
           <h3 className="text-sm font-semibold">
-            {form.id ? "Edit schedule block" : "Add schedule block"}
+            {form.originalName ? `Edit schedule "${form.originalName}"` : "Add schedule"}
           </h3>
-          {form.id && (
+          {form.originalName && (
             <Button variant="ghost" size="sm" className="h-7 gap-1" onClick={() => setForm(emptyForm)}>
               <X className="h-3.5 w-3.5" /> Cancel edit
             </Button>
@@ -407,62 +434,71 @@ function SchedulesTab({ building }: { building: Building }) {
         </div>
         <div className="mt-4 flex justify-end">
           <Button className="gap-1.5" onClick={submit}>
-            <Plus className="h-4 w-4" /> {form.id ? "Save schedule" : "Add schedule"}
+            <Plus className="h-4 w-4" /> {form.originalName ? "Save schedule" : "Add schedule"}
           </Button>
         </div>
       </div>
 
       <div>
         <h3 className="mb-2 text-sm font-semibold">Saved schedules</h3>
-        {schedules.length === 0 ? (
+        {groups.length === 0 ? (
           <div className="rounded-md border border-dashed py-8 text-center text-sm text-muted-foreground">
             No operational schedules yet.
           </div>
         ) : (
           <ul className="space-y-2">
-            {schedules.map((s) => (
-              <li
-                key={s.id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-card p-3"
-              >
-                <div className="flex flex-wrap items-center gap-3">
-                  <Badge>{WEEKDAY_LABEL[s.day]}</Badge>
-                  <span className="text-sm font-medium">{s.name}</span>
-                  <span className="text-sm text-muted-foreground">
-                    {s.from} – {s.to}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {s.months && s.months.length
-                      ? s.months.map((m) => MONTH_LABEL[m]).join(", ")
-                      : "All year"}
-                  </span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <CopyToBuildingsPopover
-                    buildings={otherBuildings}
-                    onCopy={(targets) => copyToBuildings(s, targets)}
-                  />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() => startEdit(s)}
-                    aria-label="Edit schedule"
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                    onClick={() => deleteSchedule(s.id)}
-                    aria-label="Delete schedule"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </li>
-            ))}
+            {groups.map((g) => {
+              const sortedDays = WEEKDAYS.filter((d) => g.days.includes(d));
+              return (
+                <li
+                  key={g.name}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-card p-3"
+                >
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="text-sm font-medium">{g.name}</span>
+                    <div className="flex flex-wrap gap-1">
+                      {sortedDays.map((d) => (
+                        <Badge key={d} variant="secondary">
+                          {WEEKDAY_LABEL[d]}
+                        </Badge>
+                      ))}
+                    </div>
+                    <span className="text-sm text-muted-foreground">
+                      {g.from} – {g.to}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {g.months.length
+                        ? g.months.map((m) => MONTH_LABEL[m]).join(", ")
+                        : "All year"}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <CopyToBuildingsPopover
+                      buildings={otherBuildings}
+                      onCopy={(targets) => copyGroupToBuildings(g, targets)}
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => startEditGroup(g)}
+                      aria-label="Edit schedule"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                      onClick={() => deleteGroup(g)}
+                      aria-label="Delete schedule"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
