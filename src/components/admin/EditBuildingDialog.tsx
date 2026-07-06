@@ -470,18 +470,18 @@ function SchedulesTab({ building }: { building: Building }) {
   );
 }
 
-function CopyToDaysPopover({
-  schedule,
+function CopyToBuildingsPopover({
+  buildings,
   onCopy,
 }: {
-  schedule: Schedule;
-  onCopy: (targets: Weekday[]) => void;
+  buildings: Building[];
+  onCopy: (targets: string[]) => void;
 }) {
-  const [selected, setSelected] = useState<Weekday[]>([]);
+  const [selected, setSelected] = useState<string[]>([]);
   const [open, setOpen] = useState(false);
 
-  const toggle = (d: Weekday) =>
-    setSelected((prev) => (prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d]));
+  const toggle = (id: string) =>
+    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
   return (
     <Popover
@@ -492,33 +492,36 @@ function CopyToDaysPopover({
       }}
     >
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="sm" className="h-8 gap-1 text-xs">
-          Copy to days
+        <Button variant="ghost" size="sm" className="h-8 gap-1 text-xs" disabled={buildings.length === 0}>
+          Copy to buildings
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-56 space-y-2">
+      <PopoverContent align="end" className="w-64 space-y-2">
         <div className="text-xs uppercase tracking-widest text-muted-foreground">
-          Duplicate {schedule.from}–{schedule.to}
+          Duplicate to other buildings
         </div>
-        <div className="flex flex-wrap gap-1.5">
-          {WEEKDAYS.filter((d) => d !== schedule.day).map((d) => {
-            const active = selected.includes(d);
+        <div className="max-h-60 space-y-1 overflow-auto">
+          {buildings.map((b) => {
+            const active = selected.includes(b.id);
             return (
               <button
-                key={d}
+                key={b.id}
                 type="button"
-                onClick={() => toggle(d)}
+                onClick={() => toggle(b.id)}
                 className={cn(
-                  "rounded-md border px-2.5 py-1 text-xs font-medium",
+                  "flex w-full items-center rounded-sm border px-2 py-1.5 text-left text-sm",
                   active
                     ? "border-primary bg-primary text-primary-foreground"
                     : "border-input bg-background hover:bg-accent",
                 )}
               >
-                {WEEKDAY_LABEL[d]}
+                {b.custom_display_name}
               </button>
             );
           })}
+          {buildings.length === 0 && (
+            <div className="px-2 py-1.5 text-xs text-muted-foreground">No other buildings.</div>
+          )}
         </div>
         <div className="flex justify-end">
           <Button
