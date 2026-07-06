@@ -34,6 +34,8 @@ import {
   useSchedules,
   WEEKDAYS,
   WEEKDAY_LABEL,
+  MONTHS,
+  MONTH_LABEL,
   type Building,
   type Schedule,
   type Weekday,
