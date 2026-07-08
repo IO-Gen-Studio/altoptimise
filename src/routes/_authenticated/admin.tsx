@@ -42,10 +42,10 @@ function AdminPage() {
               <div className="grid h-12 w-12 place-items-center rounded-full bg-muted">
                 <Lock className="h-5 w-5 text-muted-foreground" />
               </div>
-              <h2 className="text-lg font-semibold">Super Admin required</h2>
+              <h2 className="text-lg font-semibold">Admin access required</h2>
               <p className="max-w-sm text-sm text-muted-foreground">
-                Your role ({ROLE_LABEL[persona.role]}) doesn't include admin settings. Switch persona
-                using the top-right menu to try again.
+                Your role ({ROLE_LABEL[persona.role]}) doesn't include admin settings.
+                Ask an admin to grant you access.
               </p>
               <Button asChild size="sm" variant="outline" className="mt-2">
                 <Link to="/">Return to launcher</Link>
