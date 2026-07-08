@@ -1,4 +1,5 @@
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useRouter, useRouterState } from "@tanstack/react-router";
+import { toast } from "sonner";
 import {
   Activity,
   Building2,
@@ -9,9 +10,7 @@ import {
   Flame,
   LayoutGrid,
   LogOut,
-  Shield,
   Sun,
-  User,
   Users,
   Zap,
 } from "lucide-react";
@@ -32,6 +31,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { ROLE_LABEL, useLauncher } from "@/lib/launcher-context";
+import { supabase } from "@/integrations/supabase/client";
 
 type NavItem = { to: "/" | "/admin"; label: string; icon: typeof LayoutGrid; disabled?: boolean; superOnly?: boolean };
 const NAV: NavItem[] = [
@@ -45,7 +45,14 @@ const NAV_DISABLED = [
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const { org, orgs, setOrgId, persona, personas, setPersonaId } = useLauncher();
+  const { org, orgs, setOrgId, persona, isAdmin } = useLauncher();
+  const router = useRouter();
+
+  const signOut = async () => {
+    await supabase.auth.signOut();
+    toast.success("Signed out");
+    router.navigate({ to: "/auth", replace: true });
+  };
 
   return (
     <div className="flex min-h-screen w-full bg-background text-foreground">
@@ -63,7 +70,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
 
         <nav className="flex-1 space-y-1 px-3 py-4">
-          {NAV.filter((i) => !i.superOnly || persona.role === "super_admin").map((item) => {
+          {NAV.filter((i) => !i.superOnly || isAdmin).map((item) => {
             const active = pathname === item.to;
             const cls = cn(
               "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
@@ -173,31 +180,19 @@ export function AppShell({ children }: { children: ReactNode }) {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-64">
-                <DropdownMenuLabel>Test as persona</DropdownMenuLabel>
-                <DropdownMenuRadioGroup value={persona.id} onValueChange={setPersonaId}>
-                  {personas.map((p) => (
-                    <DropdownMenuRadioItem key={p.id} value={p.id}>
-                      <div className="flex w-full items-center justify-between gap-2">
-                        <div className="flex flex-col">
-                          <span className="text-sm font-medium">{p.name}</span>
-                          <span className="text-xs text-muted-foreground">{p.email}</span>
-                        </div>
-                        <RoleBadge role={p.role} />
-                      </div>
-                    </DropdownMenuRadioItem>
-                  ))}
-                </DropdownMenuRadioGroup>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem>
-                  <User className="mr-2 h-4 w-4" /> Profile
-                </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <Shield className="mr-2 h-4 w-4" /> Permissions
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem>
-                  <LogOut className="mr-2 h-4 w-4" /> Sign out
-                </DropdownMenuItem>
+              <DropdownMenuLabel>
+                <div className="flex flex-col">
+                  <span className="text-sm font-medium">{persona.name}</span>
+                  <span className="text-xs text-muted-foreground">{persona.email}</span>
+                  <span className="mt-1 text-[10px] uppercase tracking-widest text-muted-foreground">
+                    {ROLE_LABEL[persona.role]}
+                  </span>
+                </div>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={signOut}>
+                <LogOut className="mr-2 h-4 w-4" /> Sign out
+              </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -219,15 +214,3 @@ function StreamPill({ icon: Icon, label }: { icon: React.ComponentType<{ classNa
   );
 }
 
-function RoleBadge({ role }: { role: import("@/lib/launcher-context").Role }) {
-  const map = {
-    super_admin: "bg-primary/15 text-primary",
-    data_analyst: "bg-blue-500/15 text-blue-600",
-    viewer: "bg-muted text-muted-foreground",
-  } as const;
-  return (
-    <span className={cn("rounded px-1.5 py-0.5 text-[10px] font-medium", map[role])}>
-      {ROLE_LABEL[role]}
-    </span>
-  );
-}
