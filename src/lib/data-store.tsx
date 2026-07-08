@@ -374,7 +374,7 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
       void (async () => {
         for (let i = 0; i < withIds.length; i += CHUNK) {
           const batch = withIds.slice(i, i + CHUNK);
-          const { error } = await supabase.from("consumption_rows").insert(batch);
+          const { error } = await supabase.from("consumption_rows").insert(batch as never);
           if (error) {
             handleDbError("Import consumption", error);
             void refresh();
@@ -392,7 +392,7 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
     },
     setIngestion: (patch) => {
       setState((s) => ({ ...s, ingestion: { ...s.ingestion, ...patch } }));
-      void supabase.from("ingestion_settings").update(patch).eq("id", 1).then(({ error }) => {
+      void supabase.from("ingestion_settings").update(patch as never).eq("id", 1).then(({ error }) => {
         if (error) { handleDbError("Save ingestion settings", error); void refresh(); }
       });
     },
@@ -460,7 +460,7 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
             patch.meter_factor = next.calibrated_meter_factor;
           const { error: e2 } = await supabase
             .from("consumption_rows")
-            .update(patch)
+            .update(patch as never)
             .eq("organization_id", next.organization_id)
             .eq("meter_name", next.raw_meter_name);
           if (e2) { handleDbError("Reconcile meter rows", e2); void refresh(); }
@@ -480,7 +480,7 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
         );
         hadOverride = !!existing;
         originalBuildingId = existing?.csv_original_building_id ?? null;
-        originalFactor = existing?.csv_original_meter_factor;
+        originalFactor = existing?.csv_original_meter_factor ?? undefined;
         const consumption = s.consumption.map((c) => {
           if (c.organization_id !== orgId || c.meter_name !== rawName) return c;
           reconciled++;
@@ -515,7 +515,7 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
           if (typeof originalFactor === "number") patch.meter_factor = originalFactor;
           const { error: e2 } = await supabase
             .from("consumption_rows")
-            .update(patch)
+            .update(patch as never)
             .eq("organization_id", orgId)
             .eq("meter_name", rawName);
           if (e2) { handleDbError("Restore meter rows", e2); void refresh(); }
@@ -547,7 +547,7 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
       if (patch.from !== undefined) dbPatch.from_time = patch.from;
       if (patch.to !== undefined) dbPatch.to_time = patch.to;
       if (patch.months !== undefined) dbPatch.months = patch.months ?? [];
-      void supabase.from("schedules").update(dbPatch).eq("id", id).then(({ error }) => {
+      void supabase.from("schedules").update(dbPatch as never).eq("id", id).then(({ error }) => {
         if (error) { handleDbError("Update schedule", error); void refresh(); }
       });
     },
