@@ -8,7 +8,7 @@ import { APPS, canAccess, ROLE_LABEL, useLauncher } from "@/lib/launcher-context
 import { BaseloadApp } from "@/components/launcher/apps/BaseloadApp";
 import { SustainabilityApp } from "@/components/launcher/apps/SustainabilityApp";
 
-export const Route = createFileRoute("/apps/$slug")({
+export const Route = createFileRoute("/_authenticated/apps/$slug")({
   loader: ({ params }) => {
     const app = APPS.find((a) => a.slug === params.slug);
     if (!app) throw notFound();

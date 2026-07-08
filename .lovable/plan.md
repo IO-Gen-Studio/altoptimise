@@ -1,64 +1,51 @@
-# Edit Building modal — plan
+# Plan: Database + Auth with Role-Based Access
 
-Enhance the Buildings admin panel so clicking any building row opens a tabbed edit modal with three tabs: Building Information, Meter List, and Schedules.
+## 1. Enable Lovable Cloud
+Provisions the backend (Postgres, auth, storage) with zero external accounts.
 
-## 1. Data model additions (`src/lib/data-store.tsx`)
+## 2. Database schema (migration)
+Create these tables in `public`, each with GRANTs and RLS enabled:
 
-Extend the store so edits persist to `localStorage` alongside existing state.
+- `profiles` — `id (uuid, PK, FK auth.users on delete cascade)`, `display_name`, `created_at`. Auto-created on signup via trigger.
+- `app_role` enum: `admin`, `viewer`.
+- `user_roles` — `(user_id, role)` with unique constraint. First signed-up user is auto-promoted to `admin`; subsequent users default to `viewer`.
+- `has_role(uuid, app_role)` security-definer function (standard safe pattern).
+- `organisations` — id, name, location, created_at.
+- `buildings` — id, organization_id (FK), custom_display_name, csv_matched_name, address, created_at.
+- `consumption_rows` — mirrors current `ConsumptionRow` (half-hourly values as `numeric[]`, dates, meter fields, org/building FKs).
+- `meter_overrides` — mirrors current `MeterOverride` (composite PK on raw_meter_name + organization_id).
+- `schedules` — id, building_id, name, day, from_time, to_time, months (int[]), created_at.
+- `schema_labels` — key/label (single row-per-key, shared).
+- `ingestion_settings` — singleton row.
 
-- `Building` gains an optional `address?: string` (physical address / description).
-- New type `Schedule`:
-  ```
-  { id, building_id, name, days: Weekday[], from: "HH:mm", to: "HH:mm", created_at }
-  ```
-  where `Weekday = "mon"|"tue"|"wed"|"thu"|"fri"|"sat"|"sun"`.
-- New state slice `schedules: Schedule[]`.
-- New context actions:
-  - `updateBuilding(id, patch)` — already exists; used by tab 1.
-  - `addSchedule`, `updateSchedule`, `deleteSchedule`.
-  - `bulkAddSchedules` — used by the "copy hours to multiple days" flow (creates one schedule per selected target day, reusing name + times).
-- New selector hook `useSchedules(buildingId)` returning the building's schedules, sorted by day + start time. Exported so analytics mini-apps can query globally via `useDataStore()`.
-- Meter re-routing already supported by `upsertMeterOverride` (writes `assigned_building_id` and reconciles historical + future rows); tab 2 reuses it directly — this is the required MeterOverrides lock-in.
+### RLS policies (Admins manage, others view)
+For every data table:
+- `SELECT` → `TO authenticated USING (true)` (all signed-in users read shared data).
+- `INSERT / UPDATE / DELETE` → `TO authenticated USING (public.has_role(auth.uid(), 'admin'))`.
+- `profiles`: user can read all, update only their own.
+- `user_roles`: users read their own; only admins insert/delete.
 
-## 2. New component: `src/components/admin/EditBuildingDialog.tsx`
+## 3. Auth surface
+- `/auth` public route: email + password sign-in / sign-up (tabs), with the standard `onAuthStateChange` + `getSession` pattern and `emailRedirectTo: window.location.origin`.
+- Integration-managed `_authenticated` layout guards `/admin` and `/apps/*`; `/` remains public and shows a "Sign in" CTA when signed out.
+- Root subscribes to `onAuthStateChange` (filtered to SIGNED_IN/OUT/USER_UPDATED) and invalidates the router.
+- Header (`AppShell`) shows the signed-in user's email + Sign out; Settings link only when `has_role('admin')`.
 
-Controlled `Dialog` opened from `BuildingsPanel`. Props: `{ building, open, onOpenChange }`. Title: `Edit Building: {custom_display_name}`. Uses `Tabs` with three panels.
+## 4. Replace `DataStoreProvider` with Supabase-backed store
+- Keep the same `useDataStore` / `useOrganisations` / `useBuildings` / `useConsumption` / `useMeterOverrides` / `useMeterRegistry` / `useSchedules` hook API so existing components don't change.
+- Under the hood: TanStack Query keys per entity, subscribed to Supabase realtime (or manual invalidation on mutation). Mutations call Supabase directly from the browser client (RLS enforces admin-only writes).
+- Viewers get read-only UI: admin action buttons (Add / Edit / Delete / CSV upload / Reset) are hidden or disabled based on `has_role('admin')` from a `useIsAdmin()` hook.
+- `localStorage` state is discarded — the old `STORAGE_KEY` is not read.
 
-### Tab 1 — Building Information
-Local form state seeded from `building`. Fields:
-- Custom Display Name (`Input`)
-- CSV Matched Name (`Input`, monospace hint reused from panel)
-- Physical Address / Description (`Textarea`)
+## 5. Toasts + error handling
+Wire Supabase errors into the existing toast pattern (RLS denials become "You need admin access" messages).
 
-"Save Changes" button calls `updateBuilding(id, patch)`, toasts success, keeps dialog open.
+## Out of scope
+- No Google/Apple sign-in (email + password only, per your choice).
+- No per-user data isolation (data is shared).
+- No migration of existing browser data.
 
-### Tab 2 — Meter List
-Derives meters for this building from `useMeterRegistry(orgId)` filtered by `effective_building_id === building.id`. Table columns: Raw Meter Name, Custom Display Name (fallback em-dash), Utility Category (Badge), Actions.
-
-Actions column: "Move Meter" button opens a `Popover` (or inline `Select`) listing all other buildings in the org. Selecting a target calls `upsertMeterOverride` with `assigned_building_id = target.id`, preserving existing `custom_display_name` and `calibrated_meter_factor` from the registry row. Toast shows `Moved N historical rows to {target}`. Empty state row when no meters routed here.
-
-### Tab 3 — Schedules (Operational Profiles)
-Two areas:
-
-**Constructor form** (top): Name (`Input`), Day badges (toggleable `Mon Tue Wed Thu Fri Sat Sun`, multi-select), From time (`Input type="time"`), To time (`Input type="time"`). "Add schedule" button validates non-empty name + ≥1 day + `from < to`, then calls `bulkAddSchedules` — one entry per selected day sharing the same name/times. This is the multi-day copy mechanism (pick multiple day badges → one rule per day).
-
-**Saved list** (below): grouped visually by rule name. Each row shows day badge(s), `from – to`, edit (pencil) + delete (trash) icons.
-- Edit puts the row's values back into the constructor in "edit mode" (Save/Cancel replace Add).
-- Delete removes just that schedule row.
-
-An additional per-rule "Copy to days…" button opens a small `Popover` with day checkboxes → `bulkAddSchedules` clones the times to the newly selected days. Covers the "copy hours from day to multiple days" requirement post-hoc as well as at creation.
-
-## 3. `BuildingsPanel.tsx` wiring
-- Make each `TableRow` clickable (`cursor-pointer`, `onClick` → open dialog for that building). Stop propagation on the existing delete-icon cell so row click doesn't fire when deleting.
-- Track `editing: Building | null` state and render `<EditBuildingDialog />` once at panel level.
-
-## 4. Out of scope
-- No changes to CSV ingestion, meter override dialog, or organisations panel.
-- No new routes; everything lives inside the existing Admin → Buildings tab.
-- Schedules are stored client-side (localStorage) consistent with the rest of the store; analytics apps can already read via `useDataStore().state.schedules`.
-
-## Technical notes
-- Reuse existing shadcn primitives: `Dialog`, `Tabs`, `Table`, `Popover`, `Select`, `Button`, `Input`, `Textarea`, `Label`, `Badge`, plus `sonner` `toast` (already in the project). No new dependencies.
-- Day badges implemented with `Toggle`/`Button` variants — no new component needed.
-- Time inputs use native `<input type="time">` for 24h HH:mm — already the browser default in the app's locale.
-- All new state flows through `DataStoreProvider`, so persistence and SSR-safe hydration behave identically to organisations/buildings/meters.
+## Notes for the technical reviewer
+- Roles live in a separate `user_roles` table (never on `profiles`) and are checked via a security-definer `has_role` function to avoid RLS recursion.
+- Every `CREATE TABLE public.*` migration includes explicit `GRANT` statements for `authenticated` (and `service_role`) before `ENABLE ROW LEVEL SECURITY`.
+- Client-side admin checks are UX only; the real enforcement is RLS on the database.
