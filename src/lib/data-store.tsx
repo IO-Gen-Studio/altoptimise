@@ -1,4 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { toast } from "sonner";
+
+import { supabase } from "@/integrations/supabase/client";
 
 export interface Organisation {
   id: string;
@@ -106,12 +109,6 @@ const DEFAULT_LABELS: SchemaLabels = {
   "Variables.Category": "Utility Type",
 };
 
-const SEED_ORGS: Organisation[] = [
-  { id: "haven-holidays", organization_name: "Haven Holidays", location: "United Kingdom", created_at: new Date().toISOString() },
-  { id: "methodist-schools", organization_name: "Methodist Independent School's Trust", location: "London, UK", created_at: new Date().toISOString() },
-  { id: "io-gen", organization_name: "IO-Gen", location: "Leeds, UK", created_at: new Date().toISOString() },
-];
-
 interface State {
   organisations: Organisation[];
   buildings: Building[];
@@ -122,11 +119,9 @@ interface State {
   schedules: Schedule[];
 }
 
-const STORAGE_KEY = "optimise:store:v1";
-
-function seedState(): State {
+function emptyState(): State {
   return {
-    organisations: SEED_ORGS,
+    organisations: [],
     buildings: [],
     consumption: [],
     schemaLabels: DEFAULT_LABELS,
@@ -136,38 +131,112 @@ function seedState(): State {
   };
 }
 
-function loadState(): State {
-  const base = seedState();
-  if (typeof window === "undefined") return base;
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return base;
-    const parsed = JSON.parse(raw) as Partial<State>;
-    return {
-      organisations: parsed.organisations?.length ? parsed.organisations : base.organisations,
-      buildings: parsed.buildings ?? [],
-      consumption: parsed.consumption ?? [],
-      schemaLabels: { ...base.schemaLabels, ...(parsed.schemaLabels ?? {}) },
-      ingestion: { ...base.ingestion, ...(parsed.ingestion ?? {}) },
-      meterOverrides: parsed.meterOverrides ?? [],
-      schedules: parsed.schedules ?? [],
-    };
-  } catch {
-    return base;
-  }
-}
-
-function saveState(s: State) {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
-  } catch {
-    /* ignore */
-  }
-}
-
 function uid() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
   return Math.random().toString(36).slice(2, 10);
+}
+
+function handleDbError(context: string, error: { message: string; code?: string } | null) {
+  if (!error) return;
+  const msg =
+    error.code === "42501" || /permission|denied|row-level security/i.test(error.message)
+      ? "You need admin access to make that change"
+      : `${context}: ${error.message}`;
+  toast.error(msg);
+  console.error(context, error);
+}
+
+// --- DB row shape converters ------------------------------------------------
+
+interface DbSchedule {
+  id: string;
+  building_id: string;
+  name: string;
+  day: string;
+  from_time: string;
+  to_time: string;
+  months: number[] | null;
+  created_at: string;
+}
+function schedFromDb(r: DbSchedule): Schedule {
+  return {
+    id: r.id,
+    building_id: r.building_id,
+    name: r.name,
+    day: r.day as Weekday,
+    from: r.from_time,
+    to: r.to_time,
+    months: r.months ?? [],
+    created_at: r.created_at,
+  };
+}
+function schedToDb(s: Schedule) {
+  return {
+    id: s.id,
+    building_id: s.building_id,
+    name: s.name,
+    day: s.day,
+    from_time: s.from,
+    to_time: s.to,
+    months: s.months ?? [],
+  };
+}
+
+function normNumArray(v: unknown): (number | null)[] {
+  if (!Array.isArray(v)) return [];
+  return v.map((x) => (x === null || x === undefined ? null : Number(x)));
+}
+
+async function fetchAll(): Promise<State> {
+  const [orgs, bldgs, cons, ovs, sch, lbls, ing] = await Promise.all([
+    supabase.from("organisations").select("*").order("created_at"),
+    supabase.from("buildings").select("*").order("created_at"),
+    supabase.from("consumption_rows").select("*"),
+    supabase.from("meter_overrides").select("*"),
+    supabase.from("schedules").select("*"),
+    supabase.from("schema_labels").select("*"),
+    supabase.from("ingestion_settings").select("*").eq("id", 1).maybeSingle(),
+  ]);
+  const s = emptyState();
+  if (orgs.data) s.organisations = orgs.data as Organisation[];
+  if (bldgs.data) s.buildings = bldgs.data as Building[];
+  if (cons.data)
+    s.consumption = cons.data.map((r: Record<string, unknown>) => ({
+      ...(r as unknown as ConsumptionRow),
+      meter_factor: Number(r.meter_factor ?? 1),
+      half_hourly_values: normNumArray(r.half_hourly_values),
+    }));
+  if (ovs.data)
+    s.meterOverrides = ovs.data.map((r: Record<string, unknown>) => ({
+      raw_meter_name: r.raw_meter_name as string,
+      organization_id: r.organization_id as string,
+      custom_display_name: (r.custom_display_name as string | null) ?? null,
+      assigned_building_id: (r.assigned_building_id as string | null) ?? null,
+      calibrated_meter_factor:
+        r.calibrated_meter_factor === null || r.calibrated_meter_factor === undefined
+          ? null
+          : Number(r.calibrated_meter_factor),
+      csv_original_building_id: (r.csv_original_building_id as string | null) ?? null,
+      csv_original_meter_factor:
+        r.csv_original_meter_factor === null || r.csv_original_meter_factor === undefined
+          ? undefined
+          : Number(r.csv_original_meter_factor),
+      updated_at: r.updated_at as string,
+    }));
+  if (sch.data) s.schedules = (sch.data as DbSchedule[]).map(schedFromDb);
+  if (lbls.data) {
+    const map: SchemaLabels = { ...DEFAULT_LABELS };
+    for (const row of lbls.data as { key: string; label: string }[]) map[row.key] = row.label;
+    s.schemaLabels = map;
+  }
+  if (ing.data) {
+    s.ingestion = {
+      scheduled_time: (ing.data.scheduled_time as string) ?? "10:00",
+      last_synced_at: (ing.data.last_synced_at as string | null) ?? null,
+      source_url: (ing.data.source_url as string) ?? "",
+    };
+  }
+  return s;
 }
 
 interface StoreCtx {
@@ -192,23 +261,34 @@ interface StoreCtx {
 const Ctx = createContext<StoreCtx | null>(null);
 
 export function DataStoreProvider({ children }: { children: ReactNode }) {
-  // Always start from seed on both server and client so the initial render
-  // matches SSR output exactly and React can hydrate without mismatches.
-  const [state, setState] = useState<State>(() => seedState());
-  const [hydrated, setHydrated] = useState(false);
+  const [state, setState] = useState<State>(() => emptyState());
 
-  // After hydration, load any persisted state from localStorage.
-  useEffect(() => {
-    setState(loadState());
-    setHydrated(true);
+  const refresh = useCallback(async () => {
+    try {
+      const next = await fetchAll();
+      setState(next);
+    } catch (e) {
+      console.error("data-store refresh failed", e);
+    }
   }, []);
 
-  // Only persist changes after we've hydrated from localStorage — otherwise
-  // the seed state would overwrite the user's saved data on first paint.
+  // Load on mount + whenever auth state changes.
   useEffect(() => {
-    if (!hydrated) return;
-    saveState(state);
-  }, [state, hydrated]);
+    let mounted = true;
+    supabase.auth.getSession().then(({ data }) => {
+      if (!mounted) return;
+      if (data.session) void refresh();
+      else setState(emptyState());
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_IN" || event === "USER_UPDATED") void refresh();
+      if (event === "SIGNED_OUT") setState(emptyState());
+    });
+    return () => {
+      mounted = false;
+      sub.subscription.unsubscribe();
+    };
+  }, [refresh]);
 
   const api = useMemo<StoreCtx>(() => ({
     state,
@@ -220,43 +300,109 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
         created_at: new Date().toISOString(),
       };
       setState((s) => ({ ...s, organisations: [...s.organisations, org] }));
+      void supabase
+        .from("organisations")
+        .insert({ id: org.id, organization_name: name, location: location ?? null })
+        .then(({ error }) => {
+          if (error) {
+            handleDbError("Create organisation", error);
+            void refresh();
+          }
+        });
       return org;
     },
     updateOrganisation: (id, patch) =>
+    {
       setState((s) => ({
         ...s,
         organisations: s.organisations.map((o) => (o.id === id ? { ...o, ...patch } : o)),
-      })),
+      }));
+      const { id: _ignore, created_at: _ignore2, ...updates } = patch as Partial<Organisation>;
+      void supabase.from("organisations").update(updates).eq("id", id).then(({ error }) => {
+        if (error) { handleDbError("Update organisation", error); void refresh(); }
+      });
+    },
     deleteOrganisation: (id) =>
+    {
       setState((s) => ({
         ...s,
         organisations: s.organisations.filter((o) => o.id !== id),
         buildings: s.buildings.filter((b) => b.organization_id !== id),
         consumption: s.consumption.filter((c) => c.organization_id !== id),
-      })),
+      }));
+      void supabase.from("organisations").delete().eq("id", id).then(({ error }) => {
+        if (error) { handleDbError("Delete organisation", error); void refresh(); }
+      });
+    },
     addBuilding: (b) => {
       const building: Building = { ...b, id: uid(), created_at: new Date().toISOString() };
       setState((s) => ({ ...s, buildings: [...s.buildings, building] }));
+      void supabase.from("buildings").insert({
+        id: building.id,
+        organization_id: building.organization_id,
+        custom_display_name: building.custom_display_name,
+        csv_matched_name: building.csv_matched_name ?? "",
+        address: building.address ?? null,
+      }).then(({ error }) => {
+        if (error) { handleDbError("Create building", error); void refresh(); }
+      });
       return building;
     },
     updateBuilding: (id, patch) =>
+    {
       setState((s) => ({
         ...s,
         buildings: s.buildings.map((b) => (b.id === id ? { ...b, ...patch } : b)),
-      })),
+      }));
+      const { id: _i, created_at: _c, organization_id: _o, ...updates } = patch as Partial<Building>;
+      void supabase.from("buildings").update(updates).eq("id", id).then(({ error }) => {
+        if (error) { handleDbError("Update building", error); void refresh(); }
+      });
+    },
     deleteBuilding: (id) =>
-      setState((s) => ({ ...s, buildings: s.buildings.filter((b) => b.id !== id) })),
+    {
+      setState((s) => ({ ...s, buildings: s.buildings.filter((b) => b.id !== id) }));
+      void supabase.from("buildings").delete().eq("id", id).then(({ error }) => {
+        if (error) { handleDbError("Delete building", error); void refresh(); }
+      });
+    },
     bulkInsertConsumption: (rows) => {
       const withIds = rows.map((r) => ({ ...r, id: uid() }));
       setState((s) => ({ ...s, consumption: [...s.consumption, ...withIds] }));
+      // Insert in batches to keep payloads manageable.
+      const CHUNK = 500;
+      void (async () => {
+        for (let i = 0; i < withIds.length; i += CHUNK) {
+          const batch = withIds.slice(i, i + CHUNK);
+          const { error } = await supabase.from("consumption_rows").insert(batch);
+          if (error) {
+            handleDbError("Import consumption", error);
+            void refresh();
+            return;
+          }
+        }
+      })();
       return withIds.length;
     },
-    setSchemaLabel: (key, label) =>
-      setState((s) => ({ ...s, schemaLabels: { ...s.schemaLabels, [key]: label } })),
-    setIngestion: (patch) =>
-      setState((s) => ({ ...s, ingestion: { ...s.ingestion, ...patch } })),
-    markSynced: () =>
-      setState((s) => ({ ...s, ingestion: { ...s.ingestion, last_synced_at: new Date().toISOString() } })),
+    setSchemaLabel: (key, label) => {
+      setState((s) => ({ ...s, schemaLabels: { ...s.schemaLabels, [key]: label } }));
+      void supabase.from("schema_labels").upsert({ key, label }).then(({ error }) => {
+        if (error) { handleDbError("Save label", error); void refresh(); }
+      });
+    },
+    setIngestion: (patch) => {
+      setState((s) => ({ ...s, ingestion: { ...s.ingestion, ...patch } }));
+      void supabase.from("ingestion_settings").update(patch).eq("id", 1).then(({ error }) => {
+        if (error) { handleDbError("Save ingestion settings", error); void refresh(); }
+      });
+    },
+    markSynced: () => {
+      const now = new Date().toISOString();
+      setState((s) => ({ ...s, ingestion: { ...s.ingestion, last_synced_at: now } }));
+      void supabase.from("ingestion_settings").update({ last_synced_at: now }).eq("id", 1).then(({ error }) => {
+        if (error) { handleDbError("Save sync time", error); void refresh(); }
+      });
+    },
     upsertMeterOverride: (o) => {
       let reconciled = 0;
       setState((s) => {
@@ -295,18 +441,46 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
             meter_display_name: next.custom_display_name,
           };
         });
+        // Persist override + reconciled consumption rows in the background.
+        void (async () => {
+          const { error: e1 } = await supabase.from("meter_overrides").upsert({
+            raw_meter_name: next.raw_meter_name,
+            organization_id: next.organization_id,
+            custom_display_name: next.custom_display_name,
+            assigned_building_id: next.assigned_building_id,
+            calibrated_meter_factor: next.calibrated_meter_factor,
+            csv_original_building_id: next.csv_original_building_id ?? null,
+            csv_original_meter_factor: next.csv_original_meter_factor ?? null,
+          });
+          if (e1) { handleDbError("Save meter override", e1); void refresh(); return; }
+          const patch: Record<string, unknown> = { meter_display_name: next.custom_display_name };
+          if (next.assigned_building_id !== null && next.assigned_building_id !== undefined)
+            patch.building_id = next.assigned_building_id;
+          if (next.calibrated_meter_factor !== null && next.calibrated_meter_factor !== undefined)
+            patch.meter_factor = next.calibrated_meter_factor;
+          const { error: e2 } = await supabase
+            .from("consumption_rows")
+            .update(patch)
+            .eq("organization_id", next.organization_id)
+            .eq("meter_name", next.raw_meter_name);
+          if (e2) { handleDbError("Reconcile meter rows", e2); void refresh(); }
+        })();
         return { ...s, meterOverrides: [...others, next], consumption };
       });
       return { reconciledRows: reconciled };
     },
     deleteMeterOverride: (rawName, orgId) => {
       let reconciled = 0;
+      let originalBuildingId: string | null = null;
+      let originalFactor: number | undefined;
+      let hadOverride = false;
       setState((s) => {
         const existing = s.meterOverrides.find(
           (m) => m.raw_meter_name === rawName && m.organization_id === orgId,
         );
-        const originalBuildingId = existing?.csv_original_building_id ?? null;
-        const originalFactor = existing?.csv_original_meter_factor;
+        hadOverride = !!existing;
+        originalBuildingId = existing?.csv_original_building_id ?? null;
+        originalFactor = existing?.csv_original_meter_factor;
         const consumption = s.consumption.map((c) => {
           if (c.organization_id !== orgId || c.meter_name !== rawName) return c;
           reconciled++;
@@ -326,6 +500,27 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
           consumption,
         };
       });
+      void (async () => {
+        const { error: e1 } = await supabase
+          .from("meter_overrides")
+          .delete()
+          .eq("raw_meter_name", rawName)
+          .eq("organization_id", orgId);
+        if (e1) { handleDbError("Reset meter override", e1); void refresh(); return; }
+        if (hadOverride) {
+          const patch: Record<string, unknown> = {
+            meter_display_name: null,
+            building_id: originalBuildingId,
+          };
+          if (typeof originalFactor === "number") patch.meter_factor = originalFactor;
+          const { error: e2 } = await supabase
+            .from("consumption_rows")
+            .update(patch)
+            .eq("organization_id", orgId)
+            .eq("meter_name", rawName);
+          if (e2) { handleDbError("Restore meter rows", e2); void refresh(); }
+        }
+      })();
       return { reconciledRows: reconciled };
     },
     addSchedules: (entries) => {
@@ -335,16 +530,35 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
         created_at: new Date().toISOString(),
       }));
       setState((s) => ({ ...s, schedules: [...s.schedules, ...created] }));
+      void supabase.from("schedules").insert(created.map(schedToDb)).then(({ error }) => {
+        if (error) { handleDbError("Save schedule", error); void refresh(); }
+      });
       return created;
     },
     updateSchedule: (id, patch) =>
+    {
       setState((s) => ({
         ...s,
         schedules: s.schedules.map((sc) => (sc.id === id ? { ...sc, ...patch } : sc)),
-      })),
+      }));
+      const dbPatch: Record<string, unknown> = {};
+      if (patch.name !== undefined) dbPatch.name = patch.name;
+      if (patch.day !== undefined) dbPatch.day = patch.day;
+      if (patch.from !== undefined) dbPatch.from_time = patch.from;
+      if (patch.to !== undefined) dbPatch.to_time = patch.to;
+      if (patch.months !== undefined) dbPatch.months = patch.months ?? [];
+      void supabase.from("schedules").update(dbPatch).eq("id", id).then(({ error }) => {
+        if (error) { handleDbError("Update schedule", error); void refresh(); }
+      });
+    },
     deleteSchedule: (id) =>
-      setState((s) => ({ ...s, schedules: s.schedules.filter((sc) => sc.id !== id) })),
-  }), [state]);
+    {
+      setState((s) => ({ ...s, schedules: s.schedules.filter((sc) => sc.id !== id) }));
+      void supabase.from("schedules").delete().eq("id", id).then(({ error }) => {
+        if (error) { handleDbError("Delete schedule", error); void refresh(); }
+      });
+    },
+  }), [state, refresh]);
 
   return <Ctx.Provider value={api}>{children}</Ctx.Provider>;
 }
