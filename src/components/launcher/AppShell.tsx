@@ -45,7 +45,7 @@ const NAV_DISABLED = [
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const { org, orgs, setOrgId, persona, isAdmin } = useLauncher();
+  const { org, orgs, setOrgId, persona, isAdmin, signedIn } = useLauncher();
   const router = useRouter();
 
   const signOut = async () => {
@@ -161,7 +161,11 @@ export function AppShell({ children }: { children: ReactNode }) {
               <Activity className="h-3 w-3" /> Live
             </Badge>
 
-            {/* Persona switcher */}
+            {!signedIn ? (
+              <Button asChild size="sm">
+                <Link to="/auth">Sign in</Link>
+              </Button>
+            ) : (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="h-10 gap-2 pl-2 pr-3">
