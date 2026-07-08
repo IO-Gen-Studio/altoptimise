@@ -1,6 +1,7 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 
 import { useOrganisations, type Organisation } from "./data-store";
+import { useAuth } from "@/hooks/use-auth";
 
 export type Role = "super_admin" | "data_analyst" | "viewer";
 
@@ -24,11 +25,7 @@ export const ORGS: Org[] = [
   { id: "io-gen", name: "IO-Gen", location: "Leeds, UK" },
 ];
 
-export const PERSONAS: Persona[] = [
-  { id: "sa", name: "Jed Palma", role: "super_admin", email: "jed@io-gen.com", initials: "JP" },
-  { id: "da", name: "Kristel Calilung", role: "data_analyst", email: "kristel@io-gen.com", initials: "KC" },
-  { id: "vw", name: "Rustin Cooper", role: "viewer", email: "rustin@io-gen.com", initials: "RC" },
-];
+export const PERSONAS: Persona[] = [];
 
 export const ROLE_LABEL: Record<Role, string> = {
   super_admin: "Super Admin",
@@ -43,23 +40,45 @@ interface LauncherCtx {
   setOrgId: (id: string) => void;
   orgs: Org[];
   personas: Persona[];
+  isAdmin: boolean;
+  signedIn: boolean;
 }
 
 const Ctx = createContext<LauncherCtx | null>(null);
 
 export function LauncherProvider({ children }: { children: ReactNode }) {
-  const [personaId, setPersonaId] = useState("sa");
-  const [orgId, setOrgId] = useState("haven-holidays");
+  const [orgId, setOrgId] = useState<string>("");
   const { organisations } = useOrganisations();
+  const { user, profile, isAdmin } = useAuth();
 
   const value = useMemo<LauncherCtx>(() => {
-    const persona = PERSONAS.find((p) => p.id === personaId) ?? PERSONAS[0];
+    const email = user?.email ?? "";
+    const name = profile?.display_name || email.split("@")[0] || "Guest";
+    const initials = (name.match(/[A-Za-z0-9]/g) ?? ["?"]).slice(0, 2).join("").toUpperCase();
+    const persona: Persona = {
+      id: user?.id ?? "guest",
+      name,
+      email,
+      initials,
+      role: isAdmin ? "super_admin" : "viewer",
+    };
     const orgs: Org[] = organisations.length
       ? organisations.map(toOrg)
-      : ORGS;
-    const org = orgs.find((o) => o.id === orgId) ?? orgs[0];
-    return { persona, setPersonaId, org, setOrgId, orgs, personas: PERSONAS };
-  }, [personaId, orgId, organisations]);
+      : [];
+    const org =
+      orgs.find((o) => o.id === orgId) ??
+      orgs[0] ?? { id: "none", name: "No organisation", location: "" };
+    return {
+      persona,
+      setPersonaId: () => {},
+      org,
+      setOrgId,
+      orgs,
+      personas: [],
+      isAdmin,
+      signedIn: !!user,
+    };
+  }, [orgId, organisations, user, profile, isAdmin]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
