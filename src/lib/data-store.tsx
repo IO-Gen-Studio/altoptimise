@@ -39,6 +39,10 @@ export interface MeterOverride {
   custom_display_name: string | null;
   assigned_building_id: string | null;
   calibrated_meter_factor: number | null;
+  // Snapshot of CSV values captured before the override first mutated
+  // consumption rows, so "Reset to CSV defaults" can restore them.
+  csv_original_building_id?: string | null;
+  csv_original_meter_factor?: number | null;
   updated_at: string;
 }
 
@@ -120,8 +124,8 @@ interface State {
 
 const STORAGE_KEY = "optimise:store:v1";
 
-function loadState(): State {
-  const base: State = {
+function seedState(): State {
+  return {
     organisations: SEED_ORGS,
     buildings: [],
     consumption: [],
@@ -130,6 +134,10 @@ function loadState(): State {
     meterOverrides: [],
     schedules: [],
   };
+}
+
+function loadState(): State {
+  const base = seedState();
   if (typeof window === "undefined") return base;
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
@@ -184,16 +192,23 @@ interface StoreCtx {
 const Ctx = createContext<StoreCtx | null>(null);
 
 export function DataStoreProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<State>(() => loadState());
+  // Always start from seed on both server and client so the initial render
+  // matches SSR output exactly and React can hydrate without mismatches.
+  const [state, setState] = useState<State>(() => seedState());
+  const [hydrated, setHydrated] = useState(false);
 
-  // Hydrate on client after mount (SSR safety)
+  // After hydration, load any persisted state from localStorage.
   useEffect(() => {
     setState(loadState());
+    setHydrated(true);
   }, []);
 
+  // Only persist changes after we've hydrated from localStorage — otherwise
+  // the seed state would overwrite the user's saved data on first paint.
   useEffect(() => {
+    if (!hydrated) return;
     saveState(state);
-  }, [state]);
+  }, [state, hydrated]);
 
   const api = useMemo<StoreCtx>(() => ({
     state,
@@ -245,10 +260,31 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
     upsertMeterOverride: (o) => {
       let reconciled = 0;
       setState((s) => {
+        const existing = s.meterOverrides.find(
+          (m) => m.raw_meter_name === o.raw_meter_name && m.organization_id === o.organization_id,
+        );
         const others = s.meterOverrides.filter(
           (m) => !(m.raw_meter_name === o.raw_meter_name && m.organization_id === o.organization_id),
         );
-        const next: MeterOverride = { ...o, updated_at: new Date().toISOString() };
+        // Capture original CSV values from the first matching consumption row
+        // (or reuse an existing snapshot) so we can restore them on reset.
+        const firstRow = s.consumption.find(
+          (c) => c.organization_id === o.organization_id && c.meter_name === o.raw_meter_name,
+        );
+        const csv_original_building_id =
+          existing?.csv_original_building_id !== undefined
+            ? existing.csv_original_building_id
+            : firstRow?.building_id ?? null;
+        const csv_original_meter_factor =
+          existing?.csv_original_meter_factor !== undefined
+            ? existing.csv_original_meter_factor
+            : firstRow?.meter_factor ?? 1;
+        const next: MeterOverride = {
+          ...o,
+          csv_original_building_id,
+          csv_original_meter_factor,
+          updated_at: new Date().toISOString(),
+        };
         const consumption = s.consumption.map((c) => {
           if (c.organization_id !== o.organization_id || c.meter_name !== o.raw_meter_name) return c;
           reconciled++;
@@ -266,10 +302,21 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
     deleteMeterOverride: (rawName, orgId) => {
       let reconciled = 0;
       setState((s) => {
+        const existing = s.meterOverrides.find(
+          (m) => m.raw_meter_name === rawName && m.organization_id === orgId,
+        );
+        const originalBuildingId = existing?.csv_original_building_id ?? null;
+        const originalFactor = existing?.csv_original_meter_factor;
         const consumption = s.consumption.map((c) => {
           if (c.organization_id !== orgId || c.meter_name !== rawName) return c;
           reconciled++;
-          return { ...c, meter_display_name: null };
+          return {
+            ...c,
+            building_id: existing ? originalBuildingId : c.building_id,
+            meter_factor:
+              existing && typeof originalFactor === "number" ? originalFactor : c.meter_factor,
+            meter_display_name: null,
+          };
         });
         return {
           ...s,
@@ -377,14 +424,20 @@ export function useMeterRegistry(orgId?: string): MeterRegistryRow[] {
       const o = overridesByRaw.get(raw);
       const effectiveBuildingId = o?.assigned_building_id ?? g.rows[0]?.building_id ?? null;
       const effectiveBuilding = effectiveBuildingId ? buildingsById.get(effectiveBuildingId) : null;
+      // If an override exists, the consumption rows carry the override factor,
+      // so pull the true CSV default from the override's snapshot.
+      const csvFactor =
+        o && typeof o.csv_original_meter_factor === "number"
+          ? o.csv_original_meter_factor
+          : g.csvFactor;
       out.push({
         raw_meter_name: raw,
         utility_category: g.category,
         custom_display_name: o?.custom_display_name ?? null,
         effective_building_id: effectiveBuildingId,
         effective_building_name: effectiveBuilding?.custom_display_name ?? "Unassigned",
-        effective_meter_factor: o?.calibrated_meter_factor ?? g.csvFactor,
-        csv_meter_factor: g.csvFactor,
+        effective_meter_factor: o?.calibrated_meter_factor ?? csvFactor,
+        csv_meter_factor: csvFactor,
         has_override: !!o,
         row_count: g.rows.length,
       });
