@@ -191,7 +191,7 @@ async function fetchAll(): Promise<State> {
   const [orgs, bldgs, cons, ovs, sch, lbls, ing] = await Promise.all([
     supabase.from("organisations").select("*").order("created_at"),
     supabase.from("buildings").select("*").order("created_at"),
-    supabase.from("consumption_rows").select("*"),
+    fetchAllConsumption(),
     supabase.from("meter_overrides").select("*"),
     supabase.from("schedules").select("*"),
     supabase.from("schema_labels").select("*"),
