@@ -32,6 +32,7 @@ import {
   useDataStore,
   useMeterOverrides,
   useMeterRegistry,
+  useOrganisations,
   useSchedules,
   WEEKDAYS,
   WEEKDAY_LABEL,
@@ -41,6 +42,7 @@ import {
   type Schedule,
   type Weekday,
 } from "@/lib/data-store";
+import { inheritanceLabel, resolveProfile } from "@/lib/energy/profile";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -240,7 +242,11 @@ const emptyForm: ScheduleForm = { originalName: null, name: "", days: [], from: 
 function SchedulesTab({ building }: { building: Building }) {
   const { schedules, addSchedules, updateSchedule, deleteSchedule } = useSchedules(building.id);
   const { state } = useDataStore();
-  const { buildings } = useBuildings(building.organization_id);
+  const { buildings, updateBuilding } = useBuildings(building.organization_id);
+  const { organisations } = useOrganisations();
+  const org = organisations.find((o) => o.id === building.organization_id);
+  const profile = resolveProfile(org, building, schedules);
+  const overrideEnabled = !!building.schedule_override_enabled;
   const [form, setForm] = useState<ScheduleForm>(emptyForm);
 
   // Group schedules by name (description)
@@ -353,6 +359,42 @@ function SchedulesTab({ building }: { building: Building }) {
 
   return (
     <div className="space-y-6 py-2">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card p-3">
+        <div>
+          <div className="text-xs uppercase tracking-widest text-muted-foreground">Baseline schedule source</div>
+          <div className="mt-1 flex items-center gap-2">
+            <Badge variant={overrideEnabled ? "default" : "secondary"} className="text-[11px]">
+              {inheritanceLabel(profile.source, profile.profileType)}
+            </Badge>
+            <span className="text-xs text-muted-foreground">
+              {profile.activeFrom.slice(0,5)}–{profile.activeTo.slice(0,5)}
+            </span>
+          </div>
+        </div>
+        {overrideEnabled ? (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              updateBuilding(building.id, { schedule_override_enabled: false });
+              toast.success("Reverted to organisation profile");
+            }}
+          >
+            Revert to org profile
+          </Button>
+        ) : (
+          <Button
+            size="sm"
+            onClick={() => {
+              updateBuilding(building.id, { schedule_override_enabled: true });
+              toast.success("Custom building override enabled — add schedules below");
+            }}
+          >
+            Create Custom Building Override
+          </Button>
+        )}
+      </div>
+
       <div className="rounded-lg border bg-muted/30 p-4">
         <div className="mb-3 flex items-center justify-between">
           <h3 className="text-sm font-semibold">
