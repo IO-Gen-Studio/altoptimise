@@ -100,7 +100,7 @@ export interface MiniApp {
   tagline: string;
   description: string;
   category: string;
-  icon: "baseload" | "sustainability";
+  icon: "baseload" | "sustainability" | "completeness";
   allowedRoles: Role[];
   accent: string;
 }
@@ -117,6 +117,18 @@ export const APPS: MiniApp[] = [
     icon: "baseload",
     allowedRoles: ["super_admin", "data_analyst"],
     accent: "from-cyan-500/15 to-blue-500/10",
+  },
+  {
+    id: "data-completeness",
+    slug: "data-completeness",
+    name: "Data Completeness Check",
+    tagline: "Interval coverage & telemetry health",
+    description:
+      "Validates that half-hourly meter data is present, continuous, and free of extended flatlines before scoring runs.",
+    category: "Validation",
+    icon: "completeness",
+    allowedRoles: ["super_admin", "data_analyst", "viewer"],
+    accent: "from-amber-500/15 to-orange-500/10",
   },
   {
     id: "sustainability",
