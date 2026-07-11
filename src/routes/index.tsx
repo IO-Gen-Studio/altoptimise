@@ -5,6 +5,7 @@ import {
   Gauge,
   Leaf,
   Lock,
+  ShieldCheck,
   Sparkles,
   TrendingDown,
   TrendingUp,
@@ -24,6 +25,7 @@ export const Route = createFileRoute("/")({
 const ICONS = {
   baseload: Gauge,
   sustainability: Leaf,
+  completeness: ShieldCheck,
 };
 
 function LauncherHome() {
