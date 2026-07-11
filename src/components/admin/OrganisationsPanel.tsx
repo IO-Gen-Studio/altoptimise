@@ -1,6 +1,7 @@
-import { Building2, Plus, Trash2 } from "lucide-react";
+import { Building2, Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 
+import { EditOrganisationDialog } from "@/components/admin/EditOrganisationDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -21,7 +22,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useBuildings, useOrganisations } from "@/lib/data-store";
+import { useBuildings, useOrganisations, type Organisation } from "@/lib/data-store";
+import { PROFILE_LABEL, type ProfileType } from "@/lib/energy/profile";
+import { Badge } from "@/components/ui/badge";
 
 export function OrganisationsPanel() {
   const { organisations, addOrganisation, deleteOrganisation } = useOrganisations();
@@ -29,6 +32,7 @@ export function OrganisationsPanel() {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [location, setLocation] = useState("");
+  const [editing, setEditing] = useState<Organisation | null>(null);
 
   const buildingCount = (id: string) => buildings.filter((b) => b.organization_id === id).length;
 
@@ -85,9 +89,10 @@ export function OrganisationsPanel() {
             <TableRow>
               <TableHead>Name</TableHead>
               <TableHead>Location</TableHead>
+              <TableHead>Profile</TableHead>
               <TableHead>Buildings</TableHead>
               <TableHead>Created</TableHead>
-              <TableHead className="w-10" />
+              <TableHead className="w-24" />
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -100,11 +105,25 @@ export function OrganisationsPanel() {
                   </div>
                 </TableCell>
                 <TableCell className="text-muted-foreground">{o.location ?? "—"}</TableCell>
+                <TableCell>
+                  <Badge variant="secondary" className="text-[11px]">
+                    {PROFILE_LABEL[(o.profile_type as ProfileType) ?? "office"]}
+                  </Badge>
+                </TableCell>
                 <TableCell>{buildingCount(o.id)}</TableCell>
                 <TableCell className="text-xs text-muted-foreground">
                   {new Date(o.created_at).toLocaleDateString()}
                 </TableCell>
-                <TableCell>
+                <TableCell className="space-x-1">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setEditing(o)}
+                    aria-label="Edit organisation"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
                   <Button
                     variant="ghost"
                     size="icon"
@@ -122,13 +141,14 @@ export function OrganisationsPanel() {
             ))}
             {organisations.length === 0 && (
               <TableRow>
-                <TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
+                <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
                   No organisations yet.
                 </TableCell>
               </TableRow>
             )}
           </TableBody>
         </Table>
+        {editing && <EditOrganisationDialog org={editing} onOpenChange={(o) => !o && setEditing(null)} />}
       </CardContent>
     </Card>
   );
