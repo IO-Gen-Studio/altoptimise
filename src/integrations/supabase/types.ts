@@ -22,6 +22,7 @@ export type Database = {
           custom_display_name: string
           id: string
           organization_id: string
+          schedule_override_enabled: boolean
         }
         Insert: {
           address?: string | null
@@ -30,6 +31,7 @@ export type Database = {
           custom_display_name: string
           id?: string
           organization_id: string
+          schedule_override_enabled?: boolean
         }
         Update: {
           address?: string | null
@@ -38,6 +40,7 @@ export type Database = {
           custom_display_name?: string
           id?: string
           organization_id?: string
+          schedule_override_enabled?: boolean
         }
         Relationships: [
           {
@@ -186,22 +189,49 @@ export type Database = {
       }
       organisations: {
         Row: {
+          active_days: number[]
+          active_from: string
+          active_to: string
+          completeness_flatline_hours: number
+          completeness_missing_pct: number
           created_at: string
+          holidays: string[]
           id: string
           location: string | null
           organization_name: string
+          peak_season_months: number[]
+          profile_type: string
+          summer_gas_months: number[]
         }
         Insert: {
+          active_days?: number[]
+          active_from?: string
+          active_to?: string
+          completeness_flatline_hours?: number
+          completeness_missing_pct?: number
           created_at?: string
+          holidays?: string[]
           id?: string
           location?: string | null
           organization_name: string
+          peak_season_months?: number[]
+          profile_type?: string
+          summer_gas_months?: number[]
         }
         Update: {
+          active_days?: number[]
+          active_from?: string
+          active_to?: string
+          completeness_flatline_hours?: number
+          completeness_missing_pct?: number
           created_at?: string
+          holidays?: string[]
           id?: string
           location?: string | null
           organization_name?: string
+          peak_season_months?: number[]
+          profile_type?: string
+          summer_gas_months?: number[]
         }
         Relationships: []
       }

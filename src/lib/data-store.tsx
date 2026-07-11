@@ -8,6 +8,15 @@ export interface Organisation {
   organization_name: string;
   location?: string;
   created_at: string;
+  profile_type?: "office" | "retail" | "evening_peak";
+  active_from?: string; // "HH:MM"
+  active_to?: string;   // "HH:MM"
+  active_days?: number[]; // 0=Sun..6=Sat
+  peak_season_months?: number[]; // 1..12
+  summer_gas_months?: number[];  // 1..12
+  holidays?: string[]; // YYYY-MM-DD
+  completeness_missing_pct?: number;
+  completeness_flatline_hours?: number;
 }
 
 export interface Building {
@@ -17,6 +26,7 @@ export interface Building {
   csv_matched_name: string;
   address?: string;
   created_at: string;
+  schedule_override_enabled?: boolean;
 }
 
 export interface ConsumptionRow {
