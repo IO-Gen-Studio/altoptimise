@@ -1,5 +1,5 @@
 import type { ConsumptionRow, Organisation } from "@/lib/data-store";
-import type { ResolvedProfile } from "./profile";
+import { isActiveSlot, type ResolvedProfile } from "./profile";
 
 export type CompletenessStatus = "ok" | "incomplete" | "telemetry_offline";
 
@@ -35,18 +35,31 @@ export function checkCompleteness(
   end: Date,
   org: Organisation | undefined,
   profile: ResolvedProfile,
+  firstSeenISO?: string,
 ): CompletenessResult {
   const missingThreshold = org?.completeness_missing_pct ?? 10;
   const flatlineThreshold = org?.completeness_flatline_hours ?? 24;
-  const dayCount = daysBetween(start, end);
+  // Clamp window start to meter's first-seen date so newly onboarded meters
+  // aren't unfairly flagged for absence before they existed.
+  let effectiveStart = start;
+  if (firstSeenISO) {
+    const [fy, fm, fd] = firstSeenISO.split("-").map(Number);
+    const firstSeen = new Date(fy, fm - 1, fd);
+    if (firstSeen > effectiveStart) effectiveStart = firstSeen;
+  }
+  if (effectiveStart > end) {
+    return { status: "ok", expectedSlots: 0, presentSlots: 0, missingPct: 0, longestFlatlineHours: 0 };
+  }
+  const dayCount = daysBetween(effectiveStart, end);
   const expectedSlots = dayCount * 48;
 
   // Build a chronologically ordered flat series (null for missing)
   const startISO = start.toISOString().slice(0, 10);
   const endISO = end.toISOString().slice(0, 10);
+  const effStartISO = effectiveStart.toISOString().slice(0, 10);
   const byDate = new Map<string, (number | null)[]>();
   for (const r of rows) {
-    if (r.interval_date < startISO || r.interval_date > endISO) continue;
+    if (r.interval_date < effStartISO || r.interval_date > endISO) continue;
     // Merge duplicates by summing (multiple meters shouldn't occur here, but safe)
     const existing = byDate.get(r.interval_date);
     if (!existing) {
@@ -60,27 +73,37 @@ export function checkCompleteness(
     }
   }
 
+  // Build series + parallel active-hours flag array
   const series: (number | null)[] = [];
-  const cursor = new Date(start);
+  const active: boolean[] = [];
+  const cursor = new Date(effectiveStart);
   for (let d = 0; d < dayCount; d++) {
     const iso = cursor.toISOString().slice(0, 10);
     const day = byDate.get(iso);
-    if (day) series.push(...day);
-    else for (let i = 0; i < 48; i++) series.push(null);
+    for (let i = 0; i < 48; i++) {
+      series.push(day ? day[i] : null);
+      active.push(isActiveSlot(profile, cursor, i));
+    }
     cursor.setDate(cursor.getDate() + 1);
   }
 
   const presentSlots = series.filter((v) => v != null).length;
   const missingPct = expectedSlots === 0 ? 0 : ((expectedSlots - presentSlots) / expectedSlots) * 100;
 
-  // Longest run of absolute 0 (in half-hour slots)
+  // Longest run of 0 during ACTIVE hours only. Baseload/overnight zeros are
+  // normal for many meters and must not trigger a telemetry-offline flag.
   let longestZeroSlots = 0;
   let run = 0;
-  for (const v of series) {
-    if (v === 0) { run++; if (run > longestZeroSlots) longestZeroSlots = run; }
-    else run = 0;
+  for (let i = 0; i < series.length; i++) {
+    if (active[i] && series[i] === 0) {
+      run++;
+      if (run > longestZeroSlots) longestZeroSlots = run;
+    } else {
+      run = 0;
+    }
   }
   const longestFlatlineHours = longestZeroSlots / 2;
+  void startISO;
 
   if (missingPct > missingThreshold) {
     return {
