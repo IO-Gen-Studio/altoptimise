@@ -690,6 +690,106 @@ export function useMeterRegistry(orgId?: string): MeterRegistryRow[] {
   }, [state.consumption, state.buildings, state.meterOverrides, orgId]);
 }
 
+export interface MeterSeries {
+  rows: ConsumptionRow[];
+  firstSeen: string | null;
+  lastSeen: string | null;
+  dailyTotals: { date: string; total: number | null }[];
+  hhAverage: { slot: number; label: string; avg: number }[];
+  weekdayHeatmap: number[][]; // [weekday 0..6][slot 0..47] average kWh
+  totalWindowKwh: number;
+}
+
+export function useMeterSeries(
+  rawMeterName: string | null,
+  startISO: string,
+  endISO: string,
+): MeterSeries {
+  const { state } = useDataStore();
+  return useMemo(() => {
+    const empty: MeterSeries = {
+      rows: [], firstSeen: null, lastSeen: null,
+      dailyTotals: [], hhAverage: [], weekdayHeatmap: Array.from({ length: 7 }, () => new Array(48).fill(0)),
+      totalWindowKwh: 0,
+    };
+    if (!rawMeterName) return empty;
+    const all = state.consumption.filter((c) => c.meter_name === rawMeterName);
+    if (!all.length) return empty;
+    const sortedDates = all.map((r) => r.interval_date).sort();
+    const firstSeen = sortedDates[0];
+    const lastSeen = sortedDates[sortedDates.length - 1];
+    const windowRows = all.filter((r) => r.interval_date >= startISO && r.interval_date <= endISO);
+
+    // Daily totals
+    const dailyMap = new Map<string, number | null>();
+    for (const r of windowRows) {
+      const sum = r.half_hourly_values.reduce<number | null>((acc, v) => {
+        if (v == null) return acc;
+        return (acc ?? 0) + v;
+      }, null);
+      const scaled = sum == null ? null : sum * (r.meter_factor || 1);
+      const prev = dailyMap.get(r.interval_date);
+      if (prev == null) dailyMap.set(r.interval_date, scaled);
+      else dailyMap.set(r.interval_date, (prev ?? 0) + (scaled ?? 0));
+    }
+    // Walk window day-by-day to include gaps
+    const dailyTotals: { date: string; total: number | null }[] = [];
+    if (startISO && endISO && startISO <= endISO) {
+      const [ys, ms, ds] = startISO.split("-").map(Number);
+      const [ye, me, de] = endISO.split("-").map(Number);
+      const cur = new Date(ys, ms - 1, ds);
+      const stop = new Date(ye, me - 1, de);
+      while (cur <= stop) {
+        const iso = cur.toISOString().slice(0, 10);
+        dailyTotals.push({ date: iso, total: dailyMap.has(iso) ? dailyMap.get(iso) ?? null : null });
+        cur.setDate(cur.getDate() + 1);
+      }
+    }
+
+    // HH average across window
+    const slotSum = new Array(48).fill(0);
+    const slotCnt = new Array(48).fill(0);
+    for (const r of windowRows) {
+      const f = r.meter_factor || 1;
+      for (let i = 0; i < 48; i++) {
+        const v = r.half_hourly_values[i];
+        if (v == null) continue;
+        slotSum[i] += v * f;
+        slotCnt[i] += 1;
+      }
+    }
+    const hhAverage = Array.from({ length: 48 }, (_, i) => {
+      const h = Math.floor(i / 2);
+      const mm = i % 2 === 0 ? "00" : "30";
+      return {
+        slot: i,
+        label: `${String(h).padStart(2, "0")}:${mm}`,
+        avg: slotCnt[i] ? slotSum[i] / slotCnt[i] : 0,
+      };
+    });
+
+    // Weekday heatmap
+    const wSum = Array.from({ length: 7 }, () => new Array(48).fill(0));
+    const wCnt = Array.from({ length: 7 }, () => new Array(48).fill(0));
+    for (const r of windowRows) {
+      const [y, m, d] = r.interval_date.split("-").map(Number);
+      const dow = new Date(y, m - 1, d).getDay();
+      const f = r.meter_factor || 1;
+      for (let i = 0; i < 48; i++) {
+        const v = r.half_hourly_values[i];
+        if (v == null) continue;
+        wSum[dow][i] += v * f;
+        wCnt[dow][i] += 1;
+      }
+    }
+    const weekdayHeatmap = wSum.map((row, d) => row.map((s, i) => (wCnt[d][i] ? s / wCnt[d][i] : 0)));
+
+    const totalWindowKwh = dailyTotals.reduce((acc, dt) => acc + (dt.total ?? 0), 0);
+
+    return { rows: windowRows, firstSeen, lastSeen, dailyTotals, hhAverage, weekdayHeatmap, totalWindowKwh };
+  }, [state.consumption, rawMeterName, startISO, endISO]);
+}
+
 const DAY_ORDER: Record<Weekday, number> = {
   mon: 0, tue: 1, wed: 2, thu: 3, fri: 4, sat: 5, sun: 6,
 };
