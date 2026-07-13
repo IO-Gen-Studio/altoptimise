@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { APPS, canAccess, ROLE_LABEL, useLauncher } from "@/lib/launcher-context";
 import { BaseloadApp } from "@/components/launcher/apps/BaseloadApp";
 import { SustainabilityApp } from "@/components/launcher/apps/SustainabilityApp";
-import { DataCompletenessApp } from "@/components/launcher/apps/DataCompletenessApp";
+import { DataValidationApp } from "@/components/launcher/apps/DataValidationApp";
 
 export const Route = createFileRoute("/_authenticated/apps/$slug")({
   loader: ({ params }) => {
@@ -58,8 +58,8 @@ function AppView() {
           <BaseloadApp />
         ) : app.slug === "sustainability" ? (
           <SustainabilityApp />
-        ) : app.slug === "data-completeness" ? (
-          <DataCompletenessApp />
+        ) : app.slug === "data-validation" || app.slug === "data-completeness" ? (
+          <DataValidationApp />
         ) : (
           <Card>
             <CardContent className="p-8 text-sm text-muted-foreground">
