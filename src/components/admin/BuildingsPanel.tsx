@@ -1,5 +1,5 @@
-import { Plus, Trash2, Warehouse } from "lucide-react";
-import { useState } from "react";
+import { AlertTriangle, Plus, Trash2, Warehouse } from "lucide-react";
+import { useMemo, useState } from "react";
 
 import { EditBuildingDialog } from "@/components/admin/EditBuildingDialog";
 import { Button } from "@/components/ui/button";
@@ -16,13 +16,22 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useBuildings, useConsumption, useOrganisations, type Building } from "@/lib/data-store";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  useBuildings, useConsumption, useDataStore, useMeterRegistry, useOrganisations,
+  type Building,
+} from "@/lib/data-store";
+import { checkCompleteness, utilityKind } from "@/lib/energy/completeness";
+import { resolveProfile } from "@/lib/energy/profile";
 
 export function BuildingsPanel() {
   const { organisations } = useOrganisations();
   const [orgId, setOrgId] = useState<string>(organisations[0]?.id ?? "");
   const { buildings, addBuilding, deleteBuilding } = useBuildings(orgId);
   const { consumption } = useConsumption();
+  const { state } = useDataStore();
+  const registry = useMeterRegistry(orgId);
+  const orgRecord = organisations.find((o) => o.id === orgId);
   const [open, setOpen] = useState(false);
   const [display, setDisplay] = useState("");
   const [match, setMatch] = useState("");
@@ -30,7 +39,35 @@ export function BuildingsPanel() {
 
   const linkedCount = (bid: string) => consumption.filter((c) => c.building_id === bid).length;
 
+  // Roll up validation alerts across the building's meters over last 30 days.
+  const alertsByBuilding = useMemo(() => {
+    const map = new Map<string, { kind: "spike" | "drop" | "offline"; label: string }[]>();
+    const end = new Date();
+    const start = new Date(end);
+    start.setDate(start.getDate() - 29);
+    for (const m of registry) {
+      if (!m.effective_building_id) continue;
+      const building = buildings.find((b) => b.id === m.effective_building_id);
+      const profile = resolveProfile(
+        orgRecord, building,
+        state.schedules.filter((s) => s.building_id === (building?.id ?? "")),
+      );
+      const utility = utilityKind(m.utility_category);
+      const allRows = consumption.filter((c) => c.meter_name === m.raw_meter_name);
+      const firstSeen = allRows.map((r) => r.interval_date).sort()[0];
+      const res = checkCompleteness(allRows, utility, start, end, orgRecord, profile, firstSeen);
+      const label = m.custom_display_name ?? m.raw_meter_name;
+      const list = map.get(m.effective_building_id) ?? [];
+      if (res.integrity === "spike") list.push({ kind: "spike", label: `${label}: spike +${res.integrityDeltaPct.toFixed(0)}% vs 4-wk baseline` });
+      if (res.integrity === "drop") list.push({ kind: "drop", label: `${label}: drop ${res.integrityDeltaPct.toFixed(0)}% vs 4-wk baseline` });
+      if (res.stagnation === "offline") list.push({ kind: "offline", label: `${label}: ${res.offlineEventCount} offline event(s)` });
+      if (list.length) map.set(m.effective_building_id, list);
+    }
+    return map;
+  }, [registry, buildings, consumption, state.schedules, orgRecord]);
+
   return (
+    <TooltipProvider delayDuration={150}>
     <Card>
       <CardContent className="p-6">
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
@@ -104,6 +141,23 @@ export function BuildingsPanel() {
                 <TableCell className="font-medium">
                   <div className="flex items-center gap-2">
                     <Warehouse className="h-4 w-4 text-primary" /> {b.custom_display_name}
+                    {alertsByBuilding.get(b.id)?.length ? (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="inline-flex" onClick={(e) => e.stopPropagation()}>
+                            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="right" className="max-w-xs text-xs">
+                          <div className="font-medium">Variance Alert</div>
+                          <ul className="mt-1 space-y-0.5 text-muted-foreground">
+                            {alertsByBuilding.get(b.id)!.map((a, i) => (
+                              <li key={i}>{a.label}</li>
+                            ))}
+                          </ul>
+                        </TooltipContent>
+                      </Tooltip>
+                    ) : null}
                   </div>
                 </TableCell>
                 <TableCell><code className="rounded bg-muted px-1.5 py-0.5 text-xs">{b.csv_matched_name}</code></TableCell>
@@ -133,5 +187,6 @@ export function BuildingsPanel() {
         )}
       </CardContent>
     </Card>
+    </TooltipProvider>
   );
 }
