@@ -119,12 +119,12 @@ export const APPS: MiniApp[] = [
     accent: "from-cyan-500/15 to-blue-500/10",
   },
   {
-    id: "data-completeness",
-    slug: "data-completeness",
-    name: "Data Completeness Check",
-    tagline: "Interval coverage & telemetry health",
+    id: "data-validation",
+    slug: "data-validation",
+    name: "Data Validation Engine",
+    tagline: "Completeness, integrity & meter health",
     description:
-      "Validates that half-hourly meter data is present, continuous, and free of extended flatlines before scoring runs.",
+      "Runs structural completeness, statistical integrity (spikes/drops vs 4-wk baseline) and stagnation checks before analytics.",
     category: "Validation",
     icon: "completeness",
     allowedRoles: ["super_admin", "data_analyst", "viewer"],

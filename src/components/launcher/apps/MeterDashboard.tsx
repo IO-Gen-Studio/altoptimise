@@ -1,7 +1,7 @@
-import { ArrowLeft, Activity, CalendarDays, Gauge } from "lucide-react";
+import { ArrowLeft, Activity, AlertTriangle, CalendarDays, Gauge, TrendingDown, TrendingUp } from "lucide-react";
 import { useMemo } from "react";
 import {
-  Bar, BarChart, CartesianGrid, Line, LineChart, ReferenceArea,
+  Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ReferenceArea, ReferenceLine,
   ResponsiveContainer, Tooltip as RTooltip, XAxis, YAxis,
 } from "recharts";
 
@@ -85,8 +85,27 @@ export function MeterDashboard({ orgId, rawMeterName, windowDays, onBack }: Prop
   ) : completeness.status === "incomplete" ? (
     <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-700">Data Incomplete</Badge>
   ) : (
-    <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-700">Telemetry Offline</Badge>
+    <Badge variant="outline" className="border-red-500/30 bg-red-500/10 text-red-700">Meter Offline</Badge>
   );
+
+  const integrityBadge = (() => {
+    if (completeness.integrity === "ok") return <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-700">OK</Badge>;
+    if (completeness.integrity === "insufficient_history") return <Badge variant="outline" className="text-muted-foreground">Insufficient history</Badge>;
+    if (completeness.integrity === "skipped") return <Badge variant="outline" className="text-muted-foreground">Summer season</Badge>;
+    const Icon = completeness.integrity === "spike" ? TrendingUp : TrendingDown;
+    const sign = completeness.integrityDeltaPct >= 0 ? "+" : "";
+    return (
+      <Badge variant="outline" className="gap-1 border-muted-foreground/40 bg-muted text-foreground">
+        <AlertTriangle className="h-3 w-3 text-muted-foreground" />
+        <Icon className="h-3 w-3" />
+        {completeness.integrity === "spike" ? "Spike" : "Drop"} {sign}{completeness.integrityDeltaPct.toFixed(0)}%
+      </Badge>
+    );
+  })();
+
+  const showBaselineLine = completeness.integrity === "spike" || completeness.integrity === "drop" || completeness.integrity === "ok";
+  const baselineKwh = completeness.integrityBaselineKwh;
+  const alertDateISO = completeness.integrityTodayISO;
 
   return (
     <div className="space-y-6">
@@ -110,7 +129,7 @@ export function MeterDashboard({ orgId, rawMeterName, windowDays, onBack }: Prop
         </Badge>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-5">
         <Card><CardContent className="p-4">
           <div className="text-xs uppercase tracking-widest text-muted-foreground">Status</div>
           <div className="mt-2">{statusBadge}</div>
@@ -124,8 +143,23 @@ export function MeterDashboard({ orgId, rawMeterName, windowDays, onBack }: Prop
           </div>
         </CardContent></Card>
         <Card><CardContent className="p-4">
-          <div className="text-xs uppercase tracking-widest text-muted-foreground">Longest flatline (active hrs)</div>
+          <div className="text-xs uppercase tracking-widest text-muted-foreground">Longest 0-run (active hrs)</div>
           <div className="mt-1 text-2xl font-semibold">{completeness.longestFlatlineHours.toFixed(1)}h</div>
+          <div className="text-xs text-muted-foreground">
+            {completeness.offlineEventCount} offline event(s) ·
+            {completeness.stuckValueHours > 0 ? ` stuck ${completeness.stuckValueHours.toFixed(1)}h` : " no stuck values"}
+          </div>
+        </CardContent></Card>
+        <Card><CardContent className="p-4">
+          <div className="text-xs uppercase tracking-widest text-muted-foreground">Integrity</div>
+          <div className="mt-2">{integrityBadge}</div>
+          {completeness.integrity === "spike" || completeness.integrity === "drop" ? (
+            <div className="mt-2 text-xs text-muted-foreground">
+              {alertDateISO}: {completeness.integrityTodayKwh.toFixed(0)} kWh vs baseline {baselineKwh.toFixed(0)} kWh
+            </div>
+          ) : (
+            <div className="mt-2 text-xs text-muted-foreground">4-week same-weekday baseline</div>
+          )}
         </CardContent></Card>
         <Card><CardContent className="p-4">
           <div className="text-xs uppercase tracking-widest text-muted-foreground">Window total</div>
@@ -162,6 +196,9 @@ export function MeterDashboard({ orgId, rawMeterName, windowDays, onBack }: Prop
         <CardContent className="p-4">
           <div className="mb-2 flex items-center gap-2 text-sm font-medium">
             <CalendarDays className="h-4 w-4 text-primary" /> Daily totals
+            {showBaselineLine && baselineKwh > 0 && (
+              <span className="text-xs font-normal text-muted-foreground">— dashed line = 4-wk same-DOW baseline</span>
+            )}
           </div>
           <div className="h-56">
             <ResponsiveContainer width="100%" height="100%">
@@ -170,7 +207,19 @@ export function MeterDashboard({ orgId, rawMeterName, windowDays, onBack }: Prop
                 <XAxis dataKey="date" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
                 <YAxis tick={{ fontSize: 11 }} />
                 <RTooltip />
-                <Bar dataKey="total" fill="hsl(var(--primary))" />
+                {showBaselineLine && baselineKwh > 0 && (
+                  <ReferenceLine y={baselineKwh} stroke="hsl(var(--muted-foreground))" strokeDasharray="4 4" />
+                )}
+                <Bar dataKey="total">
+                  {series.dailyTotals.map((d) => (
+                    <Cell
+                      key={d.date}
+                      fill={d.date === alertDateISO && (completeness.integrity === "spike" || completeness.integrity === "drop")
+                        ? "hsl(var(--muted-foreground))"
+                        : "hsl(var(--primary))"}
+                    />
+                  ))}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>

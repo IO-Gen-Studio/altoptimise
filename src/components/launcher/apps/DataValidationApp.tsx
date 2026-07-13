@@ -1,4 +1,4 @@
-import { ArrowUpDown, ChevronRight, ShieldCheck } from "lucide-react";
+import { AlertTriangle, ArrowUpDown, ChevronRight, ShieldCheck, TrendingDown, TrendingUp } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
@@ -6,17 +6,21 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   useBuildings, useConsumption, useDataStore, useMeterRegistry, useOrganisations,
 } from "@/lib/data-store";
-import { checkCompleteness, utilityKind, type CompletenessStatus } from "@/lib/energy/completeness";
+import {
+  checkCompleteness, utilityKind,
+  type CompletenessStatus, type IntegrityStatus, type StagnationStatus,
+} from "@/lib/energy/completeness";
 import { resolveProfile } from "@/lib/energy/profile";
 import { useLauncher } from "@/lib/launcher-context";
 
 import { MeterDashboard } from "./MeterDashboard";
 
 type Days = 7 | 30 | 90;
-type SortKey = "building" | "meter" | "utility" | "rows" | "firstSeen" | "lastSeen" | "coverage" | "flatline" | "status";
+type SortKey = "building" | "meter" | "utility" | "rows" | "firstSeen" | "lastSeen" | "coverage" | "flatline" | "integrity" | "offlineEvents" | "status";
 
 interface MeterRow {
   raw: string;
@@ -31,11 +35,21 @@ interface MeterRow {
   flatlineHours: number;
   status: CompletenessStatus;
   reason?: string;
+  integrity: IntegrityStatus;
+  integrityDeltaPct: number;
+  integrityBaselineKwh: number;
+  integrityTodayKwh: number;
+  integrityTodayISO: string | null;
+  stagnation: StagnationStatus;
+  offlineEvents: number;
 }
 
 const STATUS_ORDER: Record<CompletenessStatus, number> = { ok: 0, incomplete: 1, telemetry_offline: 2 };
+const INTEGRITY_ORDER: Record<IntegrityStatus, number> = {
+  ok: 0, insufficient_history: 1, skipped: 2, drop: 3, spike: 4,
+};
 
-export function DataCompletenessApp() {
+export function DataValidationApp() {
   const { org } = useLauncher();
   const { organisations } = useOrganisations();
   const { buildings } = useBuildings(org.id);
@@ -88,6 +102,13 @@ export function DataCompletenessApp() {
         flatlineHours: res.longestFlatlineHours,
         status: res.status,
         reason: res.reason,
+        integrity: res.integrity,
+        integrityDeltaPct: res.integrityDeltaPct,
+        integrityBaselineKwh: res.integrityBaselineKwh,
+        integrityTodayKwh: res.integrityTodayKwh,
+        integrityTodayISO: res.integrityTodayISO,
+        stagnation: res.stagnation,
+        offlineEvents: res.offlineEventCount,
       };
     });
   }, [registry, buildings, consumption, state.schedules, orgRecord, start, end]);
@@ -114,6 +135,8 @@ export function DataCompletenessApp() {
           case "lastSeen": return (a.lastSeen ?? "").localeCompare(b.lastSeen ?? "");
           case "coverage": return a.coveragePct - b.coveragePct;
           case "flatline": return a.flatlineHours - b.flatlineHours;
+          case "integrity": return INTEGRITY_ORDER[a.integrity] - INTEGRITY_ORDER[b.integrity] || a.integrityDeltaPct - b.integrityDeltaPct;
+          case "offlineEvents": return a.offlineEvents - b.offlineEvents;
           case "status": return STATUS_ORDER[a.status] - STATUS_ORDER[b.status];
         }
       })();
@@ -130,7 +153,35 @@ export function DataCompletenessApp() {
   function statusBadge(s: CompletenessStatus) {
     if (s === "ok") return <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-700">OK</Badge>;
     if (s === "incomplete") return <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-700">Incomplete</Badge>;
-    return <Badge variant="outline" className="border-red-500/30 bg-red-500/10 text-red-700">Telemetry Offline</Badge>;
+    return <Badge variant="outline" className="border-red-500/30 bg-red-500/10 text-red-700">Meter Offline</Badge>;
+  }
+
+  function integrityBadge(r: MeterRow) {
+    if (r.integrity === "ok") return <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-700">OK</Badge>;
+    if (r.integrity === "insufficient_history") return <Badge variant="outline" className="text-muted-foreground">Insufficient history</Badge>;
+    if (r.integrity === "skipped") return <Badge variant="outline" className="text-muted-foreground">Summer season</Badge>;
+    const sign = r.integrityDeltaPct >= 0 ? "+" : "";
+    const label = r.integrity === "spike" ? "Spike" : "Drop";
+    const Icon = r.integrity === "spike" ? TrendingUp : TrendingDown;
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="inline-flex items-center gap-1">
+            <Badge variant="outline" className="border-muted-foreground/40 bg-muted text-foreground gap-1">
+              <AlertTriangle className="h-3 w-3 text-muted-foreground" />
+              <Icon className="h-3 w-3" />
+              {label} {sign}{r.integrityDeltaPct.toFixed(0)}%
+            </Badge>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="text-xs">
+          <div>Variance Alert: Unexpectedly {r.integrity === "spike" ? "High" : "Low"} Consumption Detected</div>
+          <div className="mt-1 text-muted-foreground">
+            {r.integrityTodayISO ?? "today"}: {r.integrityTodayKwh.toFixed(0)} kWh vs 4-wk same-day baseline {r.integrityBaselineKwh.toFixed(0)} kWh
+          </div>
+        </TooltipContent>
+      </Tooltip>
+    );
   }
 
   const utilities = Array.from(new Set(meterRows.map((r) => r.utility)));
@@ -147,6 +198,7 @@ export function DataCompletenessApp() {
   }
 
   return (
+    <TooltipProvider delayDuration={150}>
     <div className="space-y-6">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-start gap-4">
@@ -154,9 +206,9 @@ export function DataCompletenessApp() {
             <ShieldCheck className="h-6 w-6 text-primary" />
           </div>
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Data Completeness Check</h1>
+            <h1 className="text-2xl font-semibold tracking-tight">Data Validation Engine</h1>
             <p className="text-sm text-muted-foreground">
-              Per-meter interval coverage for {org.name} — last {days} days. Click any meter to open its dashboard.
+              Structural completeness, statistical integrity and stagnation checks for {org.name} — last {days} days. Click any meter to open its dashboard.
             </p>
           </div>
         </div>
@@ -202,7 +254,9 @@ export function DataCompletenessApp() {
                 <SortableHead k="firstSeen" label="First seen" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
                 <SortableHead k="lastSeen" label="Last seen" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
                 <SortableHead k="coverage" label="Coverage" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
-                <SortableHead k="flatline" label="Longest flatline" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                <SortableHead k="flatline" label="Longest 0-run (active hrs)" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                <SortableHead k="offlineEvents" label="Offline events" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+                <SortableHead k="integrity" label="Integrity" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
                 <SortableHead k="status" label="Status" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
                 <TableHead className="w-10" />
               </TableRow>
@@ -222,18 +276,21 @@ export function DataCompletenessApp() {
                   <TableCell className="text-xs">{r.lastSeen ?? "—"}</TableCell>
                   <TableCell>{r.coveragePct.toFixed(1)}%</TableCell>
                   <TableCell>{r.flatlineHours.toFixed(1)}h</TableCell>
+                  <TableCell>{r.offlineEvents}</TableCell>
+                  <TableCell>{integrityBadge(r)}</TableCell>
                   <TableCell>{statusBadge(r.status)}</TableCell>
                   <TableCell><ChevronRight className="h-4 w-4 text-muted-foreground" /></TableCell>
                 </TableRow>
               ))}
               {sorted.length === 0 && (
-                <TableRow><TableCell colSpan={10} className="py-8 text-center text-sm text-muted-foreground">No meters match these filters.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={12} className="py-8 text-center text-sm text-muted-foreground">No meters match these filters.</TableCell></TableRow>
               )}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
     </div>
+    </TooltipProvider>
   );
 }
 
