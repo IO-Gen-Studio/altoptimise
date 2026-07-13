@@ -1,47 +1,64 @@
-## Goal
-Turn the Data Completeness grid into a drill-down energy dashboard **per meter**, and tighten the completeness calculation so newly onboarded meters aren't unfairly flagged.
 
-## 1. Completeness engine — per-meter accuracy
-Update `src/lib/energy/completeness.ts`:
-- Add optional `firstSeen: string` (YYYY-MM-DD) argument. When present, clamp the expected window to `max(start, firstSeen)`.
-- `checkCompleteness()` continues to return `{ status, missingPct, longestFlatlineHours, reason, expectedSlots, presentSlots }` but now with the clamped denominator.
-- Fix a minor bug: current flatline detection treats `0` as "offline" — many real meters legitimately record `0` overnight. Change to: flatline = run of `0` **during active hours only** (uses `isActiveSlot` from `profile.ts`). Keep the summer-gas exemption.
+## Rename
 
-## 2. Grid becomes per-meter (replaces current building×utility aggregation)
-Rewrite `src/components/launcher/apps/DataCompletenessApp.tsx`:
-- Row = one meter (using `MeterRegistryRow` from data-store; already keyed by `raw_meter_name`).
-- Columns: Building, Meter (display name or raw), Utility, Rows, First seen, Last seen, Coverage %, Longest flatline, Status.
-- Sortable columns (click header to toggle asc/desc). Simple local `useState` sort key + direction.
-- Filter: building select (All / specific) + utility select + the existing 7/30/90 window.
-- Clicking a row (or a building group header) opens the meter dashboard (see §3).
-- Group-by-building toggle: when on, render collapsible sections per building with a small summary chip (n meters, worst status).
+- Launcher entry (`src/lib/launcher-context.tsx`): id/slug → `data-validation`, name → "Data Validation Engine", updated description. Keep `data-completeness` as an alias slug so existing links still resolve.
+- `src/routes/_authenticated/apps/$slug.tsx`: match both `data-validation` and `data-completeness`.
+- `DataCompletenessApp.tsx` → `DataValidationApp.tsx` (component renamed, header + copy updated). Old file removed.
+- Building drill-down link (BuildingsPanel "Open dashboard" if present) points to `/apps/data-validation?building=<id>`.
 
-## 3. Meter energy dashboard (drill-down)
-New file `src/components/launcher/apps/MeterDashboard.tsx`, rendered inline in the Data Completeness app when a meter is selected (state-driven; no new route needed — back button returns to grid).
+No DB/schema changes.
 
-Shows for the selected window:
-- **Header**: building, meter, utility, meter factor, first/last seen, effective schedule badge (reuses `resolveProfile` + `inheritanceLabel`).
-- **Completeness card**: coverage %, missing intervals, longest flatline, status badge, reason text.
-- **HH profile chart**: average kWh per half-hour slot (0..47), line chart. Overlay the active-hours band from the resolved profile.
-- **Daily totals chart**: bar chart of daily kWh across the window; missing days rendered as gaps.
-- **Weekly pattern chart**: average kWh by weekday × slot heatmap (7×48 grid via CSS grid + colour scale from `hsl(var(--primary))` at varying alpha — no new dep).
-- All charts use existing `recharts` (already in project) except the heatmap which is a lightweight CSS grid.
+## Validation engine additions (`src/lib/energy/completeness.ts` → keep filename, extend API)
 
-## 4. Data-store helper
-Add to `src/lib/data-store.tsx`:
-- `useMeterSeries(rawMeterName, buildingId, start, end)` → `{ rows, firstSeen, lastSeen, dailyTotals, hhAverage, weekdayHeatmap }` computed with `useMemo` from existing `consumption` state (no new fetch).
-- `useBuildingMeters(buildingId)` → list of `MeterRegistryRow` scoped to the building (filtering the existing registry).
+Extend `CompletenessResult` with new fields (all optional so existing consumers keep working):
 
-## 5. Building drill-down entry point
-When "Group by building" is on, clicking a building header expands its meter list. Clicking a meter opens §3. Also add a small "Open dashboard" button in the existing `BuildingsPanel` row → navigates to `/apps/data-completeness?building=<id>` (URL search param read on mount to auto-open that building's group).
+```
+integrity: "ok" | "spike" | "drop" | "insufficient_history"
+integrityDeltaPct: number         // signed % vs 4-week same-DOW baseline
+integrityBaselineKwh: number
+integrityTodayKwh: number
+stagnation: "ok" | "offline" | "stuck_value"
+stagnationHours: number           // longest 0-run during active hours (elec/water)
+stuckValueHours: number           // longest run of identical non-zero value (elec/water)
+offlineEventCount: number         // historical offline events in window
+```
+
+Rules implemented:
+
+1. **Structural** — unchanged (>10% missing → `incomplete`).
+2. **Statistical integrity (Spike/Drop)** — for the most recent complete day in the window:
+   - Baseline = mean of totals on the same weekday for the previous 4 occurrences that ALSO pass structural completeness AND (for holiday-park/evening_peak profiles) fall in the same peak-vs-off-peak season as today, per `isPeakSeason`.
+   - Need ≥3 baseline days; otherwise `insufficient_history`.
+   - Flag `spike` when today > baseline × 1.30, `drop` when today < baseline × 0.70.
+   - Skip entirely for utility === "gas" during `summerGasMonths`.
+3. **Stagnation** — electricity + water only:
+   - `offline`: ≥24h continuous absolute 0 during active hours (reuses existing active-hour longest-zero logic; threshold raised to 24h and decoupled from `completeness_flatline_hours`).
+   - `stuck_value`: ≥12 consecutive intervals with identical non-zero value (any hour).
+   - `offlineEventCount`: count of distinct ≥24h zero runs across the full history of the meter (not just current window).
+   - Gas: always `ok` for stagnation.
+4. Existing status precedence stays: structural `incomplete` → `telemetry_offline` (now driven by `stagnation !== "ok"`) → `ok`. Integrity is reported alongside status, not as the top-level status.
+
+## Grid updates (`DataValidationApp.tsx`)
+
+New columns (sortable):
+- **Integrity** — badge (OK / Spike +Δ% / Drop −Δ% / — insufficient history). Grey neutral warning icon per spec.
+- **Offline events** — count from `offlineEventCount`.
+- Existing "Longest flatline" relabelled "Longest 0-run (active hrs)".
+- Existing "Status" merges structural + stagnation.
+
+Grouping/filters unchanged. Tooltip on Integrity badge shows today vs baseline kWh and which weekday/season it compared against.
+
+## Buildings list warning icon
+
+`BuildingsPanel` (and any building list in the launcher grid): a `useBuildingIntegritySummary(buildingId)` helper in `src/lib/data-store.tsx` runs the new engine across the building's meters and returns whether any triggered `spike`/`drop`/`offline`/`stuck_value`. Show a grey `AlertTriangle` icon + tooltip ("Variance Alert: Unexpectedly Low/High Consumption Detected" / "Meter Offline"). Neutral grey styling (`text-muted-foreground`) — not red/amber, per spec.
+
+## Meter dashboard visuals (`MeterDashboard.tsx`)
+
+- New "Data Validation" card next to existing completeness card showing: structural status, integrity badge with today vs 4-week baseline (with a small sparkline of the last ~8 same-DOW totals highlighting today), stagnation status, and offline-event counter.
+- On the daily-totals bar chart: overlay a dashed line at the 4-week same-DOW baseline and colour today's bar grey with a warning glyph when spike/drop fires.
+- On the HH profile chart: shade any ≥24h zero window (during active hours) grey and annotate "Offline".
 
 ## Out of scope
-- No schema/migration changes.
-- No changes to CSV ingestion, meter overrides, or auth.
-- BaseloadApp untouched.
 
-## Technical notes
-- All charts client-side from already-loaded `consumption` rows — no server work.
-- First-seen = `min(interval_date)` across the meter's rows in the full dataset (not the window), so re-selecting a shorter window still shows the true onboarding date.
-- Sorting: stable sort with `Array.prototype.toSorted` (Node ≥20, supported by the target).
-- Files touched: `completeness.ts` (edit), `DataCompletenessApp.tsx` (rewrite), `data-store.tsx` (add hooks), new `MeterDashboard.tsx`.
+- No changes to Baseload scoring, CSV ingestion, meter overrides, or auth.
+- No new DB tables; offline-event counter is computed on the fly from `consumption` state.
