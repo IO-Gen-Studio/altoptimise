@@ -70,9 +70,9 @@ export function DataValidationApp() {
     const dates = orgRows.map((r) => r.interval_date).sort();
     const last = dates.length ? dates[dates.length - 1] : new Date().toISOString().slice(0, 10);
     const [y, m, d] = last.split("-").map(Number);
-    const endD = new Date(y, m - 1, d);
+    const endD = new Date(Date.UTC(y, m - 1, d));
     const startD = new Date(endD);
-    startD.setDate(startD.getDate() - (days - 1));
+    startD.setUTCDate(startD.getUTCDate() - (days - 1));
     return { start: startD, end: endD };
   }, [consumption, org.id, days]);
 

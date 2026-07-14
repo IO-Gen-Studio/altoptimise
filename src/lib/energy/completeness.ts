@@ -59,7 +59,7 @@ export function checkCompleteness(
   let effectiveStart = start;
   if (firstSeenISO) {
     const [fy, fm, fd] = firstSeenISO.split("-").map(Number);
-    const firstSeen = new Date(fy, fm - 1, fd);
+    const firstSeen = new Date(Date.UTC(fy, fm - 1, fd));
     if (firstSeen > effectiveStart) effectiveStart = firstSeen;
   }
   // Compute integrity + stagnation across the full meter history so
@@ -106,7 +106,7 @@ export function checkCompleteness(
       series.push(day ? day[i] : null);
       active.push(isActiveSlot(profile, cursor, i));
     }
-    cursor.setDate(cursor.getDate() + 1);
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
   }
 
   const presentSlots = series.filter((v) => v != null).length;
@@ -227,8 +227,8 @@ function computeIntegrity(
   }
   if (!todayISO) return empty;
   const [ty, tm, td] = todayISO.split("-").map(Number);
-  const todayDate = new Date(ty, tm - 1, td);
-  const dow = todayDate.getDay();
+  const todayDate = new Date(Date.UTC(ty, tm - 1, td));
+  const dow = todayDate.getUTCDay();
   const todayIsPeak = isPeakSeason(profile, todayDate);
   const todayKwh = dayTotal(byDate.get(todayISO)!).total;
 
@@ -242,7 +242,7 @@ function computeIntegrity(
   const baselineDates: string[] = [];
   const baselineTotals: number[] = [];
   const cursor = new Date(todayDate);
-  cursor.setDate(cursor.getDate() - 7);
+  cursor.setUTCDate(cursor.getUTCDate() - 7);
   let scanned = 0;
   while (baselineDates.length < 4 && scanned < 26) {
     const iso = cursor.toISOString().slice(0, 10);
@@ -254,7 +254,7 @@ function computeIntegrity(
         baselineTotals.push(t.total);
       }
     }
-    cursor.setDate(cursor.getDate() - 7);
+    cursor.setUTCDate(cursor.getUTCDate() - 7);
     scanned++;
   }
 
@@ -316,7 +316,7 @@ function computeStagnation(
   const slotISO: string[] = [];
   for (const r of sorted) {
     const [y, m, d] = r.interval_date.split("-").map(Number);
-    const date = new Date(y, m - 1, d);
+    const date = new Date(Date.UTC(y, m - 1, d));
     const f = r.meter_factor || 1;
     for (let i = 0; i < 48; i++) {
       const v = r.half_hourly_values[i];
@@ -374,6 +374,6 @@ function computeStagnation(
 function monthRange(start: Date, end: Date): number[] {
   const out = new Set<number>();
   const c = new Date(start);
-  while (c <= end) { out.add(c.getMonth() + 1); c.setDate(c.getDate() + 1); }
+  while (c <= end) { out.add(c.getUTCMonth() + 1); c.setUTCDate(c.getUTCDate() + 1); }
   return Array.from(out);
 }

@@ -42,9 +42,10 @@ export function BuildingsPanel() {
   // Roll up validation alerts across the building's meters over last 30 days.
   const alertsByBuilding = useMemo(() => {
     const map = new Map<string, { kind: "spike" | "drop" | "offline"; label: string }[]>();
-    const end = new Date();
+    const now = new Date();
+    const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
     const start = new Date(end);
-    start.setDate(start.getDate() - 29);
+    start.setUTCDate(start.getUTCDate() - 29);
     for (const m of registry) {
       if (!m.effective_building_id) continue;
       const building = buildings.find((b) => b.id === m.effective_building_id);
