@@ -50,9 +50,9 @@ export function MeterDashboard({ orgId, rawMeterName, windowDays, onBack }: Prop
       .map((r) => r.interval_date).sort();
     const last = dates.length ? dates[dates.length - 1] : new Date().toISOString().slice(0, 10);
     const [y, m, d] = last.split("-").map(Number);
-    const end = new Date(y, m - 1, d);
+    const end = new Date(Date.UTC(y, m - 1, d));
     const start = new Date(end);
-    start.setDate(start.getDate() - (windowDays - 1));
+    start.setUTCDate(start.getUTCDate() - (windowDays - 1));
     return { start, end, startISO: start.toISOString().slice(0, 10), endISO: end.toISOString().slice(0, 10) };
   }, [consumption, rawMeterName, windowDays]);
 

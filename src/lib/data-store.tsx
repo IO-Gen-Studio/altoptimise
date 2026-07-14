@@ -737,12 +737,12 @@ export function useMeterSeries(
     if (startISO && endISO && startISO <= endISO) {
       const [ys, ms, ds] = startISO.split("-").map(Number);
       const [ye, me, de] = endISO.split("-").map(Number);
-      const cur = new Date(ys, ms - 1, ds);
-      const stop = new Date(ye, me - 1, de);
+      const cur = new Date(Date.UTC(ys, ms - 1, ds));
+      const stop = new Date(Date.UTC(ye, me - 1, de));
       while (cur <= stop) {
         const iso = cur.toISOString().slice(0, 10);
         dailyTotals.push({ date: iso, total: dailyMap.has(iso) ? dailyMap.get(iso) ?? null : null });
-        cur.setDate(cur.getDate() + 1);
+        cur.setUTCDate(cur.getUTCDate() + 1);
       }
     }
 
@@ -773,7 +773,7 @@ export function useMeterSeries(
     const wCnt = Array.from({ length: 7 }, () => new Array(48).fill(0));
     for (const r of windowRows) {
       const [y, m, d] = r.interval_date.split("-").map(Number);
-      const dow = new Date(y, m - 1, d).getDay();
+      const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
       const f = r.meter_factor || 1;
       for (let i = 0; i < 48; i++) {
         const v = r.half_hourly_values[i];
