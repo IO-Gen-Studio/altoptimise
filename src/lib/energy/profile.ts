@@ -92,7 +92,7 @@ function slotMinutes(slot: number): number {
 export function isActiveSlot(profile: ResolvedProfile, date: Date, slotIdx: number): boolean {
   const iso = date.toISOString().slice(0, 10);
   if (profile.holidays.includes(iso)) return false;
-  const dow = date.getDay();
+  const dow = date.getUTCDay();
   if (!profile.activeDays.includes(dow)) return false;
   const mins = slotMinutes(slotIdx);
   return mins >= hhmmToMinutes(profile.activeFrom) && mins < hhmmToMinutes(profile.activeTo);
@@ -104,7 +104,7 @@ export function isBaseloadSlot(profile: ResolvedProfile, date: Date, slotIdx: nu
 
 export function isPeakSeason(profile: ResolvedProfile, date: Date): boolean {
   if (!profile.peakSeasonMonths.length) return true;
-  return profile.peakSeasonMonths.includes(date.getMonth() + 1);
+  return profile.peakSeasonMonths.includes(date.getUTCMonth() + 1);
 }
 
 export function inheritanceLabel(source: ScheduleSource, profileType: ProfileType): string {
