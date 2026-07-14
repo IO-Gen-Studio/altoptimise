@@ -14,9 +14,10 @@ export interface ScoreResult {
 const ANOMALY_MULTIPLIER = 1.5;
 
 function slotDate(dateISO: string): Date {
-  // Interpret as local date to avoid TZ drift when checking weekdays.
+  // Interpret as UTC midnight so weekday/month checks match the ISO date
+  // regardless of the viewer's timezone.
   const [y, m, d] = dateISO.split("-").map(Number);
-  return new Date(y, m - 1, d);
+  return new Date(Date.UTC(y, m - 1, d));
 }
 
 function percentile(arr: number[], p: number): number {
