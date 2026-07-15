@@ -14,6 +14,7 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as AuthenticatedAppsSlugRouteImport } from './routes/_authenticated/apps/$slug'
+import { Route as ApiPublicHooksRunDueIngestionsRouteImport } from './routes/api/public/hooks/run-due-ingestions'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
@@ -39,18 +40,26 @@ const AuthenticatedAppsSlugRoute = AuthenticatedAppsSlugRouteImport.update({
   path: '/apps/$slug',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const ApiPublicHooksRunDueIngestionsRoute =
+  ApiPublicHooksRunDueIngestionsRouteImport.update({
+    id: '/api/public/hooks/run-due-ingestions',
+    path: '/api/public/hooks/run-due-ingestions',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/admin': typeof AuthenticatedAdminRoute
   '/apps/$slug': typeof AuthenticatedAppsSlugRoute
+  '/api/public/hooks/run-due-ingestions': typeof ApiPublicHooksRunDueIngestionsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/admin': typeof AuthenticatedAdminRoute
   '/apps/$slug': typeof AuthenticatedAppsSlugRoute
+  '/api/public/hooks/run-due-ingestions': typeof ApiPublicHooksRunDueIngestionsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -59,12 +68,23 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
   '/_authenticated/apps/$slug': typeof AuthenticatedAppsSlugRoute
+  '/api/public/hooks/run-due-ingestions': typeof ApiPublicHooksRunDueIngestionsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/admin' | '/apps/$slug'
+  fullPaths:
+    | '/'
+    | '/auth'
+    | '/admin'
+    | '/apps/$slug'
+    | '/api/public/hooks/run-due-ingestions'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/admin' | '/apps/$slug'
+  to:
+    | '/'
+    | '/auth'
+    | '/admin'
+    | '/apps/$slug'
+    | '/api/public/hooks/run-due-ingestions'
   id:
     | '__root__'
     | '/'
@@ -72,12 +92,14 @@ export interface FileRouteTypes {
     | '/auth'
     | '/_authenticated/admin'
     | '/_authenticated/apps/$slug'
+    | '/api/public/hooks/run-due-ingestions'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
+  ApiPublicHooksRunDueIngestionsRoute: typeof ApiPublicHooksRunDueIngestionsRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -117,6 +139,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAppsSlugRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/api/public/hooks/run-due-ingestions': {
+      id: '/api/public/hooks/run-due-ingestions'
+      path: '/api/public/hooks/run-due-ingestions'
+      fullPath: '/api/public/hooks/run-due-ingestions'
+      preLoaderRoute: typeof ApiPublicHooksRunDueIngestionsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -137,6 +166,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
+  ApiPublicHooksRunDueIngestionsRoute: ApiPublicHooksRunDueIngestionsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

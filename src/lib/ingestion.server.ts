@@ -93,7 +93,7 @@ export async function runIngestionSchedule(scheduleId: string): Promise<RunResul
     .eq("id", scheduleId)
     .single();
   if (sErr || !sched) throw new Error(sErr?.message || "Schedule not found");
-  const schedule = sched as {
+  const schedule = sched as unknown as {
     id: string; organization_id: string; source_url: string; enabled: boolean;
   };
   if (!schedule.enabled) throw new Error("Schedule is disabled");
