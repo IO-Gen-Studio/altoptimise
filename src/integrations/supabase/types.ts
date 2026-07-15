@@ -115,6 +115,59 @@ export type Database = {
           },
         ]
       }
+      ingestion_schedules: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          id: string
+          last_error: string | null
+          last_rows_imported: number | null
+          last_status: string | null
+          last_synced_at: string | null
+          name: string
+          organization_id: string
+          scheduled_time: string
+          source_url: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          last_error?: string | null
+          last_rows_imported?: number | null
+          last_status?: string | null
+          last_synced_at?: string | null
+          name: string
+          organization_id: string
+          scheduled_time?: string
+          source_url: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          last_error?: string | null
+          last_rows_imported?: number | null
+          last_status?: string | null
+          last_synced_at?: string | null
+          name?: string
+          organization_id?: string
+          scheduled_time?: string
+          source_url?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ingestion_schedules_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ingestion_settings: {
         Row: {
           id: number

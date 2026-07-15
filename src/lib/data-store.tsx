@@ -101,6 +101,20 @@ export interface IngestionSettings {
   source_url: string;
 }
 
+export interface IngestionSchedule {
+  id: string;
+  organization_id: string;
+  name: string;
+  source_url: string;
+  scheduled_time: string; // "HH:mm" UTC
+  enabled: boolean;
+  last_synced_at: string | null;
+  last_status: string | null;
+  last_error: string | null;
+  last_rows_imported: number | null;
+  created_at: string;
+}
+
 export const SCHEMA_FIELDS = [
   "OrganizationalUnits.Name",
   "Meters.Name",
