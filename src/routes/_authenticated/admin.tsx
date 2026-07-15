@@ -3,9 +3,9 @@ import { Lock, Shield } from "lucide-react";
 
 import { BuildingsPanel } from "@/components/admin/BuildingsPanel";
 import { CsvIngestion } from "@/components/admin/CsvIngestion";
+import { IngestionSchedulesPanel } from "@/components/admin/IngestionSchedulesPanel";
 import { MeterRegistryPanel } from "@/components/admin/MeterRegistryPanel";
 import { OrganisationsPanel } from "@/components/admin/OrganisationsPanel";
-import { ScheduleSettings } from "@/components/admin/ScheduleSettings";
 import { SchemaLabelsEditor } from "@/components/admin/SchemaLabelsEditor";
 import { AppShell } from "@/components/launcher/AppShell";
 import { Button } from "@/components/ui/button";
@@ -65,7 +65,7 @@ function AdminPage() {
             <TabsContent value="meters"><MeterRegistryPanel /></TabsContent>
             <TabsContent value="data" className="space-y-4">
               <CsvIngestion />
-              <ScheduleSettings />
+              <IngestionSchedulesPanel />
               <SchemaLabelsEditor />
             </TabsContent>
           </Tabs>
