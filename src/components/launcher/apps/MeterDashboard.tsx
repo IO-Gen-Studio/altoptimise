@@ -106,6 +106,9 @@ export function MeterDashboard({ orgId, rawMeterName, windowDays, onBack }: Prop
   const showBaselineLine = completeness.integrity === "spike" || completeness.integrity === "drop" || completeness.integrity === "ok";
   const baselineKwh = completeness.integrityBaselineKwh;
   const alertDateISO = completeness.integrityTodayISO;
+  const eventByDate = new Map(completeness.integrityEvents.map((e) => [e.date, e] as const));
+  const recentEvents = [...completeness.integrityEvents].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 3);
+  const latestEvent = recentEvents[0];
 
   return (
     <div className="space-y-6">
@@ -157,6 +160,10 @@ export function MeterDashboard({ orgId, rawMeterName, windowDays, onBack }: Prop
             <div className="mt-2 text-xs text-muted-foreground">
               {alertDateISO}: {completeness.integrityTodayKwh.toFixed(0)} kWh vs baseline {baselineKwh.toFixed(0)} kWh
             </div>
+          ) : latestEvent ? (
+            <div className="mt-2 text-xs text-muted-foreground">
+              Last variance {latestEvent.date} · {latestEvent.kind === "spike" ? "+" : ""}{latestEvent.deltaPct.toFixed(0)}%
+            </div>
           ) : (
             <div className="mt-2 text-xs text-muted-foreground">4-week same-weekday baseline</div>
           )}
@@ -199,6 +206,9 @@ export function MeterDashboard({ orgId, rawMeterName, windowDays, onBack }: Prop
             {showBaselineLine && baselineKwh > 0 && (
               <span className="text-xs font-normal text-muted-foreground">— dashed line = 4-wk same-DOW baseline</span>
             )}
+            {completeness.integrityEvents.length > 0 && (
+              <span className="text-xs font-normal text-muted-foreground">· grey bars = spike/drop events</span>
+            )}
           </div>
           <div className="h-56">
             <ResponsiveContainer width="100%" height="100%">
@@ -214,7 +224,8 @@ export function MeterDashboard({ orgId, rawMeterName, windowDays, onBack }: Prop
                   {series.dailyTotals.map((d) => (
                     <Cell
                       key={d.date}
-                      fill={d.date === alertDateISO && (completeness.integrity === "spike" || completeness.integrity === "drop")
+                      fill={eventByDate.has(d.date) ||
+                        (d.date === alertDateISO && (completeness.integrity === "spike" || completeness.integrity === "drop"))
                         ? "hsl(var(--muted-foreground))"
                         : "hsl(var(--primary))"}
                     />
@@ -223,6 +234,30 @@ export function MeterDashboard({ orgId, rawMeterName, windowDays, onBack }: Prop
               </BarChart>
             </ResponsiveContainer>
           </div>
+          {recentEvents.length > 0 && (
+            <div className="mt-3 border-t pt-3">
+              <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <AlertTriangle className="h-3.5 w-3.5" /> Recent variance events
+              </div>
+              <ul className="space-y-1 text-xs">
+                {recentEvents.map((e) => {
+                  const Icon = e.kind === "spike" ? TrendingUp : TrendingDown;
+                  const sign = e.deltaPct >= 0 ? "+" : "";
+                  return (
+                    <li key={e.date} className="flex items-center gap-2">
+                      <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="font-mono">{e.date}</span>
+                      <span className="capitalize text-muted-foreground">{e.kind}</span>
+                      <span className="text-foreground">{sign}{e.deltaPct.toFixed(0)}%</span>
+                      <span className="text-muted-foreground">
+                        · {e.todayKwh.toFixed(0)} kWh vs baseline {e.baselineKwh.toFixed(0)} kWh
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
         </CardContent>
       </Card>
 
