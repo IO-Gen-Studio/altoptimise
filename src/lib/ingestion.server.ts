@@ -135,15 +135,24 @@ export async function runIngestionSchedule(scheduleId: string): Promise<RunResul
     (overrides ?? []) as Override[],
   );
 
-  // Replace existing rows for the dates in the payload to keep the org
-  // idempotent when a schedule runs multiple times.
-  const dates = Array.from(new Set(rows.map((r) => r.interval_date as string)));
-  if (dates.length > 0) {
+  // Replace existing rows only for the exact (meter, date) pairs present in
+  // the new payload — never wipe meters that happen to be missing from this
+  // download. Group deletes per meter to keep the org idempotent without
+  // touching unrelated meters' historical data.
+  const perMeterDates = new Map<string, Set<string>>();
+  for (const r of rows) {
+    const meter = r.meter_name as string;
+    const date = r.interval_date as string;
+    if (!perMeterDates.has(meter)) perMeterDates.set(meter, new Set());
+    perMeterDates.get(meter)!.add(date);
+  }
+  for (const [meter, dateSet] of perMeterDates) {
     const { error: delErr } = await supabaseAdmin
       .from("consumption_rows")
       .delete()
       .eq("organization_id", schedule.organization_id)
-      .in("interval_date", dates);
+      .eq("meter_name", meter)
+      .in("interval_date", Array.from(dateSet));
     if (delErr) { await markFailure(`Cleanup failed: ${delErr.message}`); throw new Error(delErr.message); }
   }
 
