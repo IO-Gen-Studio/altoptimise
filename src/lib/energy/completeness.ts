@@ -5,6 +5,14 @@ export type CompletenessStatus = "ok" | "incomplete" | "telemetry_offline";
 export type IntegrityStatus = "ok" | "spike" | "drop" | "insufficient_history" | "skipped";
 export type StagnationStatus = "ok" | "offline" | "stuck_value";
 
+export interface IntegrityEvent {
+  date: string;
+  kind: "spike" | "drop";
+  deltaPct: number;
+  todayKwh: number;
+  baselineKwh: number;
+}
+
 export interface CompletenessResult {
   status: CompletenessStatus;
   expectedSlots: number;
@@ -18,10 +26,12 @@ export interface CompletenessResult {
   integrityTodayKwh: number;
   integrityTodayISO: string | null;
   integrityBaselineDates: string[];
+  integrityEvents: IntegrityEvent[];
   stagnation: StagnationStatus;
   stuckValueHours: number;
   offlineEventCount: number;
   offlineEventDates: string[];
+  recentFlatlineHours: number;
 }
 
 export function utilityKind(category: string): "electricity" | "gas" | "water" | "other" {
@@ -66,11 +76,12 @@ export function checkCompleteness(
   // offline-event counting isn't artificially limited to the window.
   const integrity = computeIntegrity(rows, utility, end, org, profile);
   const stagnation = computeStagnation(rows, utility, profile, org);
+  const recentFlatlineHours = computeRecentFlatline(rows, end, profile);
 
   if (effectiveStart > end) {
     return {
       status: "ok", expectedSlots: 0, presentSlots: 0, missingPct: 0, longestFlatlineHours: 0,
-      ...integrity, ...stagnation,
+      ...integrity, ...stagnation, recentFlatlineHours,
     };
   }
   const dayCount = daysBetween(effectiveStart, end);
@@ -131,7 +142,7 @@ export function checkCompleteness(
       status: "incomplete",
       expectedSlots, presentSlots, missingPct, longestFlatlineHours,
       reason: `${missingPct.toFixed(1)}% of intervals missing (> ${missingThreshold}%)`,
-      ...integrity, ...stagnation,
+      ...integrity, ...stagnation, recentFlatlineHours,
     };
   }
 
@@ -140,12 +151,12 @@ export function checkCompleteness(
     utility === "gas" &&
     monthRange(start, end).some((m) => profile.summerGasMonths.includes(m));
 
-  if ((utility === "electricity" || utility === "water") && longestFlatlineHours >= flatlineThreshold) {
+  if ((utility === "electricity" || utility === "water") && recentFlatlineHours >= flatlineThreshold) {
     return {
       status: "telemetry_offline",
       expectedSlots, presentSlots, missingPct, longestFlatlineHours,
-      reason: `Meter recorded 0 for ${longestFlatlineHours.toFixed(1)}h continuously (≥ ${flatlineThreshold}h)`,
-      ...integrity, ...stagnation,
+      reason: `Meter recorded 0 for ${recentFlatlineHours.toFixed(1)}h continuously in the last 7 days (≥ ${flatlineThreshold}h)`,
+      ...integrity, ...stagnation, recentFlatlineHours,
     };
   }
   if ((utility === "electricity" || utility === "water") &&
@@ -154,22 +165,22 @@ export function checkCompleteness(
       status: "telemetry_offline",
       expectedSlots, presentSlots, missingPct, longestFlatlineHours,
       reason: `Meter reported the same non-zero value for ${stagnation.stuckValueHours.toFixed(1)}h continuously (≥ ${(stuckIntervalThreshold / 2).toFixed(1)}h)`,
-      ...integrity, ...stagnation,
+      ...integrity, ...stagnation, recentFlatlineHours,
     };
   }
-  if (utility === "gas" && !skipFlatlineForGas && longestFlatlineHours >= flatlineThreshold * 3) {
+  if (utility === "gas" && !skipFlatlineForGas && recentFlatlineHours >= flatlineThreshold * 3) {
     // Non-summer gas: still flag extremely long flatlines (3× threshold)
     return {
       status: "telemetry_offline",
       expectedSlots, presentSlots, missingPct, longestFlatlineHours,
-      reason: `Gas meter flat 0 for ${longestFlatlineHours.toFixed(1)}h outside summer season`,
-      ...integrity, ...stagnation,
+      reason: `Gas meter flat 0 for ${recentFlatlineHours.toFixed(1)}h in the last 7 days outside summer season`,
+      ...integrity, ...stagnation, recentFlatlineHours,
     };
   }
 
   return {
     status: "ok", expectedSlots, presentSlots, missingPct, longestFlatlineHours,
-    ...integrity, ...stagnation,
+    ...integrity, ...stagnation, recentFlatlineHours,
   };
 }
 
@@ -182,6 +193,7 @@ interface IntegrityFields {
   integrityTodayKwh: number;
   integrityTodayISO: string | null;
   integrityBaselineDates: string[];
+  integrityEvents: IntegrityEvent[];
 }
 
 function dayTotal(row: ConsumptionRow): { total: number; complete: boolean } {
@@ -210,6 +222,7 @@ function computeIntegrity(
     integrityTodayKwh: 0,
     integrityTodayISO: null,
     integrityBaselineDates: [],
+    integrityEvents: [],
   };
   if (!rows.length) return empty;
 
@@ -218,6 +231,42 @@ function computeIntegrity(
   for (const r of rows) byDate.set(r.interval_date, r);
   const endISO = end.toISOString().slice(0, 10);
   const sortedDates = [...byDate.keys()].sort();
+
+  // Walk every complete day <= end and record any spike/drop event.
+  const events: IntegrityEvent[] = [];
+  for (const iso of sortedDates) {
+    if (iso > endISO) continue;
+    const row = byDate.get(iso)!;
+    const t = dayTotal(row);
+    if (!t.complete) continue;
+    const [yy, mm] = iso.split("-").map(Number);
+    if (utility === "gas" && profile.summerGasMonths.includes(mm)) continue;
+    const [y2, m2, d2] = iso.split("-").map(Number);
+    const dDate = new Date(Date.UTC(y2, m2 - 1, d2));
+    const dPeak = isPeakSeason(profile, dDate);
+    const bDates: number[] = [];
+    const cur = new Date(dDate);
+    cur.setUTCDate(cur.getUTCDate() - 7);
+    let scanned2 = 0;
+    while (bDates.length < 4 && scanned2 < 26) {
+      const biso = cur.toISOString().slice(0, 10);
+      const brow = byDate.get(biso);
+      if (brow) {
+        const bt = dayTotal(brow);
+        if (bt.complete && isPeakSeason(profile, cur) === dPeak) bDates.push(bt.total);
+      }
+      cur.setUTCDate(cur.getUTCDate() - 7);
+      scanned2++;
+      void yy;
+    }
+    if (bDates.length < 3) continue;
+    const bAvg = bDates.reduce((a, b) => a + b, 0) / bDates.length;
+    if (bAvg <= 0) continue;
+    const dlt = (t.total - bAvg) / bAvg;
+    if (t.total > bAvg * 1.3) events.push({ date: iso, kind: "spike", deltaPct: dlt * 100, todayKwh: t.total, baselineKwh: bAvg });
+    else if (t.total < bAvg * 0.7) events.push({ date: iso, kind: "drop", deltaPct: dlt * 100, todayKwh: t.total, baselineKwh: bAvg });
+  }
+
   let todayISO: string | null = null;
   for (let i = sortedDates.length - 1; i >= 0; i--) {
     const iso = sortedDates[i];
@@ -234,7 +283,7 @@ function computeIntegrity(
 
   // Skip integrity for gas during summer gas months.
   if (utility === "gas" && profile.summerGasMonths.includes(tm)) {
-    return { ...empty, integrity: "skipped", integrityTodayISO: todayISO, integrityTodayKwh: todayKwh };
+    return { ...empty, integrity: "skipped", integrityTodayISO: todayISO, integrityTodayKwh: todayKwh, integrityEvents: events };
   }
 
   // Walk back same-DOW dates, prefer previous 4 complete matches that also
@@ -259,7 +308,7 @@ function computeIntegrity(
   }
 
   if (baselineTotals.length < 3) {
-    return { ...empty, integrity: "insufficient_history", integrityTodayISO: todayISO, integrityTodayKwh: todayKwh };
+    return { ...empty, integrity: "insufficient_history", integrityTodayISO: todayISO, integrityTodayKwh: todayKwh, integrityEvents: events };
   }
 
   const baseline = baselineTotals.reduce((a, b) => a + b, 0) / baselineTotals.length;
@@ -271,6 +320,7 @@ function computeIntegrity(
       integrityTodayKwh: todayKwh,
       integrityTodayISO: todayISO,
       integrityBaselineDates: baselineDates,
+      integrityEvents: events,
     };
   }
   const delta = (todayKwh - baseline) / baseline;
@@ -285,6 +335,7 @@ function computeIntegrity(
     integrityTodayKwh: todayKwh,
     integrityTodayISO: todayISO,
     integrityBaselineDates: baselineDates,
+    integrityEvents: events,
   };
 }
 
@@ -376,4 +427,44 @@ function monthRange(start: Date, end: Date): number[] {
   const c = new Date(start);
   while (c <= end) { out.add(c.getUTCMonth() + 1); c.setUTCDate(c.getUTCDate() + 1); }
   return Array.from(out);
+}
+
+// Longest continuous zero-run (during active hours) within the trailing
+// 7 days ending at `end`. Used to gate the telemetry_offline status so
+// stale offline events from earlier in a 30/90-day window don't keep
+// meters marked offline forever.
+function computeRecentFlatline(
+  rows: ConsumptionRow[],
+  end: Date,
+  profile: ResolvedProfile,
+): number {
+  if (!rows.length) return 0;
+  const startD = new Date(end);
+  startD.setUTCDate(startD.getUTCDate() - 6);
+  const startISO = startD.toISOString().slice(0, 10);
+  const endISO = end.toISOString().slice(0, 10);
+  const byDate = new Map<string, (number | null)[]>();
+  for (const r of rows) {
+    if (r.interval_date < startISO || r.interval_date > endISO) continue;
+    byDate.set(r.interval_date, [...r.half_hourly_values]);
+  }
+  const cursor = new Date(startD);
+  let longest = 0;
+  let run = 0;
+  for (let d = 0; d < 7; d++) {
+    const iso = cursor.toISOString().slice(0, 10);
+    const day = byDate.get(iso);
+    for (let i = 0; i < 48; i++) {
+      const v = day ? day[i] : null;
+      const active = isActiveSlot(profile, cursor, i);
+      if (active && v === 0) {
+        run++;
+        if (run > longest) longest = run;
+      } else {
+        run = 0;
+      }
+    }
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return longest / 2;
 }
