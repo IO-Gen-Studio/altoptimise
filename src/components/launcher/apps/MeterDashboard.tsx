@@ -1,4 +1,4 @@
-import { ArrowLeft, Activity, AlertTriangle, CalendarDays, Gauge, TrendingDown, TrendingUp } from "lucide-react";
+import { ArrowLeft, Activity, AlertTriangle, CalendarDays, Gauge, PowerOff, TrendingDown, TrendingUp } from "lucide-react";
 import { useMemo } from "react";
 import {
   Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ReferenceArea, ReferenceLine,
@@ -109,6 +109,10 @@ export function MeterDashboard({ orgId, rawMeterName, windowDays, onBack }: Prop
   const eventByDate = new Map(completeness.integrityEvents.map((e) => [e.date, e] as const));
   const recentEvents = [...completeness.integrityEvents].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 3);
   const latestEvent = recentEvents[0];
+  const recentOfflineEvents = [...completeness.offlineEvents]
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 3);
+  const offlineDateSet = new Set(completeness.offlineEventDates);
 
   return (
     <div className="space-y-6">
@@ -224,16 +228,38 @@ export function MeterDashboard({ orgId, rawMeterName, windowDays, onBack }: Prop
                   {series.dailyTotals.map((d) => (
                     <Cell
                       key={d.date}
-                      fill={eventByDate.has(d.date) ||
-                        (d.date === alertDateISO && (completeness.integrity === "spike" || completeness.integrity === "drop"))
-                        ? "hsl(var(--muted-foreground))"
-                        : "hsl(var(--primary))"}
+                      fill={
+                        offlineDateSet.has(d.date)
+                          ? "hsl(var(--destructive))"
+                          : eventByDate.has(d.date) ||
+                            (d.date === alertDateISO &&
+                              (completeness.integrity === "spike" || completeness.integrity === "drop"))
+                          ? "hsl(var(--muted-foreground))"
+                          : "hsl(var(--primary))"
+                      }
                     />
                   ))}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
+          {recentOfflineEvents.length > 0 && (
+            <div className="mt-3 border-t pt-3">
+              <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <PowerOff className="h-3.5 w-3.5" /> Recent offline events
+              </div>
+              <ul className="space-y-1 text-xs">
+                {recentOfflineEvents.map((e) => (
+                  <li key={e.date} className="flex items-center gap-2">
+                    <PowerOff className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span className="font-mono">{e.date}</span>
+                    <span className="text-muted-foreground">offline for</span>
+                    <span className="text-foreground">{e.hours.toFixed(1)}h</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           {recentEvents.length > 0 && (
             <div className="mt-3 border-t pt-3">
               <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
@@ -285,8 +311,8 @@ export function MeterDashboard({ orgId, rawMeterName, windowDays, onBack }: Prop
                       <div
                         key={i}
                         title={`${WEEKDAY_LABELS[d]} ${String(Math.floor(i / 2)).padStart(2, "0")}:${i % 2 === 0 ? "00" : "30"} — ${v.toFixed(2)}`}
-                        style={{ width: 12, height: 18, background: `hsl(var(--primary) / ${alpha})` }}
-                        className="border border-background"
+                        style={{ width: 12, height: 18, backgroundColor: "var(--primary)", opacity: alpha }}
+                        className="shrink-0 border border-background"
                       />
                     );
                   })}

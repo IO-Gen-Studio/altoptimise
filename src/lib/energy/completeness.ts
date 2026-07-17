@@ -5,6 +5,11 @@ export type CompletenessStatus = "ok" | "incomplete" | "telemetry_offline";
 export type IntegrityStatus = "ok" | "spike" | "drop" | "insufficient_history" | "skipped";
 export type StagnationStatus = "ok" | "offline" | "stuck_value";
 
+export interface OfflineEvent {
+  date: string;
+  hours: number;
+}
+
 export interface IntegrityEvent {
   date: string;
   kind: "spike" | "drop";
@@ -31,6 +36,7 @@ export interface CompletenessResult {
   stuckValueHours: number;
   offlineEventCount: number;
   offlineEventDates: string[];
+  offlineEvents: OfflineEvent[];
   recentFlatlineHours: number;
 }
 
@@ -77,6 +83,7 @@ export function checkCompleteness(
   const integrity = computeIntegrity(rows, utility, end, org, profile);
   const stagnation = computeStagnation(rows, utility, profile, org);
   const recentFlatlineHours = computeRecentFlatline(rows, end, profile);
+  const recentHasAnyReading = hasRecentReading(rows, end);
 
   if (effectiveStart > end) {
     return {
@@ -151,32 +158,24 @@ export function checkCompleteness(
     utility === "gas" &&
     monthRange(start, end).some((m) => profile.summerGasMonths.includes(m));
 
-  if ((utility === "electricity" || utility === "water") && recentFlatlineHours >= flatlineThreshold) {
+  if ((utility === "electricity" || utility === "water") && !recentHasAnyReading) {
     return {
       status: "telemetry_offline",
       expectedSlots, presentSlots, missingPct, longestFlatlineHours,
-      reason: `Meter recorded 0 for ${recentFlatlineHours.toFixed(1)}h continuously in the last 7 days (≥ ${flatlineThreshold}h)`,
+      reason: `Meter reported no readings in the last 7 days`,
       ...integrity, ...stagnation, recentFlatlineHours,
     };
   }
-  if ((utility === "electricity" || utility === "water") &&
-      stagnation.stuckValueHours >= stuckIntervalThreshold / 2) {
+  void stuckIntervalThreshold;
+  if (utility === "gas" && !skipFlatlineForGas && !recentHasAnyReading) {
     return {
       status: "telemetry_offline",
       expectedSlots, presentSlots, missingPct, longestFlatlineHours,
-      reason: `Meter reported the same non-zero value for ${stagnation.stuckValueHours.toFixed(1)}h continuously (≥ ${(stuckIntervalThreshold / 2).toFixed(1)}h)`,
+      reason: `Gas meter reported no readings in the last 7 days`,
       ...integrity, ...stagnation, recentFlatlineHours,
     };
   }
-  if (utility === "gas" && !skipFlatlineForGas && recentFlatlineHours >= flatlineThreshold * 3) {
-    // Non-summer gas: still flag extremely long flatlines (3× threshold)
-    return {
-      status: "telemetry_offline",
-      expectedSlots, presentSlots, missingPct, longestFlatlineHours,
-      reason: `Gas meter flat 0 for ${recentFlatlineHours.toFixed(1)}h in the last 7 days outside summer season`,
-      ...integrity, ...stagnation, recentFlatlineHours,
-    };
-  }
+  void flatlineThreshold;
 
   return {
     status: "ok", expectedSlots, presentSlots, missingPct, longestFlatlineHours,
@@ -346,6 +345,7 @@ interface StagnationFields {
   stuckValueHours: number;
   offlineEventCount: number;
   offlineEventDates: string[];
+  offlineEvents: OfflineEvent[];
 }
 
 function computeStagnation(
@@ -355,7 +355,7 @@ function computeStagnation(
   _org: Organisation | undefined,
 ): StagnationFields {
   const empty: StagnationFields = {
-    stagnation: "ok", stuckValueHours: 0, offlineEventCount: 0, offlineEventDates: [],
+    stagnation: "ok", stuckValueHours: 0, offlineEventCount: 0, offlineEventDates: [], offlineEvents: [],
   };
   if (utility === "gas" || utility === "other") return empty;
   if (!rows.length) return empty;
@@ -382,16 +382,23 @@ function computeStagnation(
   let run = 0;
   let runStart = -1;
   const offlineDates = new Set<string>();
+  const offlineEvents: OfflineEvent[] = [];
   for (let i = 0; i < series.length; i++) {
     if (active[i] && series[i] === 0) {
       if (run === 0) runStart = i;
       run++;
     } else {
-      if (run >= OFFLINE_SLOTS) offlineDates.add(slotISO[runStart]);
+      if (run >= OFFLINE_SLOTS) {
+        offlineDates.add(slotISO[runStart]);
+        offlineEvents.push({ date: slotISO[runStart], hours: run / 2 });
+      }
       run = 0;
     }
   }
-  if (run >= OFFLINE_SLOTS) offlineDates.add(slotISO[runStart]);
+  if (run >= OFFLINE_SLOTS) {
+    offlineDates.add(slotISO[runStart]);
+    offlineEvents.push({ date: slotISO[runStart], hours: run / 2 });
+  }
 
   // Stuck non-zero value: longest run of identical non-zero across ALL hours.
   const STUCK_SLOTS = 12;
@@ -419,6 +426,7 @@ function computeStagnation(
     stuckValueHours,
     offlineEventCount: offlineDates.size,
     offlineEventDates: [...offlineDates].sort(),
+    offlineEvents,
   };
 }
 
@@ -467,4 +475,23 @@ function computeRecentFlatline(
     cursor.setUTCDate(cursor.getUTCDate() + 1);
   }
   return longest / 2;
+}
+
+// True when any half-hour interval in the trailing 7 days has a non-null,
+// non-zero reading. Used to gate the telemetry_offline flag so meters only
+// register as offline when the last 7 days contain no readings at all.
+function hasRecentReading(rows: ConsumptionRow[], end: Date): boolean {
+  if (!rows.length) return false;
+  const startD = new Date(end);
+  startD.setUTCDate(startD.getUTCDate() - 6);
+  const startISO = startD.toISOString().slice(0, 10);
+  const endISO = end.toISOString().slice(0, 10);
+  for (const r of rows) {
+    if (r.interval_date < startISO || r.interval_date > endISO) continue;
+    for (let i = 0; i < 48; i++) {
+      const v = r.half_hourly_values[i];
+      if (v != null && v !== 0) return true;
+    }
+  }
+  return false;
 }
