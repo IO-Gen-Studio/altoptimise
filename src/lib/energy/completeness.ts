@@ -77,6 +77,7 @@ export function checkCompleteness(
   const integrity = computeIntegrity(rows, utility, end, org, profile);
   const stagnation = computeStagnation(rows, utility, profile, org);
   const recentFlatlineHours = computeRecentFlatline(rows, end, profile);
+  const recentHasAnyReading = hasRecentReading(rows, end);
 
   if (effectiveStart > end) {
     return {
@@ -159,15 +160,15 @@ export function checkCompleteness(
       ...integrity, ...stagnation, recentFlatlineHours,
     };
   }
-  if ((utility === "electricity" || utility === "water") &&
-      stagnation.stuckValueHours >= stuckIntervalThreshold / 2) {
+  if ((utility === "electricity" || utility === "water") && !recentHasAnyReading) {
     return {
       status: "telemetry_offline",
       expectedSlots, presentSlots, missingPct, longestFlatlineHours,
-      reason: `Meter reported the same non-zero value for ${stagnation.stuckValueHours.toFixed(1)}h continuously (≥ ${(stuckIntervalThreshold / 2).toFixed(1)}h)`,
+      reason: `Meter reported no readings in the last 7 days`,
       ...integrity, ...stagnation, recentFlatlineHours,
     };
   }
+  void stuckIntervalThreshold;
   if (utility === "gas" && !skipFlatlineForGas && recentFlatlineHours >= flatlineThreshold * 3) {
     // Non-summer gas: still flag extremely long flatlines (3× threshold)
     return {
