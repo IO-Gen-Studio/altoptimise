@@ -5,6 +5,11 @@ export type CompletenessStatus = "ok" | "incomplete" | "telemetry_offline";
 export type IntegrityStatus = "ok" | "spike" | "drop" | "insufficient_history" | "skipped";
 export type StagnationStatus = "ok" | "offline" | "stuck_value";
 
+export interface OfflineEvent {
+  date: string;
+  hours: number;
+}
+
 export interface IntegrityEvent {
   date: string;
   kind: "spike" | "drop";
@@ -31,6 +36,7 @@ export interface CompletenessResult {
   stuckValueHours: number;
   offlineEventCount: number;
   offlineEventDates: string[];
+  offlineEvents: OfflineEvent[];
   recentFlatlineHours: number;
 }
 
@@ -339,6 +345,7 @@ interface StagnationFields {
   stuckValueHours: number;
   offlineEventCount: number;
   offlineEventDates: string[];
+  offlineEvents: OfflineEvent[];
 }
 
 function computeStagnation(
@@ -348,7 +355,7 @@ function computeStagnation(
   _org: Organisation | undefined,
 ): StagnationFields {
   const empty: StagnationFields = {
-    stagnation: "ok", stuckValueHours: 0, offlineEventCount: 0, offlineEventDates: [],
+    stagnation: "ok", stuckValueHours: 0, offlineEventCount: 0, offlineEventDates: [], offlineEvents: [],
   };
   if (utility === "gas" || utility === "other") return empty;
   if (!rows.length) return empty;
@@ -375,16 +382,23 @@ function computeStagnation(
   let run = 0;
   let runStart = -1;
   const offlineDates = new Set<string>();
+  const offlineEvents: OfflineEvent[] = [];
   for (let i = 0; i < series.length; i++) {
     if (active[i] && series[i] === 0) {
       if (run === 0) runStart = i;
       run++;
     } else {
-      if (run >= OFFLINE_SLOTS) offlineDates.add(slotISO[runStart]);
+      if (run >= OFFLINE_SLOTS) {
+        offlineDates.add(slotISO[runStart]);
+        offlineEvents.push({ date: slotISO[runStart], hours: run / 2 });
+      }
       run = 0;
     }
   }
-  if (run >= OFFLINE_SLOTS) offlineDates.add(slotISO[runStart]);
+  if (run >= OFFLINE_SLOTS) {
+    offlineDates.add(slotISO[runStart]);
+    offlineEvents.push({ date: slotISO[runStart], hours: run / 2 });
+  }
 
   // Stuck non-zero value: longest run of identical non-zero across ALL hours.
   const STUCK_SLOTS = 12;
@@ -412,6 +426,7 @@ function computeStagnation(
     stuckValueHours,
     offlineEventCount: offlineDates.size,
     offlineEventDates: [...offlineDates].sort(),
+    offlineEvents,
   };
 }
 
