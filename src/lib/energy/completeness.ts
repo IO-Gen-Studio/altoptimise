@@ -152,14 +152,6 @@ export function checkCompleteness(
     utility === "gas" &&
     monthRange(start, end).some((m) => profile.summerGasMonths.includes(m));
 
-  if ((utility === "electricity" || utility === "water") && recentFlatlineHours >= flatlineThreshold) {
-    return {
-      status: "telemetry_offline",
-      expectedSlots, presentSlots, missingPct, longestFlatlineHours,
-      reason: `Meter recorded 0 for ${recentFlatlineHours.toFixed(1)}h continuously in the last 7 days (≥ ${flatlineThreshold}h)`,
-      ...integrity, ...stagnation, recentFlatlineHours,
-    };
-  }
   if ((utility === "electricity" || utility === "water") && !recentHasAnyReading) {
     return {
       status: "telemetry_offline",
@@ -169,15 +161,15 @@ export function checkCompleteness(
     };
   }
   void stuckIntervalThreshold;
-  if (utility === "gas" && !skipFlatlineForGas && recentFlatlineHours >= flatlineThreshold * 3) {
-    // Non-summer gas: still flag extremely long flatlines (3× threshold)
+  if (utility === "gas" && !skipFlatlineForGas && !recentHasAnyReading) {
     return {
       status: "telemetry_offline",
       expectedSlots, presentSlots, missingPct, longestFlatlineHours,
-      reason: `Gas meter flat 0 for ${recentFlatlineHours.toFixed(1)}h in the last 7 days outside summer season`,
+      reason: `Gas meter reported no readings in the last 7 days`,
       ...integrity, ...stagnation, recentFlatlineHours,
     };
   }
+  void flatlineThreshold;
 
   return {
     status: "ok", expectedSlots, presentSlots, missingPct, longestFlatlineHours,
