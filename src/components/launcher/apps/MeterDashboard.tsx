@@ -285,8 +285,8 @@ export function MeterDashboard({ orgId, rawMeterName, windowDays, onBack }: Prop
                       <div
                         key={i}
                         title={`${WEEKDAY_LABELS[d]} ${String(Math.floor(i / 2)).padStart(2, "0")}:${i % 2 === 0 ? "00" : "30"} — ${v.toFixed(2)}`}
-                        style={{ width: 12, height: 18, background: `hsl(var(--primary) / ${alpha})` }}
-                        className="border border-background"
+                        style={{ width: 12, height: 18, backgroundColor: "var(--primary)", opacity: alpha }}
+                        className="shrink-0 border border-background"
                       />
                     );
                   })}
