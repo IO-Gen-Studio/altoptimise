@@ -469,3 +469,22 @@ function computeRecentFlatline(
   }
   return longest / 2;
 }
+
+// True when any half-hour interval in the trailing 7 days has a non-null,
+// non-zero reading. Used to gate the telemetry_offline flag so meters only
+// register as offline when the last 7 days contain no readings at all.
+function hasRecentReading(rows: ConsumptionRow[], end: Date): boolean {
+  if (!rows.length) return false;
+  const startD = new Date(end);
+  startD.setUTCDate(startD.getUTCDate() - 6);
+  const startISO = startD.toISOString().slice(0, 10);
+  const endISO = end.toISOString().slice(0, 10);
+  for (const r of rows) {
+    if (r.interval_date < startISO || r.interval_date > endISO) continue;
+    for (let i = 0; i < 48; i++) {
+      const v = r.half_hourly_values[i];
+      if (v != null && v !== 0) return true;
+    }
+  }
+  return false;
+}
