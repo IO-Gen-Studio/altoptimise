@@ -29,7 +29,7 @@ const ICONS = {
 };
 
 function LauncherHome() {
-  const { persona, org } = useLauncher();
+  const { persona, org, appAccess } = useLauncher();
 
   return (
     <AppShell>
