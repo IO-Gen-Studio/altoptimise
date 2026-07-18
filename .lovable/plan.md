@@ -1,64 +1,69 @@
+# User Management & Access Control
 
-## Rename
+## 1. Hide self-signup on `/auth`
 
-- Launcher entry (`src/lib/launcher-context.tsx`): id/slug → `data-validation`, name → "Data Validation Engine", updated description. Keep `data-completeness` as an alias slug so existing links still resolve.
-- `src/routes/_authenticated/apps/$slug.tsx`: match both `data-validation` and `data-completeness`.
-- `DataCompletenessApp.tsx` → `DataValidationApp.tsx` (component renamed, header + copy updated). Old file removed.
-- Building drill-down link (BuildingsPanel "Open dashboard" if present) points to `/apps/data-validation?building=<id>`.
+- Remove the "Create account" tab from `src/routes/auth.tsx`; sign-in only.
+- Also flip Cloud auth setting `disable_signup: true` so nobody can hit the endpoint directly.
 
-No DB/schema changes.
+## 2. Expand role model
 
-## Validation engine additions (`src/lib/energy/completeness.ts` → keep filename, extend API)
+Replace the current `app_role` enum (`admin | viewer`) with three roles:
 
-Extend `CompletenessResult` with new fields (all optional so existing consumers keep working):
+- `super_admin` — full access, every organisation, every mini-app.
+- `admin` — full functionality but scoped to assigned organisations; can manage users within those orgs.
+- `user` — viewer-only, scoped to assigned organisations and assigned mini-apps.
 
-```
-integrity: "ok" | "spike" | "drop" | "insufficient_history"
-integrityDeltaPct: number         // signed % vs 4-week same-DOW baseline
-integrityBaselineKwh: number
-integrityTodayKwh: number
-stagnation: "ok" | "offline" | "stuck_value"
-stagnationHours: number           // longest 0-run during active hours (elec/water)
-stuckValueHours: number           // longest run of identical non-zero value (elec/water)
-offlineEventCount: number         // historical offline events in window
-```
+Migration:
 
-Rules implemented:
+- `ALTER TYPE app_role ADD VALUE 'super_admin'` / `'user'`. Existing `admin` rows stay admin; keep `viewer` as a deprecated alias mapped to `user` in code, or migrate rows to `'user'` in the same migration.
+- Add helper `is_super_admin(uuid)` (SECURITY DEFINER) for RLS.
+- Backfill: the first existing admin becomes `super_admin` (or all current admins → super_admin — see Question 1).
 
-1. **Structural** — unchanged (>10% missing → `incomplete`).
-2. **Statistical integrity (Spike/Drop)** — for the most recent complete day in the window:
-   - Baseline = mean of totals on the same weekday for the previous 4 occurrences that ALSO pass structural completeness AND (for holiday-park/evening_peak profiles) fall in the same peak-vs-off-peak season as today, per `isPeakSeason`.
-   - Need ≥3 baseline days; otherwise `insufficient_history`.
-   - Flag `spike` when today > baseline × 1.30, `drop` when today < baseline × 0.70.
-   - Skip entirely for utility === "gas" during `summerGasMonths`.
-3. **Stagnation** — electricity + water only:
-   - `offline`: ≥24h continuous absolute 0 during active hours (reuses existing active-hour longest-zero logic; threshold raised to 24h and decoupled from `completeness_flatline_hours`).
-   - `stuck_value`: ≥12 consecutive intervals with identical non-zero value (any hour).
-   - `offlineEventCount`: count of distinct ≥24h zero runs across the full history of the meter (not just current window).
-   - Gas: always `ok` for stagnation.
-4. Existing status precedence stays: structural `incomplete` → `telemetry_offline` (now driven by `stagnation !== "ok"`) → `ok`. Integrity is reported alongside status, not as the top-level status.
+New tables (all with GRANTs + RLS + `updated_at` triggers):
 
-## Grid updates (`DataValidationApp.tsx`)
+- `user_organisations (user_id, organisation_id)` — many-to-many, PK on the pair.
+- `user_app_access (user_id, app_slug)` — many-to-many; `app_slug` is a text matching `APPS[].slug` in `launcher-context.tsx`. Super admins & admins implicitly have all apps; rows only meaningful for `user` role.
 
-New columns (sortable):
-- **Integrity** — badge (OK / Spike +Δ% / Drop −Δ% / — insufficient history). Grey neutral warning icon per spec.
-- **Offline events** — count from `offlineEventCount`.
-- Existing "Longest flatline" relabelled "Longest 0-run (active hrs)".
-- Existing "Status" merges structural + stagnation.
+RLS updates:
 
-Grouping/filters unchanged. Tooltip on Integrity badge shows today vs baseline kWh and which weekday/season it compared against.
+- `organisations`, `buildings`, `consumption_rows`, `meter_overrides`, `schedules`, `ingestion_schedules`: allow row if `is_super_admin(auth.uid())` OR org is in caller's `user_organisations`. Writes further gated by role (`super_admin` or `admin`).
+- `user_roles`, `user_organisations`, `user_app_access`, `profiles` (of others): read/write only by super_admin, or admin for users whose org set overlaps theirs.
 
-## Buildings list warning icon
+## 3. Server functions for user CRUD
 
-`BuildingsPanel` (and any building list in the launcher grid): a `useBuildingIntegritySummary(buildingId)` helper in `src/lib/data-store.tsx` runs the new engine across the building's meters and returns whether any triggered `spike`/`drop`/`offline`/`stuck_value`. Show a grey `AlertTriangle` icon + tooltip ("Variance Alert: Unexpectedly Low/High Consumption Detected" / "Meter Offline"). Neutral grey styling (`text-muted-foreground`) — not red/amber, per spec.
+New `src/lib/users.functions.ts` (client-safe, `.handler()` bodies dynamically import `client.server`):
 
-## Meter dashboard visuals (`MeterDashboard.tsx`)
+- `listUsers` — returns profile + email (from `auth.users` via admin client) + role + org ids + app slugs. Admin sees only users sharing at least one of their orgs.
+- `createUser({ email, password, displayName, role, organisationIds, appSlugs })` — uses `supabaseAdmin.auth.admin.createUser({ email_confirm: true })`, then inserts into `profiles`, `user_roles`, `user_organisations`, `user_app_access`. Admins cannot create super_admins and can only assign orgs they belong to.
+- `updateUser({ userId, displayName?, role?, organisationIds?, appSlugs?, password? })` — password is optional; when omitted, current password is retained (no call to `updateUserById({ password })`). Email is not editable in v1.
+- `deleteUser({ userId })` — `supabaseAdmin.auth.admin.deleteUser`; cascades via FKs.
+- All functions use `.middleware([requireSupabaseAuth])`, verify caller role via `context.supabase.rpc('has_role', ...)`, then load `supabaseAdmin` inside the handler.
 
-- New "Data Validation" card next to existing completeness card showing: structural status, integrity badge with today vs 4-week baseline (with a small sparkline of the last ~8 same-DOW totals highlighting today), stagnation status, and offline-event counter.
-- On the daily-totals bar chart: overlay a dashed line at the 4-week same-DOW baseline and colour today's bar grey with a warning glyph when spike/drop fires.
-- On the HH profile chart: shade any ≥24h zero window (during active hours) grey and annotate "Offline".
+## 4. Users management page
 
-## Out of scope
+- Activate the existing "Users" sidebar item; route `src/routes/_authenticated/users.tsx`, gated to `super_admin` and `admin` (viewers see access-required card, same pattern as Settings).
+- Table columns: Name, Email, Role, Organisations (chip list), App access (chip list, or "All" for admin/super), Actions (Edit, Delete).
+- Toolbar: search + "Add user" button.
+- `AddUserDialog` / `EditUserDialog` (shared component in `src/components/admin/UserFormDialog.tsx`):
+  - Fields: Display name, Email (create only), Role (select — admin cannot pick super_admin), Organisations (multi-select checkbox list — admin limited to own orgs), App access (multi-select of `APPS`; disabled + shown as "All apps" when role is super_admin/admin), Password.
+  - Password row: text input + "Generate" button (16-char cryptographically random, mix of upper/lower/digits/symbols) + copy-to-clipboard + show/hide toggle. In edit mode the field is empty with helper text "Leave blank to keep current password".
+  - Confirm delete via `AlertDialog`.
+- Toast feedback for every action.
 
-- No changes to Baseload scoring, CSV ingestion, meter overrides, or auth.
-- No new DB tables; offline-event counter is computed on the fly from `consumption` state.
+## 5. Enforce access elsewhere
+
+- `LauncherProvider` (`src/lib/launcher-context.tsx`): resolve `role` from the new enum, filter `orgs` to `user_organisations`, expose `allowedAppSlugs`; `canAccess(app, role, allowedAppSlugs)` becomes the single gate.
+- Sidebar Settings item: visible for `super_admin` and `admin` (admin lands in a scoped view — see Question 2).
+- `/apps/$slug`: keep existing lock card, checking the new gate.
+
+## Technical notes
+
+- Password generation runs client-side using `crypto.getRandomValues`; server also validates length ≥ 12.
+- `updateUser` re-uses `supabaseAdmin.auth.admin.updateUserById` and passes `password` only when a non-empty value is supplied — this is what preserves the current password.
+- Existing seed super-admin flow in `handle_new_user` (first user becomes admin) stays for bootstrap but we relabel to `super_admin`.
+
+## Questions before implementing
+
+1. Existing users with role `admin` today — promote all of them to `super_admin`, or only the very first account and demote the rest to the new `admin`? Only the very first account. 
+2. Should `admin` (org-scoped) see the Settings page too (buildings/meters/schedules/ingestion) for their assigned orgs, or is Settings super_admin-only and admins only get the Users page + mini-apps? Should see settings page too for assigned organisation
+3. Should admins be able to create other admins, or only `user` accounts? Both yes
