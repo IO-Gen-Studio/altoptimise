@@ -29,7 +29,7 @@ const ICONS = {
 };
 
 function LauncherHome() {
-  const { persona, org } = useLauncher();
+  const { persona, org, appAccess } = useLauncher();
 
   return (
     <AppShell>
@@ -59,13 +59,13 @@ function LauncherHome() {
           <h2 className="text-lg font-semibold tracking-tight">Apps</h2>
           <Badge variant="outline" className="gap-1">
             <Activity className="h-3 w-3" />
-            {APPS.filter((a) => canAccess(a, persona.role)).length} of {APPS.length} accessible
+            {APPS.filter((a) => canAccess(a, persona.role, appAccess)).length} of {APPS.length} accessible
           </Badge>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {APPS.map((app) => (
-            <AppCard key={app.id} app={app} allowed={canAccess(app, persona.role)} />
+            <AppCard key={app.id} app={app} allowed={canAccess(app, persona.role, appAccess)} />
           ))}
         </div>
       </div>

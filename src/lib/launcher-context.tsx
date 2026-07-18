@@ -3,7 +3,7 @@ import { createContext, useContext, useMemo, useState, type ReactNode } from "re
 import { useOrganisations, type Organisation } from "./data-store";
 import { useAuth } from "@/hooks/use-auth";
 
-export type Role = "super_admin" | "data_analyst" | "viewer";
+export type Role = "super_admin" | "admin" | "user";
 
 export interface Org {
   id: string;
@@ -29,8 +29,8 @@ export const PERSONAS: Persona[] = [];
 
 export const ROLE_LABEL: Record<Role, string> = {
   super_admin: "Super Admin",
-  data_analyst: "Data Analyst",
-  viewer: "Viewer",
+  admin: "Admin",
+  user: "User",
 };
 
 interface LauncherCtx {
@@ -41,6 +41,8 @@ interface LauncherCtx {
   orgs: Org[];
   personas: Persona[];
   isAdmin: boolean;
+  isSuperAdmin: boolean;
+  appAccess: string[];
   signedIn: boolean;
 }
 
@@ -49,7 +51,7 @@ const Ctx = createContext<LauncherCtx | null>(null);
 export function LauncherProvider({ children }: { children: ReactNode }) {
   const [orgId, setOrgId] = useState<string>("");
   const { organisations } = useOrganisations();
-  const { user, profile, isAdmin } = useAuth();
+  const { user, profile, isAdmin, isSuperAdmin, role, appAccess } = useAuth();
 
   const value = useMemo<LauncherCtx>(() => {
     const email = user?.email ?? "";
@@ -60,7 +62,7 @@ export function LauncherProvider({ children }: { children: ReactNode }) {
       name,
       email,
       initials,
-      role: isAdmin ? "super_admin" : "viewer",
+      role: (role ?? "user") as Role,
     };
     const orgs: Org[] = organisations.length
       ? organisations.map(toOrg)
@@ -76,9 +78,11 @@ export function LauncherProvider({ children }: { children: ReactNode }) {
       orgs,
       personas: [],
       isAdmin,
+      isSuperAdmin,
+      appAccess,
       signedIn: !!user,
     };
-  }, [orgId, organisations, user, profile, isAdmin]);
+  }, [orgId, organisations, user, profile, isAdmin, isSuperAdmin, role, appAccess]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
@@ -115,7 +119,7 @@ export const APPS: MiniApp[] = [
       "Continuously scans half-hourly electricity and gas data to score baseload health and flag unusual consumption.",
     category: "Analysis",
     icon: "baseload",
-    allowedRoles: ["super_admin", "data_analyst"],
+    allowedRoles: ["super_admin", "admin", "user"],
     accent: "from-cyan-500/15 to-blue-500/10",
   },
   {
@@ -127,7 +131,7 @@ export const APPS: MiniApp[] = [
       "Runs structural completeness, statistical integrity (spikes/drops vs 4-wk baseline) and stagnation checks before analytics.",
     category: "Validation",
     icon: "completeness",
-    allowedRoles: ["super_admin", "data_analyst", "viewer"],
+    allowedRoles: ["super_admin", "admin", "user"],
     accent: "from-amber-500/15 to-orange-500/10",
   },
   {
@@ -139,11 +143,15 @@ export const APPS: MiniApp[] = [
       "Calculates Scope 1 and 2 emissions from electricity, gas, water and solar PV to track your carbon trajectory.",
     category: "Monitoring",
     icon: "sustainability",
-    allowedRoles: ["super_admin", "data_analyst", "viewer"],
+    allowedRoles: ["super_admin", "admin", "user"],
     accent: "from-emerald-500/15 to-teal-500/10",
   },
 ];
 
-export function canAccess(app: MiniApp, role: Role) {
-  return app.allowedRoles.includes(role);
+export function canAccess(app: MiniApp, role: Role, appAccess: string[] = []): boolean {
+  if (!app.allowedRoles.includes(role)) return false;
+  // Super admin has access to everything
+  if (role === "super_admin") return true;
+  // Admin and user require explicit app access assignment
+  return appAccess.includes(app.slug);
 }

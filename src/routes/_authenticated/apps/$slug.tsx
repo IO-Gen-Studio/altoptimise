@@ -20,8 +20,8 @@ export const Route = createFileRoute("/_authenticated/apps/$slug")({
 
 function AppView() {
   const { app } = Route.useLoaderData();
-  const { persona } = useLauncher();
-  const allowed = canAccess(app, persona.role);
+  const { persona, appAccess } = useLauncher();
+  const allowed = canAccess(app, persona.role, appAccess);
 
   return (
     <AppShell>
