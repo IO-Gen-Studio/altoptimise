@@ -33,13 +33,13 @@ import { cn } from "@/lib/utils";
 import { ROLE_LABEL, useLauncher } from "@/lib/launcher-context";
 import { supabase } from "@/integrations/supabase/client";
 
-type NavItem = { to: "/" | "/admin"; label: string; icon: typeof LayoutGrid; disabled?: boolean; superOnly?: boolean };
+type NavItem = { to: "/" | "/admin" | "/users"; label: string; icon: typeof LayoutGrid; adminOnly?: boolean };
 const NAV: NavItem[] = [
   { to: "/", label: "Launcher", icon: LayoutGrid },
-  { to: "/admin", label: "Settings", icon: Cog, superOnly: true },
+  { to: "/admin", label: "Settings", icon: Cog, adminOnly: true },
+  { to: "/users", label: "Users", icon: Users, adminOnly: true },
 ];
 const NAV_DISABLED = [
-  { label: "Users", icon: Users },
   { label: "Reports", icon: Building2 },
 ];
 
@@ -70,7 +70,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
 
         <nav className="flex-1 space-y-1 px-3 py-4">
-          {NAV.filter((i) => !i.superOnly || isAdmin).map((item) => {
+          {NAV.filter((i) => !i.adminOnly || isAdmin).map((item) => {
             const active = pathname === item.to;
             const cls = cn(
               "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
