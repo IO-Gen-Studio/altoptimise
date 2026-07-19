@@ -19,7 +19,7 @@ export const Route = createFileRoute("/_authenticated/admin")({
 
 function AdminPage() {
   const { persona } = useLauncher();
-  const isSuper = persona.role === "super_admin";
+  const canView = persona.role === "super_admin" || persona.role === "admin";
 
   return (
     <AppShell>
@@ -36,7 +36,7 @@ function AdminPage() {
           </div>
         </header>
 
-        {!isSuper ? (
+        {!canView ? (
           <Card className="border-dashed">
             <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
               <div className="grid h-12 w-12 place-items-center rounded-full bg-muted">
