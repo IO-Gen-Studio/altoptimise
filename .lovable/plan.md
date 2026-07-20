@@ -1,69 +1,89 @@
-# User Management & Access Control
+## Consumption League Table — new mini-app
 
-## 1. Hide self-signup on `/auth`
+A cross-site ranking view that aggregates every meter into per-site totals per utility, with time-scale presets, monthly drilldown, and a rich set of comparison columns.
 
-- Remove the "Create account" tab from `src/routes/auth.tsx`; sign-in only.
-- Also flip Cloud auth setting `disable_signup: true` so nobody can hit the endpoint directly.
+### 1. Data model additions
 
-## 2. Expand role model
+Extend `organisations` with per-utility tariff and emission factors so cost and CO₂e stay editable per client (no new tables — keeps admin surface small):
 
-Replace the current `app_role` enum (`admin | viewer`) with three roles:
+- `tariff_electricity_pence_per_kwh`, `tariff_gas_pence_per_kwh`, `tariff_water_pence_per_m3`
+- `co2_factor_electricity_kg_per_kwh`, `co2_factor_gas_kg_per_kwh`, `co2_factor_water_kg_per_m3`
 
-- `super_admin` — full access, every organisation, every mini-app.
-- `admin` — full functionality but scoped to assigned organisations; can manage users within those orgs.
-- `user` — viewer-only, scoped to assigned organisations and assigned mini-apps.
+Sensible UK defaults (0.207 kg/kWh elec, 0.183 kg/kWh gas, 0.344 kg/m³ water) applied when null.
 
-Migration:
+`EditOrganisationDialog` gains a "Tariffs & carbon factors" section for admins.
 
-- `ALTER TYPE app_role ADD VALUE 'super_admin'` / `'user'`. Existing `admin` rows stay admin; keep `viewer` as a deprecated alias mapped to `user` in code, or migrate rows to `'user'` in the same migration.
-- Add helper `is_super_admin(uuid)` (SECURITY DEFINER) for RLS.
-- Backfill: the first existing admin becomes `super_admin` (or all current admins → super_admin — see Question 1).
+No new consumption tables — everything is derived from `consumption_rows` already loaded by `useConsumption()`.
 
-New tables (all with GRANTs + RLS + `updated_at` triggers):
+### 2. New app registration
 
-- `user_organisations (user_id, organisation_id)` — many-to-many, PK on the pair.
-- `user_app_access (user_id, app_slug)` — many-to-many; `app_slug` is a text matching `APPS[].slug` in `launcher-context.tsx`. Super admins & admins implicitly have all apps; rows only meaningful for `user` role.
+Add to `APPS` in `src/lib/launcher-context.tsx`:
 
-RLS updates:
+- slug: `league-table`
+- name: "Consumption League"
+- tagline: "Rank sites by usage, cost & carbon"
+- icon: new `leagueTable` icon (Trophy from lucide)
+- accent: violet/fuchsia gradient
+- allowedRoles: super_admin, admin, user (respect `appAccess`)
 
-- `organisations`, `buildings`, `consumption_rows`, `meter_overrides`, `schedules`, `ingestion_schedules`: allow row if `is_super_admin(auth.uid())` OR org is in caller's `user_organisations`. Writes further gated by role (`super_admin` or `admin`).
-- `user_roles`, `user_organisations`, `user_app_access`, `profiles` (of others): read/write only by super_admin, or admin for users whose org set overlaps theirs.
+Wired into `src/routes/_authenticated/apps/$slug.tsx` router switch.
 
-## 3. Server functions for user CRUD
+### 3. UI — `src/components/launcher/apps/LeagueTableApp.tsx`
 
-New `src/lib/users.functions.ts` (client-safe, `.handler()` bodies dynamically import `client.server`):
+**Header row (filters):**
+- Utility tabs: Electricity · Gas · Water · Solar (auto-hidden when org has no meters of that kind)
+- Time preset dropdown: YTD · MTD · Last 30 days · Last 12 months · Previous year · Custom range
+- Ranking metric toggle: Total (kWh) · Intensity (kWh/m²) · YoY change %
+- Sort direction + search box (filter by site name)
 
-- `listUsers` — returns profile + email (from `auth.users` via admin client) + role + org ids + app slugs. Admin sees only users sharing at least one of their orgs.
-- `createUser({ email, password, displayName, role, organisationIds, appSlugs })` — uses `supabaseAdmin.auth.admin.createUser({ email_confirm: true })`, then inserts into `profiles`, `user_roles`, `user_organisations`, `user_app_access`. Admins cannot create super_admins and can only assign orgs they belong to.
-- `updateUser({ userId, displayName?, role?, organisationIds?, appSlugs?, password? })` — password is optional; when omitted, current password is retained (no call to `updateUserById({ password })`). Email is not editable in v1.
-- `deleteUser({ userId })` — `supabaseAdmin.auth.admin.deleteUser`; cascades via FKs.
-- All functions use `.middleware([requireSupabaseAuth])`, verify caller role via `context.supabase.rpc('has_role', ...)`, then load `supabaseAdmin` inside the handler.
+**Summary strip (4 KPI cards for the current filter):**
+- Total consumption (kWh) with sparkline
+- Estimated cost (£) at org tariff
+- CO₂e (tonnes) with equivalent (miles driven / trees)
+- Sites tracked (n) and coverage % (data completeness roll-up)
 
-## 4. Users management page
+**League table (sortable columns):**
 
-- Activate the existing "Users" sidebar item; route `src/routes/_authenticated/users.tsx`, gated to `super_admin` and `admin` (viewers see access-required card, same pattern as Settings).
-- Table columns: Name, Email, Role, Organisations (chip list), App access (chip list, or "All" for admin/super), Actions (Edit, Delete).
-- Toolbar: search + "Add user" button.
-- `AddUserDialog` / `EditUserDialog` (shared component in `src/components/admin/UserFormDialog.tsx`):
-  - Fields: Display name, Email (create only), Role (select — admin cannot pick super_admin), Organisations (multi-select checkbox list — admin limited to own orgs), App access (multi-select of `APPS`; disabled + shown as "All apps" when role is super_admin/admin), Password.
-  - Password row: text input + "Generate" button (16-char cryptographically random, mix of upper/lower/digits/symbols) + copy-to-clipboard + show/hide toggle. In edit mode the field is empty with helper text "Leave blank to keep current password".
-  - Confirm delete via `AlertDialog`.
-- Toast feedback for every action.
+| # | Site | Consumption (kWh) | vs Prev Year | Cost (£) | CO₂e (kg) | Peak Demand (kW) | Load Factor | Out-of-Hours % | Data Quality |
 
-## 5. Enforce access elsewhere
+- **Rank medal** for top 3 reducers (green) and bottom 3 (red).
+- **vs Prev Year**: % delta + absolute kWh saved/added, sparkline bar (green/red).
+- **Peak demand**: max half-hourly kW extrapolated (`max_hh_kwh × 2`).
+- **Load factor**: `avg_kW / peak_kW` — flags spiky vs steady consumption.
+- **Out-of-Hours %**: share of kWh consumed outside the building's active schedule (uses `resolveProfile` from `energy/profile.ts`).
+- **Data Quality**: reuses `checkCompleteness` status pill so unreliable sites don't win the league unfairly.
 
-- `LauncherProvider` (`src/lib/launcher-context.tsx`): resolve `role` from the new enum, filter `orgs` to `user_organisations`, expose `allowedAppSlugs`; `canAccess(app, role, allowedAppSlugs)` becomes the single gate.
-- Sidebar Settings item: visible for `super_admin` and `admin` (admin lands in a scoped view — see Question 2).
-- `/apps/$slug`: keep existing lock card, checking the new gate.
+**Monthly drilldown:**
+Click a row → expands an inline panel with:
+- 12-month stacked bar (this year vs previous year overlay line)
+- Best/worst month callouts
+- Per-meter contribution donut (top 5 meters + "Other")
 
-## Technical notes
+### 4. Calculation module — `src/lib/energy/league.ts`
 
-- Password generation runs client-side using `crypto.getRandomValues`; server also validates length ≥ 12.
-- `updateUser` re-uses `supabaseAdmin.auth.admin.updateUserById` and passes `password` only when a non-empty value is supplied — this is what preserves the current password.
-- Existing seed super-admin flow in `handle_new_user` (first user becomes admin) stays for bootstrap but we relabel to `super_admin`.
+Pure functions, no hooks:
+- `aggregateBySite(rows, range, utility) → SiteAggregate[]`
+- `computePeakAndLoadFactor(rows) → { peakKw, loadFactor }`
+- `computeOutOfHoursShare(rows, profile) → number` (uses HH slot × active window mask)
+- `computeYoYDelta(currentAgg, priorAgg) → { deltaPct, deltaKwh }`
+- `estimateCost(kwh, tariff)` and `estimateCo2(kwh, factor)`
+- Utility classifier reuses `utilityKind()` from `energy/completeness.ts`
 
-## Questions before implementing
+All aggregation done client-side over already-cached consumption rows — no new server functions or Supabase reads.
 
-1. Existing users with role `admin` today — promote all of them to `super_admin`, or only the very first account and demote the rest to the new `admin`? Only the very first account. 
-2. Should `admin` (org-scoped) see the Settings page too (buildings/meters/schedules/ingestion) for their assigned orgs, or is Settings super_admin-only and admins only get the Users page + mini-apps? Should see settings page too for assigned organisation
-3. Should admins be able to create other admins, or only `user` accounts? Both yes
+### 5. Small helpers reused
+
+- `useConsumption`, `useBuildings`, `useOrganisations`, `useMeterRegistry` from `data-store`
+- `resolveProfile` for schedule-aware out-of-hours
+- `checkCompleteness` for data-quality badge
+
+### 6. Out of scope for this pass
+
+- Intensity per m² UI shows "—" until an optional `floor_area_m2` field is added to buildings (flagged in the tooltip). Adding the field is a follow-up if the user wants it.
+- No CSV export in this pass (easy add later).
+
+### Technical notes
+
+- Migration adds nullable numeric columns to `organisations`; no RLS changes needed (existing `can_access_org` policies cover them).
+- Types regenerate after migration, then `EditOrganisationDialog` and `league.ts` are wired up.
+- Timezone-safe: all date math uses the existing UTC helpers to avoid the day-shift bug we already fixed elsewhere.

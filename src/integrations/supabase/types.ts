@@ -245,6 +245,9 @@ export type Database = {
           active_days: number[]
           active_from: string
           active_to: string
+          co2_factor_electricity_kg_per_kwh: number | null
+          co2_factor_gas_kg_per_kwh: number | null
+          co2_factor_water_kg_per_m3: number | null
           completeness_flatline_hours: number
           completeness_missing_pct: number
           created_at: string
@@ -255,11 +258,17 @@ export type Database = {
           peak_season_months: number[]
           profile_type: string
           summer_gas_months: number[]
+          tariff_electricity_pence_per_kwh: number | null
+          tariff_gas_pence_per_kwh: number | null
+          tariff_water_pence_per_m3: number | null
         }
         Insert: {
           active_days?: number[]
           active_from?: string
           active_to?: string
+          co2_factor_electricity_kg_per_kwh?: number | null
+          co2_factor_gas_kg_per_kwh?: number | null
+          co2_factor_water_kg_per_m3?: number | null
           completeness_flatline_hours?: number
           completeness_missing_pct?: number
           created_at?: string
@@ -270,11 +279,17 @@ export type Database = {
           peak_season_months?: number[]
           profile_type?: string
           summer_gas_months?: number[]
+          tariff_electricity_pence_per_kwh?: number | null
+          tariff_gas_pence_per_kwh?: number | null
+          tariff_water_pence_per_m3?: number | null
         }
         Update: {
           active_days?: number[]
           active_from?: string
           active_to?: string
+          co2_factor_electricity_kg_per_kwh?: number | null
+          co2_factor_gas_kg_per_kwh?: number | null
+          co2_factor_water_kg_per_m3?: number | null
           completeness_flatline_hours?: number
           completeness_missing_pct?: number
           created_at?: string
@@ -285,6 +300,9 @@ export type Database = {
           peak_season_months?: number[]
           profile_type?: string
           summer_gas_months?: number[]
+          tariff_electricity_pence_per_kwh?: number | null
+          tariff_gas_pence_per_kwh?: number | null
+          tariff_water_pence_per_m3?: number | null
         }
         Relationships: []
       }

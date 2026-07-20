@@ -28,6 +28,12 @@ export function EditOrganisationDialog({ org, onOpenChange }: Props) {
   const [holidays, setHolidays] = useState<string>("");
   const [missingPct, setMissingPct] = useState(10);
   const [flatlineHrs, setFlatlineHrs] = useState(24);
+  const [tElec, setTElec] = useState<string>("");
+  const [tGas, setTGas] = useState<string>("");
+  const [tWater, setTWater] = useState<string>("");
+  const [cElec, setCElec] = useState<string>("");
+  const [cGas, setCGas] = useState<string>("");
+  const [cWater, setCWater] = useState<string>("");
 
   useEffect(() => {
     if (!org) return;
@@ -42,6 +48,12 @@ export function EditOrganisationDialog({ org, onOpenChange }: Props) {
     setHolidays((org.holidays ?? []).join(", "));
     setMissingPct(org.completeness_missing_pct ?? 10);
     setFlatlineHrs(org.completeness_flatline_hours ?? 24);
+    setTElec(org.tariff_electricity_pence_per_kwh?.toString() ?? "");
+    setTGas(org.tariff_gas_pence_per_kwh?.toString() ?? "");
+    setTWater(org.tariff_water_pence_per_m3?.toString() ?? "");
+    setCElec(org.co2_factor_electricity_kg_per_kwh?.toString() ?? "");
+    setCGas(org.co2_factor_gas_kg_per_kwh?.toString() ?? "");
+    setCWater(org.co2_factor_water_kg_per_m3?.toString() ?? "");
   }, [org]);
 
   if (!org) return null;
@@ -64,6 +76,12 @@ export function EditOrganisationDialog({ org, onOpenChange }: Props) {
       .split(/[,\s]+/)
       .map((s) => s.trim())
       .filter((s) => /^\d{4}-\d{2}-\d{2}$/.test(s));
+    const num = (s: string): number | null => {
+      const t = s.trim();
+      if (!t) return null;
+      const n = Number(t);
+      return Number.isFinite(n) ? n : null;
+    };
     updateOrganisation(org.id, {
       organization_name: name.trim(),
       location: location.trim() || undefined,
@@ -76,6 +94,12 @@ export function EditOrganisationDialog({ org, onOpenChange }: Props) {
       holidays: holidayList,
       completeness_missing_pct: Number(missingPct),
       completeness_flatline_hours: Number(flatlineHrs),
+      tariff_electricity_pence_per_kwh: num(tElec),
+      tariff_gas_pence_per_kwh: num(tGas),
+      tariff_water_pence_per_m3: num(tWater),
+      co2_factor_electricity_kg_per_kwh: num(cElec),
+      co2_factor_gas_kg_per_kwh: num(cGas),
+      co2_factor_water_kg_per_m3: num(cWater),
     });
     toast.success("Organisation updated");
     onOpenChange(false);
@@ -167,6 +191,40 @@ export function EditOrganisationDialog({ org, onOpenChange }: Props) {
               <Label>Flatline threshold (hours)</Label>
               <Input type="number" min={1} step={1} value={flatlineHrs}
                 onChange={(e) => setFlatlineHrs(Number(e.target.value))} />
+            </div>
+          </div>
+
+          <div className="space-y-2 rounded-lg border p-3">
+            <div className="text-sm font-medium">Tariffs & carbon factors</div>
+            <p className="text-xs text-muted-foreground">
+              Used by the Consumption League for cost and CO₂e estimates. Leave blank to fall back to UK defaults
+              (28p/kWh elec, 8p/kWh gas, 200p/m³ water · 0.207 / 0.183 kg per kWh, 0.344 kg per m³).
+            </p>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="space-y-1.5">
+                <Label>Electricity tariff (p/kWh)</Label>
+                <Input type="number" step="0.01" value={tElec} onChange={(e) => setTElec(e.target.value)} placeholder="28" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Gas tariff (p/kWh)</Label>
+                <Input type="number" step="0.01" value={tGas} onChange={(e) => setTGas(e.target.value)} placeholder="8" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Water tariff (p/m³)</Label>
+                <Input type="number" step="0.01" value={tWater} onChange={(e) => setTWater(e.target.value)} placeholder="200" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Elec CO₂ (kg/kWh)</Label>
+                <Input type="number" step="0.001" value={cElec} onChange={(e) => setCElec(e.target.value)} placeholder="0.207" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Gas CO₂ (kg/kWh)</Label>
+                <Input type="number" step="0.001" value={cGas} onChange={(e) => setCGas(e.target.value)} placeholder="0.183" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Water CO₂ (kg/m³)</Label>
+                <Input type="number" step="0.001" value={cWater} onChange={(e) => setCWater(e.target.value)} placeholder="0.344" />
+              </div>
             </div>
           </div>
 

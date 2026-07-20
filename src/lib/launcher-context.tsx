@@ -104,7 +104,7 @@ export interface MiniApp {
   tagline: string;
   description: string;
   category: string;
-  icon: "baseload" | "sustainability" | "completeness";
+  icon: "baseload" | "sustainability" | "completeness" | "league";
   allowedRoles: Role[];
   accent: string;
 }
@@ -145,6 +145,18 @@ export const APPS: MiniApp[] = [
     icon: "sustainability",
     allowedRoles: ["super_admin", "admin", "user"],
     accent: "from-emerald-500/15 to-teal-500/10",
+  },
+  {
+    id: "league-table",
+    slug: "league-table",
+    name: "Consumption League",
+    tagline: "Rank sites by usage, cost & carbon",
+    description:
+      "League table of every site with aggregated consumption per utility, YoY change, cost, CO₂e, peak demand and out-of-hours share.",
+    category: "Benchmarking",
+    icon: "league",
+    allowedRoles: ["super_admin", "admin", "user"],
+    accent: "from-violet-500/15 to-fuchsia-500/10",
   },
 ];
 
