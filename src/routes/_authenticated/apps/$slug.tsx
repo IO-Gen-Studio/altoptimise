@@ -8,6 +8,7 @@ import { APPS, canAccess, ROLE_LABEL, useLauncher } from "@/lib/launcher-context
 import { BaseloadApp } from "@/components/launcher/apps/BaseloadApp";
 import { SustainabilityApp } from "@/components/launcher/apps/SustainabilityApp";
 import { DataValidationApp } from "@/components/launcher/apps/DataValidationApp";
+import { LeagueTableApp } from "@/components/launcher/apps/LeagueTableApp";
 
 export const Route = createFileRoute("/_authenticated/apps/$slug")({
   loader: ({ params }) => {
@@ -60,6 +61,8 @@ function AppView() {
           <SustainabilityApp />
         ) : app.slug === "data-validation" || app.slug === "data-completeness" ? (
           <DataValidationApp />
+        ) : app.slug === "league-table" ? (
+          <LeagueTableApp />
         ) : (
           <Card>
             <CardContent className="p-8 text-sm text-muted-foreground">
