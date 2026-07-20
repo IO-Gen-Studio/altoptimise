@@ -17,6 +17,12 @@ export interface Organisation {
   holidays?: string[]; // YYYY-MM-DD
   completeness_missing_pct?: number;
   completeness_flatline_hours?: number;
+  tariff_electricity_pence_per_kwh?: number | null;
+  tariff_gas_pence_per_kwh?: number | null;
+  tariff_water_pence_per_m3?: number | null;
+  co2_factor_electricity_kg_per_kwh?: number | null;
+  co2_factor_gas_kg_per_kwh?: number | null;
+  co2_factor_water_kg_per_m3?: number | null;
 }
 
 export interface Building {

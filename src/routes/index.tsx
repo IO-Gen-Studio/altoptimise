@@ -9,6 +9,7 @@ import {
   Sparkles,
   TrendingDown,
   TrendingUp,
+  Trophy,
 } from "lucide-react";
 
 import { AppShell } from "@/components/launcher/AppShell";
@@ -26,6 +27,7 @@ const ICONS = {
   baseload: Gauge,
   sustainability: Leaf,
   completeness: ShieldCheck,
+  league: Trophy,
 };
 
 function LauncherHome() {
