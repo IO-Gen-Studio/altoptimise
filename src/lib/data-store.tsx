@@ -339,15 +339,32 @@ const Ctx = createContext<StoreCtx | null>(null);
 export function DataStoreProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<State>(() => emptyState());
   const consumptionLoadVersion = useRef(0);
+  const currentUserId = useRef<string | null>(null);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Debounced persist of the full state to IndexedDB so subsequent refreshes
+  // paint instantly from cache before the network round-trip returns.
+  const scheduleCacheSave = useCallback((next: State) => {
+    if (!currentUserId.current) return;
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    const userId = currentUserId.current;
+    saveTimer.current = setTimeout(() => {
+      void saveCachedState(userId, next);
+    }, 400);
+  }, []);
 
   const refreshMetadata = useCallback(async () => {
     try {
       const next = await fetchAll();
-      setState((s) => ({ ...next, consumption: s.consumption }));
+      setState((s) => {
+        const merged = { ...next, consumption: s.consumption };
+        scheduleCacheSave(merged);
+        return merged;
+      });
     } catch (e) {
       console.error("data-store refresh failed", e);
     }
-  }, []);
+  }, [scheduleCacheSave]);
 
   const refresh = useCallback(async () => {
     const version = consumptionLoadVersion.current + 1;
@@ -366,22 +383,42 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
       }
     }).then((rows) => {
       if (consumptionLoadVersion.current === version) {
-        setState((s) => ({ ...s, consumption: rows }));
+        setState((s) => {
+          const merged = { ...s, consumption: rows };
+          scheduleCacheSave(merged);
+          return merged;
+        });
       }
     });
-  }, [refreshMetadata]);
+  }, [refreshMetadata, scheduleCacheSave]);
 
-  // Load on mount + whenever auth state changes.
+  // Load on mount + whenever auth state changes. Hydrate from IndexedDB cache
+  // first so dashboards paint instantly, then revalidate from the network.
   useEffect(() => {
     let mounted = true;
+    const hydrateAndRefresh = async (userId: string) => {
+      currentUserId.current = userId;
+      const cached = await loadCachedState<State>(userId);
+      if (!mounted) return;
+      if (cached) setState(cached.data);
+      void refresh();
+    };
     supabase.auth.getSession().then(({ data }) => {
       if (!mounted) return;
-      if (data.session) void refresh();
+      if (data.session) void hydrateAndRefresh(data.session.user.id);
       else setState(emptyState());
     });
-    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "SIGNED_IN" || event === "USER_UPDATED") void refresh();
-      if (event === "SIGNED_OUT") setState(emptyState());
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_IN" || event === "USER_UPDATED") {
+        if (session?.user.id) void hydrateAndRefresh(session.user.id);
+        else void refresh();
+      }
+      if (event === "SIGNED_OUT") {
+        const uid = currentUserId.current;
+        currentUserId.current = null;
+        setState(emptyState());
+        if (uid) void clearCachedState(uid);
+      }
     });
     return () => {
       mounted = false;
