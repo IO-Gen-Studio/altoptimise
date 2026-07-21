@@ -322,7 +322,7 @@ interface StoreCtx {
   addBuilding: (b: Omit<Building, "id" | "created_at">) => Building;
   updateBuilding: (id: string, patch: Partial<Building>) => void;
   deleteBuilding: (id: string) => void;
-  bulkInsertConsumption: (rows: Omit<ConsumptionRow, "id">[]) => number;
+  bulkInsertConsumption: (rows: Omit<ConsumptionRow, "id">[]) => Promise<number>;
   setSchemaLabel: (key: string, label: string) => void;
   setIngestion: (patch: Partial<IngestionSettings>) => void;
   markSynced: () => void;
@@ -464,23 +464,21 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
         if (error) { handleDbError("Delete building", error); void refresh(); }
       });
     },
-    bulkInsertConsumption: (rows) => {
+    bulkInsertConsumption: async (rows) => {
       const withIds = rows.map((r) => ({ ...r, id: uid() }));
       setState((s) => ({ ...s, consumption: [...s.consumption, ...withIds] }));
       // Insert in batches to keep payloads manageable.
       const CHUNK = 500;
-      void (async () => {
-        for (let i = 0; i < withIds.length; i += CHUNK) {
-          const batch = withIds.slice(i, i + CHUNK);
-          const { error } = await supabase.from("consumption_rows").insert(batch as never);
-          if (error) {
-            handleDbError("Import consumption", error);
-            void refresh();
-            return;
-          }
+      for (let i = 0; i < withIds.length; i += CHUNK) {
+        const batch = withIds.slice(i, i + CHUNK);
+        const { error } = await supabase.from("consumption_rows").insert(batch as never);
+        if (error) {
+          handleDbError("Import consumption", error);
+          void refresh();
+          throw new Error(error.message);
         }
-        void refreshMetadata();
-      })();
+      }
+      void refreshMetadata();
       return withIds.length;
     },
     setSchemaLabel: (key, label) => {
