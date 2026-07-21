@@ -1,0 +1,3 @@
+DROP TRIGGER IF EXISTS trg_consumption_rows_registry_insert ON public.consumption_rows;
+DROP TRIGGER IF EXISTS trg_consumption_rows_registry_update ON public.consumption_rows;
+DROP TRIGGER IF EXISTS trg_consumption_rows_registry_delete ON public.consumption_rows;
