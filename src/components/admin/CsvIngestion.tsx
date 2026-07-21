@@ -54,12 +54,12 @@ export function CsvIngestion() {
     if (file) handleFile(file);
   };
 
-  const confirmImport = () => {
+  const confirmImport = async () => {
     if (!parsed || !orgId) return;
     const tId = toast.loading("Importing data…");
     try {
       const rows = pivotRows(parsed, orgId, buildings, overrides);
-      const n = bulkInsertConsumption(rows);
+      const n = await bulkInsertConsumption(rows);
       markSynced();
       const applied = overrides.length
         ? rows.filter((r) => overrides.some((o) => o.raw_meter_name === r.meter_name)).length
