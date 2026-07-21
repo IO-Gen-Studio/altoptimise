@@ -312,6 +312,12 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
     try {
       const next = await fetchAll();
       setState(next);
+      // Consumption is large (48-value arrays × tens of thousands of rows);
+      // load it after the lightweight tables so the UI (orgs/buildings/etc.)
+      // renders immediately instead of blocking on the heavy paginated fetch.
+      void fetchConsumption().then((rows) => {
+        setState((s) => ({ ...s, consumption: rows }));
+      });
     } catch (e) {
       console.error("data-store refresh failed", e);
     }
