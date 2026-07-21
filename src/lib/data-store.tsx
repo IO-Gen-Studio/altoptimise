@@ -218,30 +218,9 @@ function normNumArray(v: unknown): (number | null)[] {
 }
 
 async function fetchAll(): Promise<State> {
-  async function fetchAllConsumption() {
-    const PAGE = 1000;
-    let from = 0;
-    const all: Record<string, unknown>[] = [];
-    // Paginate to bypass PostgREST default row cap
-    // Keep going until a page returns fewer rows than requested.
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
-      const { data, error } = await supabase
-        .from("consumption_rows")
-        .select("*")
-        .range(from, from + PAGE - 1);
-      if (error) return { data: all, error };
-      if (!data || data.length === 0) break;
-      all.push(...(data as Record<string, unknown>[]));
-      if (data.length < PAGE) break;
-      from += PAGE;
-    }
-    return { data: all, error: null };
-  }
-  const [orgs, bldgs, cons, ovs, sch, lbls, ing] = await Promise.all([
+  const [orgs, bldgs, ovs, sch, lbls, ing] = await Promise.all([
     supabase.from("organisations").select("*").order("created_at"),
     supabase.from("buildings").select("*").order("created_at"),
-    fetchAllConsumption(),
     supabase.from("meter_overrides").select("*"),
     supabase.from("schedules").select("*"),
     supabase.from("schema_labels").select("*"),
@@ -250,12 +229,6 @@ async function fetchAll(): Promise<State> {
   const s = emptyState();
   if (orgs.data) s.organisations = orgs.data as Organisation[];
   if (bldgs.data) s.buildings = bldgs.data as Building[];
-  if (cons.data)
-    s.consumption = cons.data.map((r: Record<string, unknown>) => ({
-      ...(r as unknown as ConsumptionRow),
-      meter_factor: Number(r.meter_factor ?? 1),
-      half_hourly_values: normNumArray(r.half_hourly_values),
-    }));
   if (ovs.data)
     s.meterOverrides = ovs.data.map((r: Record<string, unknown>) => ({
       raw_meter_name: r.raw_meter_name as string,
@@ -287,6 +260,28 @@ async function fetchAll(): Promise<State> {
     };
   }
   return s;
+}
+
+async function fetchConsumption(): Promise<ConsumptionRow[]> {
+    const PAGE = 1000;
+    let from = 0;
+    const all: Record<string, unknown>[] = [];
+    while (true) {
+      const { data, error } = await supabase
+        .from("consumption_rows")
+        .select("*")
+        .range(from, from + PAGE - 1);
+      if (error) { console.error("consumption fetch", error); break; }
+      if (!data || data.length === 0) break;
+      all.push(...(data as Record<string, unknown>[]));
+      if (data.length < PAGE) break;
+      from += PAGE;
+    }
+  return all.map((r: Record<string, unknown>) => ({
+      ...(r as unknown as ConsumptionRow),
+      meter_factor: Number(r.meter_factor ?? 1),
+      half_hourly_values: normNumArray(r.half_hourly_values),
+    }));
 }
 
 interface StoreCtx {
