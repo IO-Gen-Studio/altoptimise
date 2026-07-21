@@ -371,14 +371,22 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
     consumptionLoadVersion.current = version;
     await refreshMetadata();
 
-    // Consumption is large (48-value arrays × tens of thousands of rows). Keep
-    // existing rows visible during refreshes, then stream pages in so apps do
-    // not appear to lose all data while the full dataset is still loading.
+    // Consumption is large (48-value arrays × tens of thousands of rows).
+    // If we already have rows on screen (e.g. hydrated from IndexedDB cache),
+    // keep them visible untouched and only swap in the fresh dataset once the
+    // full fetch completes — otherwise partial pages would wipe out the cached
+    // view and make dashboards look like they are constantly reloading.
+    let hasExisting = false;
+    setState((s) => {
+      hasExisting = s.consumption.length > 0;
+      return s;
+    });
     const accumulated: ConsumptionRow[] = [];
     void fetchConsumption((pageRows, pageIndex) => {
       if (consumptionLoadVersion.current !== version) return;
       accumulated.push(...pageRows);
-      if (pageIndex === 1 || pageIndex % 10 === 0) {
+      // Only stream progressive updates when there is nothing on screen yet.
+      if (!hasExisting && (pageIndex === 1 || pageIndex % 10 === 0)) {
         setState((s) => ({ ...s, consumption: accumulated.slice() }));
       }
     }).then((rows) => {
