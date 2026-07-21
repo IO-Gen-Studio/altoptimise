@@ -1,89 +1,39 @@
-## Consumption League Table — new mini-app
+# Speed up mini-app refresh with caching
 
-A cross-site ranking view that aggregates every meter into per-site totals per utility, with time-scale presets, monthly drilldown, and a rich set of comparison columns.
+Today every refresh re-downloads ~100k+ consumption rows and recomputes league/baseload/validation results in the browser. We'll fix this in two phases.
 
-### 1. Data model additions
+## Phase 1 — Client-side cache (ship first)
 
-Extend `organisations` with per-utility tariff and emission factors so cost and CO₂e stay editable per client (no new tables — keeps admin surface small):
+Goal: refreshing any mini-app paints the last known dashboard instantly, then quietly revalidates.
 
-- `tariff_electricity_pence_per_kwh`, `tariff_gas_pence_per_kwh`, `tariff_water_pence_per_m3`
-- `co2_factor_electricity_kg_per_kwh`, `co2_factor_gas_kg_per_kwh`, `co2_factor_water_kg_per_m3`
+- Add an IndexedDB-backed cache layer (via `idb-keyval`) keyed by `orgId` + dataset version.
+- Persist on load:
+  - Raw consumption rows (already paged in `data-store.tsx`)
+  - Buildings, meters, schedules, org settings, meter registry
+  - A `lastSyncedAt` timestamp and a max `updated_at` watermark per table
+- On app boot: hydrate React state from IndexedDB synchronously → dashboards render immediately with cached numbers.
+- In the background: fetch only rows newer than the watermark (`updated_at > lastSyncedAt`) and merge — no full re-download unless the cache is empty or schema version changed.
+- Memoise expensive derived results (league aggregates, baseload scores, completeness reports) per `(orgId, utility, dateRange, dataVersion)` and store them in IndexedDB too, so switching tabs or refreshing skips recomputation until data changes.
+- Invalidate cache on: sign-out, org switch to a new org, successful CSV import, scheduled ingestion run, or manual "Refresh data" button in the header.
 
-Sensible UK defaults (0.207 kg/kWh elec, 0.183 kg/kWh gas, 0.344 kg/m³ water) applied when null.
+Affected files: `src/lib/data-store.tsx` (hydration + revalidation), new `src/lib/cache/idb-cache.ts`, small hook wrappers in `src/lib/energy/{league,scoring,completeness}.ts` call sites.
 
-`EditOrganisationDialog` gains a "Tariffs & carbon factors" section for admins.
+## Phase 2 — Server-side precomputed aggregates (follow-up)
 
-No new consumption tables — everything is derived from `consumption_rows` already loaded by `useConsumption()`.
+Goal: even a cold cache loads in <1s and scales past millions of rows.
 
-### 2. New app registration
+- New tables:
+  - `meter_daily_totals` (org_id, meter_name, building_id, utility, day, kwh, peak_kw, present_slots, expected_slots, out_of_hours_kwh)
+  - `meter_monthly_totals` (same shape, month granularity)
+  - `building_daily_totals` rollup view/materialisation for league table
+- Populate via:
+  - Trigger on `consumption_rows` insert/update/delete → upsert affected day rows (same pattern as `meter_registry_cache`).
+  - Backfill migration for existing data.
+- Rewrite League Table, Baseload, and Data Validation to query these small tables instead of scanning raw half-hourly rows. Meter Dashboard drilldown keeps using raw rows on demand only when the user opens a specific meter.
+- Client cache from Phase 1 now stores tiny aggregate rows instead of the full raw dataset → refreshes become near-instant even on first load.
 
-Add to `APPS` in `src/lib/launcher-context.tsx`:
+## Notes
 
-- slug: `league-table`
-- name: "Consumption League"
-- tagline: "Rank sites by usage, cost & carbon"
-- icon: new `leagueTable` icon (Trophy from lucide)
-- accent: violet/fuchsia gradient
-- allowedRoles: super_admin, admin, user (respect `appAccess`)
-
-Wired into `src/routes/_authenticated/apps/$slug.tsx` router switch.
-
-### 3. UI — `src/components/launcher/apps/LeagueTableApp.tsx`
-
-**Header row (filters):**
-- Utility tabs: Electricity · Gas · Water · Solar (auto-hidden when org has no meters of that kind)
-- Time preset dropdown: YTD · MTD · Last 30 days · Last 12 months · Previous year · Custom range
-- Ranking metric toggle: Total (kWh) · Intensity (kWh/m²) · YoY change %
-- Sort direction + search box (filter by site name)
-
-**Summary strip (4 KPI cards for the current filter):**
-- Total consumption (kWh) with sparkline
-- Estimated cost (£) at org tariff
-- CO₂e (tonnes) with equivalent (miles driven / trees)
-- Sites tracked (n) and coverage % (data completeness roll-up)
-
-**League table (sortable columns):**
-
-| # | Site | Consumption (kWh) | vs Prev Year | Cost (£) | CO₂e (kg) | Peak Demand (kW) | Load Factor | Out-of-Hours % | Data Quality |
-
-- **Rank medal** for top 3 reducers (green) and bottom 3 (red).
-- **vs Prev Year**: % delta + absolute kWh saved/added, sparkline bar (green/red).
-- **Peak demand**: max half-hourly kW extrapolated (`max_hh_kwh × 2`).
-- **Load factor**: `avg_kW / peak_kW` — flags spiky vs steady consumption.
-- **Out-of-Hours %**: share of kWh consumed outside the building's active schedule (uses `resolveProfile` from `energy/profile.ts`).
-- **Data Quality**: reuses `checkCompleteness` status pill so unreliable sites don't win the league unfairly.
-
-**Monthly drilldown:**
-Click a row → expands an inline panel with:
-- 12-month stacked bar (this year vs previous year overlay line)
-- Best/worst month callouts
-- Per-meter contribution donut (top 5 meters + "Other")
-
-### 4. Calculation module — `src/lib/energy/league.ts`
-
-Pure functions, no hooks:
-- `aggregateBySite(rows, range, utility) → SiteAggregate[]`
-- `computePeakAndLoadFactor(rows) → { peakKw, loadFactor }`
-- `computeOutOfHoursShare(rows, profile) → number` (uses HH slot × active window mask)
-- `computeYoYDelta(currentAgg, priorAgg) → { deltaPct, deltaKwh }`
-- `estimateCost(kwh, tariff)` and `estimateCo2(kwh, factor)`
-- Utility classifier reuses `utilityKind()` from `energy/completeness.ts`
-
-All aggregation done client-side over already-cached consumption rows — no new server functions or Supabase reads.
-
-### 5. Small helpers reused
-
-- `useConsumption`, `useBuildings`, `useOrganisations`, `useMeterRegistry` from `data-store`
-- `resolveProfile` for schedule-aware out-of-hours
-- `checkCompleteness` for data-quality badge
-
-### 6. Out of scope for this pass
-
-- Intensity per m² UI shows "—" until an optional `floor_area_m2` field is added to buildings (flagged in the tooltip). Adding the field is a follow-up if the user wants it.
-- No CSV export in this pass (easy add later).
-
-### Technical notes
-
-- Migration adds nullable numeric columns to `organisations`; no RLS changes needed (existing `can_access_org` policies cover them).
-- Types regenerate after migration, then `EditOrganisationDialog` and `league.ts` are wired up.
-- Timezone-safe: all date math uses the existing UTC helpers to avoid the day-shift bug we already fixed elsewhere.
+- No UI changes beyond a small "Last synced Xm ago · Refresh" indicator in the AppShell header.
+- No behaviour change to calculations — same functions, just fed pre-aggregated inputs.
+- Phase 1 alone should remove the visible lag on refresh; Phase 2 removes it structurally as data grows.
