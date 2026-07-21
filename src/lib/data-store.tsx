@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -282,10 +282,11 @@ async function fetchAll(): Promise<State> {
   return s;
 }
 
-async function fetchConsumption(): Promise<ConsumptionRow[]> {
+async function fetchConsumption(onPage?: (rows: ConsumptionRow[], pageIndex: number) => void): Promise<ConsumptionRow[]> {
     const PAGE = 1000;
     let lastId: string | null = null;
     const all: Record<string, unknown>[] = [];
+    let pageIndex = 0;
     while (true) {
       let query = supabase
         .from("consumption_rows")
@@ -296,14 +297,21 @@ async function fetchConsumption(): Promise<ConsumptionRow[]> {
       const { data, error } = await query;
       if (error) { console.error("consumption fetch", error); break; }
       if (!data || data.length === 0) break;
-      all.push(...(data as Record<string, unknown>[]));
-      lastId = String((data[data.length - 1] as Record<string, unknown>).id);
+      const pageRows = data as Record<string, unknown>[];
+      all.push(...pageRows);
+      pageIndex += 1;
+      onPage?.(pageRows.map(rowFromDb), pageIndex);
+      lastId = String((pageRows[pageRows.length - 1] as Record<string, unknown>).id);
     }
-  return all.map((r: Record<string, unknown>) => ({
-      ...(r as unknown as ConsumptionRow),
-      meter_factor: Number(r.meter_factor ?? 1),
-      half_hourly_values: normNumArray(r.half_hourly_values),
-    }));
+  return all.map(rowFromDb);
+}
+
+function rowFromDb(r: Record<string, unknown>): ConsumptionRow {
+  return {
+    ...(r as unknown as ConsumptionRow),
+    meter_factor: Number(r.meter_factor ?? 1),
+    half_hourly_values: normNumArray(r.half_hourly_values),
+  };
 }
 
 interface StoreCtx {
@@ -329,21 +337,38 @@ const Ctx = createContext<StoreCtx | null>(null);
 
 export function DataStoreProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<State>(() => emptyState());
+  const consumptionLoadVersion = useRef(0);
 
-  const refresh = useCallback(async () => {
+  const refreshMetadata = useCallback(async () => {
     try {
       const next = await fetchAll();
-      setState(next);
-      // Consumption is large (48-value arrays × tens of thousands of rows);
-      // load it after the lightweight tables so the UI (orgs/buildings/etc.)
-      // renders immediately instead of blocking on the heavy paginated fetch.
-      void fetchConsumption().then((rows) => {
-        setState((s) => ({ ...s, consumption: rows }));
-      });
+      setState((s) => ({ ...next, consumption: s.consumption }));
     } catch (e) {
       console.error("data-store refresh failed", e);
     }
   }, []);
+
+  const refresh = useCallback(async () => {
+    const version = consumptionLoadVersion.current + 1;
+    consumptionLoadVersion.current = version;
+    await refreshMetadata();
+
+    // Consumption is large (48-value arrays × tens of thousands of rows). Keep
+    // existing rows visible during refreshes, then stream pages in so apps do
+    // not appear to lose all data while the full dataset is still loading.
+    const accumulated: ConsumptionRow[] = [];
+    void fetchConsumption((pageRows, pageIndex) => {
+      if (consumptionLoadVersion.current !== version) return;
+      accumulated.push(...pageRows);
+      if (pageIndex === 1 || pageIndex % 10 === 0) {
+        setState((s) => ({ ...s, consumption: accumulated.slice() }));
+      }
+    }).then((rows) => {
+      if (consumptionLoadVersion.current === version) {
+        setState((s) => ({ ...s, consumption: rows }));
+      }
+    });
+  }, [refreshMetadata]);
 
   // Load on mount + whenever auth state changes.
   useEffect(() => {
@@ -454,6 +479,7 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
             return;
           }
         }
+        void refreshMetadata();
       })();
       return withIds.length;
     },
@@ -634,7 +660,7 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
         if (error) { handleDbError("Delete schedule", error); void refresh(); }
       });
     },
-  }), [state, refresh]);
+  }), [state, refresh, refreshMetadata]);
 
   return <Ctx.Provider value={api}>{children}</Ctx.Provider>;
 }
@@ -700,8 +726,9 @@ export function useMeterRegistry(orgId?: string): MeterRegistryRow[] {
         .filter((m) => m.organization_id === orgId)
         .map((m) => [m.raw_meter_name, m] as const),
     );
+    const cacheRows = state.meterRegistry.filter((m) => m.organization_id === orgId && m.raw_meter_name);
     const rowsByRaw = new Map<string, MeterRegistryRow>();
-    for (const base of state.meterRegistry.filter((m) => m.organization_id === orgId && m.raw_meter_name)) {
+    for (const base of cacheRows) {
       const o = overridesByRaw.get(base.raw_meter_name);
       const csvFactor =
         o && typeof o.csv_original_meter_factor === "number"
@@ -720,37 +747,43 @@ export function useMeterRegistry(orgId?: string): MeterRegistryRow[] {
       });
     }
 
-    const groups = new Map<string, { rows: ConsumptionRow[]; category: string; csvFactor: number }>();
-    for (const c of state.consumption) {
-      if (c.organization_id !== orgId) continue;
-      const key = c.meter_name;
-      if (rowsByRaw.has(key)) continue;
-      if (!key) continue;
-      const existing = groups.get(key);
-      if (existing) existing.rows.push(c);
-      else groups.set(key, { rows: [c], category: c.variable_category, csvFactor: c.meter_factor });
-    }
-    for (const [raw, g] of groups) {
-      const o = overridesByRaw.get(raw);
-      const effectiveBuildingId = o?.assigned_building_id ?? g.rows[0]?.building_id ?? null;
-      const effectiveBuilding = effectiveBuildingId ? buildingsById.get(effectiveBuildingId) : null;
-      // If an override exists, the consumption rows carry the override factor,
-      // so pull the true CSV default from the override's snapshot.
-      const csvFactor =
-        o && typeof o.csv_original_meter_factor === "number"
-          ? o.csv_original_meter_factor
-          : g.csvFactor;
-      rowsByRaw.set(raw, {
-        raw_meter_name: raw,
-        utility_category: g.category,
-        custom_display_name: o?.custom_display_name ?? null,
-        effective_building_id: effectiveBuildingId,
-        effective_building_name: effectiveBuilding?.custom_display_name ?? "Unassigned",
-        effective_meter_factor: o?.calibrated_meter_factor ?? csvFactor,
-        csv_meter_factor: csvFactor,
-        has_override: !!o,
-        row_count: g.rows.length,
-      });
+    // The backend registry cache is authoritative once it exists. Falling back
+    // to a browser-side scan of every half-hourly row is only safe for an empty
+    // cache; otherwise large uploads make the UI repeatedly stall and appear to
+    // drop data while pages stream in.
+    if (cacheRows.length === 0) {
+      const groups = new Map<string, { rows: ConsumptionRow[]; category: string; csvFactor: number }>();
+      for (const c of state.consumption) {
+        if (c.organization_id !== orgId) continue;
+        const key = c.meter_name;
+        if (!key) continue;
+        const existing = groups.get(key);
+        if (existing) existing.rows.push(c);
+        else groups.set(key, { rows: [c], category: c.variable_category, csvFactor: c.meter_factor });
+      }
+      for (const [raw, g] of groups) {
+        const o = overridesByRaw.get(raw);
+        const effectiveBuildingId = o?.assigned_building_id ?? g.rows[0]?.building_id ?? null;
+        const effectiveBuilding = effectiveBuildingId ? buildingsById.get(effectiveBuildingId) : null;
+        // If an override exists, the consumption rows carry the override factor,
+        // so pull the true CSV default from the override's snapshot.
+        const csvFactor =
+          o && typeof o.csv_original_meter_factor === "number"
+            ? o.csv_original_meter_factor
+            : g.csvFactor;
+        rowsByRaw.set(raw, {
+          organization_id: orgId,
+          raw_meter_name: raw,
+          utility_category: g.category,
+          custom_display_name: o?.custom_display_name ?? null,
+          effective_building_id: effectiveBuildingId,
+          effective_building_name: effectiveBuilding?.custom_display_name ?? "Unassigned",
+          effective_meter_factor: o?.calibrated_meter_factor ?? csvFactor,
+          csv_meter_factor: csvFactor,
+          has_override: !!o,
+          row_count: g.rows.length,
+        });
+      }
     }
     return [...rowsByRaw.values()].sort((a, b) => a.raw_meter_name.localeCompare(b.raw_meter_name));
   }, [state.meterRegistry, state.consumption, state.buildings, state.meterOverrides, orgId]);
