@@ -432,13 +432,16 @@ function KpiCard({
 }
 
 function MonthlyDrilldown({
-  row, prev, utility, unit,
+  row, prev, utility, unit, utilRows, rangeYear,
 }: {
   row: SiteAggregate & { costGbp: number; co2Kg: number };
   prev: SiteAggregate | undefined;
   utility: Utility;
   unit: string;
+  utilRows: ConsumptionRow[];
+  rangeYear: number;
 }) {
+  const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
   const data = MONTH_LABELS.map((m, i) => ({
     month: m,
     current: Math.round(row.monthlyTotals[i] ?? 0),
@@ -450,23 +453,77 @@ function MonthlyDrilldown({
   const M = UTILITY_META[utility];
   const Icon = M.icon;
 
+  // Build daily breakdown for the selected month (from raw rows for this building)
+  const dailyData = useMemo(() => {
+    if (selectedMonth == null) return [];
+    const mm = String(selectedMonth + 1).padStart(2, "0");
+    const prefix = `${rangeYear}-${mm}-`;
+    const bucket = new Map<string, number>();
+    for (const r of utilRows) {
+      if (r.building_id !== row.buildingId) continue;
+      if (!r.interval_date.startsWith(prefix)) continue;
+      const f = r.meter_factor || 1;
+      let s = 0;
+      for (let i = 0; i < 48; i++) {
+        const v = r.half_hourly_values[i];
+        if (v != null) s += v * f;
+      }
+      bucket.set(r.interval_date, (bucket.get(r.interval_date) ?? 0) + s);
+    }
+    const daysInMonth = new Date(Date.UTC(rangeYear, selectedMonth + 1, 0)).getUTCDate();
+    const out: { day: string; current: number }[] = [];
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dd = String(d).padStart(2, "0");
+      const key = `${rangeYear}-${mm}-${dd}`;
+      out.push({ day: String(d), current: Math.round(bucket.get(key) ?? 0) });
+    }
+    return out;
+  }, [selectedMonth, utilRows, row.buildingId, rangeYear]);
+
   return (
     <div className="grid gap-4 md:grid-cols-[1.5fr,1fr]">
       <div>
-        <div className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">
-          <Icon className={cn("h-3.5 w-3.5", M.color)} /> Monthly {M.label.toLowerCase()} — current vs previous year
+        <div className="mb-2 flex items-center justify-between gap-2 text-xs font-medium text-muted-foreground">
+          <div className="flex items-center gap-2">
+            <Icon className={cn("h-3.5 w-3.5", M.color)} />
+            {selectedMonth == null
+              ? <>Monthly {M.label.toLowerCase()} — current vs previous year <span className="text-muted-foreground/70">· click a bar for daily breakdown</span></>
+              : <>Daily {M.label.toLowerCase()} — {MONTH_LABELS[selectedMonth]} {rangeYear}</>}
+          </div>
+          {selectedMonth != null && (
+            <Button size="sm" variant="ghost" className="h-6 gap-1 px-2 text-xs" onClick={() => setSelectedMonth(null)}>
+              <ArrowLeft className="h-3 w-3" /> Back to months
+            </Button>
+          )}
         </div>
         <div className="h-56">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data}>
-              <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-              <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} />
-              <RTooltip />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Bar dataKey="current" name={`This period (${unit})`} fill="hsl(var(--primary))" />
-              <Bar dataKey="previous" name={`Previous year (${unit})`} fill="hsl(var(--muted-foreground))" fillOpacity={0.5} />
-            </BarChart>
+            {selectedMonth == null ? (
+              <BarChart
+                data={data}
+                onClick={(e: { activeTooltipIndex?: number } | null) => {
+                  const idx = e?.activeTooltipIndex;
+                  if (typeof idx === "number") setSelectedMonth(idx);
+                }}
+              >
+                <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} />
+                <RTooltip />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Bar dataKey="current" name={`This period (${unit})`} fill={M.chart} cursor="pointer" />
+                <Bar dataKey="previous" name={`Previous year (${unit})`} fill={M.chartPrev} fillOpacity={0.8} cursor="pointer" />
+              </BarChart>
+            ) : (
+              <BarChart data={dailyData}>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                <XAxis dataKey="day" tick={{ fontSize: 10 }} interval={0} />
+                <YAxis tick={{ fontSize: 11 }} />
+                <RTooltip />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Bar dataKey="current" name={`Daily (${unit})`} fill={M.chart} />
+              </BarChart>
+            )}
           </ResponsiveContainer>
         </div>
       </div>
@@ -476,7 +533,7 @@ function MonthlyDrilldown({
           <div className="h-24">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={data}>
-                <Line dataKey="current" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
+                <Line dataKey="current" stroke={M.chart} strokeWidth={2} dot={false} />
                 <RTooltip />
                 <XAxis dataKey="month" tick={{ fontSize: 10 }} interval={1} />
               </LineChart>
