@@ -266,16 +266,19 @@ async function fetchConsumption(): Promise<ConsumptionRow[]> {
     const PAGE = 1000;
     let from = 0;
     const all: Record<string, unknown>[] = [];
+    let total = Infinity;
     while (true) {
-      const { data, error } = await supabase
+      const { data, error, count } = await supabase
         .from("consumption_rows")
-        .select("*")
+        .select("*", { count: "exact" })
+        .order("id")
         .range(from, from + PAGE - 1);
       if (error) { console.error("consumption fetch", error); break; }
       if (!data || data.length === 0) break;
       all.push(...(data as Record<string, unknown>[]));
-      if (data.length < PAGE) break;
-      from += PAGE;
+      if (typeof count === "number") total = count;
+      from += data.length;
+      if (from >= total) break;
     }
   return all.map((r: Record<string, unknown>) => ({
       ...(r as unknown as ConsumptionRow),
