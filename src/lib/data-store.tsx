@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
+import { loadCachedState, saveCachedState, clearCachedState } from "@/lib/cache/idb-cache";
 
 export interface Organisation {
   id: string;
