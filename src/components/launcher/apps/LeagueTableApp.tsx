@@ -1,10 +1,11 @@
 import { useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, Coins, Flame, Leaf, PoundSterling, Trophy, TrendingDown, TrendingUp, Zap, Sun, Droplet, Gauge } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowUp, Coins, Flame, Leaf, PoundSterling, Trophy, TrendingDown, TrendingUp, Zap, Sun, Droplet, Gauge } from "lucide-react";
 import {
   Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip as RTooltip, XAxis, YAxis, Line, LineChart, Legend,
 } from "recharts";
 
 import { Badge } from "@/components/ui/badge";
+import type { ConsumptionRow } from "@/lib/data-store";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -27,11 +28,11 @@ type Dir = "asc" | "desc";
 
 const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-const UTILITY_META: Record<Utility, { label: string; icon: typeof Zap; color: string }> = {
-  electricity: { label: "Electricity", icon: Zap, color: "text-amber-500" },
-  gas: { label: "Gas", icon: Flame, color: "text-orange-500" },
-  water: { label: "Water", icon: Droplet, color: "text-sky-500" },
-  solar: { label: "Solar", icon: Sun, color: "text-yellow-500" },
+const UTILITY_META: Record<Utility, { label: string; icon: typeof Zap; color: string; chart: string; chartPrev: string }> = {
+  electricity: { label: "Electricity", icon: Zap, color: "text-violet-500", chart: "#8b5cf6", chartPrev: "#c4b5fd" },
+  gas: { label: "Gas", icon: Flame, color: "text-orange-500", chart: "#f97316", chartPrev: "#fdba74" },
+  water: { label: "Water", icon: Droplet, color: "text-blue-500", chart: "#3b82f6", chartPrev: "#93c5fd" },
+  solar: { label: "Solar", icon: Sun, color: "text-yellow-500", chart: "#eab308", chartPrev: "#fde68a" },
 };
 
 export function LeagueTableApp() {
