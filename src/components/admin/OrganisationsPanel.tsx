@@ -12,6 +12,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -22,19 +32,23 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useBuildings, useOrganisations, type Organisation } from "@/lib/data-store";
+import { useBuildings, useConsumption, useOrganisations, type Organisation } from "@/lib/data-store";
 import { PROFILE_LABEL, type ProfileType } from "@/lib/energy/profile";
 import { Badge } from "@/components/ui/badge";
 
 export function OrganisationsPanel() {
   const { organisations, addOrganisation, deleteOrganisation } = useOrganisations();
   const { buildings } = useBuildings();
+  const { consumption } = useConsumption();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [location, setLocation] = useState("");
   const [editing, setEditing] = useState<Organisation | null>(null);
+  const [deleting, setDeleting] = useState<Organisation | null>(null);
+  const [confirmText, setConfirmText] = useState("");
 
   const buildingCount = (id: string) => buildings.filter((b) => b.organization_id === id).length;
+  const rowCount = (id: string) => consumption.filter((c) => c.organization_id === id).length;
 
   return (
     <Card>
@@ -128,11 +142,8 @@ export function OrganisationsPanel() {
                     variant="ghost"
                     size="icon"
                     className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                    onClick={() => {
-                      if (confirm(`Delete ${o.organization_name}? This removes its buildings and data.`)) {
-                        deleteOrganisation(o.id);
-                      }
-                    }}
+                    onClick={() => { setDeleting(o); setConfirmText(""); }}
+                    aria-label="Delete organisation"
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -149,6 +160,48 @@ export function OrganisationsPanel() {
           </TableBody>
         </Table>
         {editing && <EditOrganisationDialog org={editing} onOpenChange={(o) => !o && setEditing(null)} />}
+        <AlertDialog open={!!deleting} onOpenChange={(o) => { if (!o) { setDeleting(null); setConfirmText(""); } }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-destructive">Delete organisation permanently?</AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-3 text-sm">
+                  <p>
+                    This will permanently remove <strong>{deleting?.organization_name}</strong> along with{" "}
+                    <strong>{deleting ? buildingCount(deleting.id) : 0}</strong> building(s) and{" "}
+                    <strong>{deleting ? rowCount(deleting.id).toLocaleString() : 0}</strong> half-hourly
+                    consumption rows. This action cannot be undone.
+                  </p>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="confirm-org-name" className="text-xs font-medium">
+                      Type <span className="font-mono">{deleting?.organization_name}</span> to confirm
+                    </Label>
+                    <Input
+                      id="confirm-org-name"
+                      value={confirmText}
+                      onChange={(e) => setConfirmText(e.target.value)}
+                      autoComplete="off"
+                    />
+                  </div>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={!deleting || confirmText.trim() !== deleting.organization_name}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={() => {
+                  if (deleting) deleteOrganisation(deleting.id);
+                  setDeleting(null);
+                  setConfirmText("");
+                }}
+              >
+                Delete permanently
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </CardContent>
     </Card>
   );
