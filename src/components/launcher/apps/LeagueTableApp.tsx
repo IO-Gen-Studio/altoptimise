@@ -359,6 +359,8 @@ export function LeagueTableApp() {
                               prev={r.buildingId ? prevByBldg.get(r.buildingId) : undefined}
                               utility={activeUtility}
                               unit={unit}
+                              utilRows={utilRows}
+                              rangeYear={Number(range.startISO.slice(0, 4))}
                             />
                           </td>
                         </tr>
