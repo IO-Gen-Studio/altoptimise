@@ -1,5 +1,5 @@
 import { AlertTriangle, Plus, Trash2, Warehouse } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { EditBuildingDialog } from "@/components/admin/EditBuildingDialog";
 import { Button } from "@/components/ui/button";
@@ -37,7 +37,15 @@ export function BuildingsPanel() {
   const [match, setMatch] = useState("");
   const [editing, setEditing] = useState<Building | null>(null);
 
-  const linkedCount = (bid: string) => consumption.filter((c) => c.building_id === bid).length;
+  useEffect(() => {
+    if (!organisations.length) return;
+    if (!orgId || !organisations.some((o) => o.id === orgId)) setOrgId(organisations[0].id);
+  }, [organisations, orgId]);
+
+  const linkedCount = (bid: string) =>
+    registry
+      .filter((m) => m.effective_building_id === bid)
+      .reduce((total, m) => total + m.row_count, 0);
 
   // Roll up validation alerts across the building's meters over last 30 days.
   const alertsByBuilding = useMemo(() => {
