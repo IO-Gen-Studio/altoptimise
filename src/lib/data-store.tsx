@@ -512,7 +512,46 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
     },
     bulkInsertConsumption: async (rows) => {
       const withIds = rows.map((r) => ({ ...r, id: uid() }));
-      setState((s) => ({ ...s, consumption: [...s.consumption, ...withIds] }));
+      // Merge semantics: latest upload wins per (organization, meter, date).
+      // Remove existing rows for those exact tuples before inserting, both in
+      // local state and in the database, so re-uploading a file replaces
+      // matching rows without aggregating and without touching unrelated data.
+      const keyOf = (r: { organization_id: string; meter_name: string; interval_date: string }) =>
+        `${r.organization_id}\u0000${r.meter_name}\u0000${r.interval_date}`;
+      const incomingKeys = new Set(withIds.map(keyOf));
+      setState((s) => ({
+        ...s,
+        consumption: [
+          ...s.consumption.filter((r) => !incomingKeys.has(keyOf(r))),
+          ...withIds,
+        ],
+      }));
+
+      // Group by (org, meter) and delete matching dates from the DB.
+      const perOrgMeter = new Map<string, { org: string; meter: string; dates: Set<string> }>();
+      for (const r of withIds) {
+        const k = `${r.organization_id}\u0000${r.meter_name}`;
+        if (!perOrgMeter.has(k)) perOrgMeter.set(k, { org: r.organization_id, meter: r.meter_name, dates: new Set() });
+        perOrgMeter.get(k)!.dates.add(r.interval_date);
+      }
+      for (const { org, meter, dates } of perOrgMeter.values()) {
+        const dateArr = Array.from(dates);
+        const DCHUNK = 500;
+        for (let i = 0; i < dateArr.length; i += DCHUNK) {
+          const { error: delErr } = await supabase
+            .from("consumption_rows")
+            .delete()
+            .eq("organization_id", org)
+            .eq("meter_name", meter)
+            .in("interval_date", dateArr.slice(i, i + DCHUNK));
+          if (delErr) {
+            handleDbError("Merge existing rows", delErr);
+            void refresh();
+            throw new Error(delErr.message);
+          }
+        }
+      }
+
       // Insert in batches to keep payloads manageable.
       const CHUNK = 500;
       for (let i = 0; i < withIds.length; i += CHUNK) {
