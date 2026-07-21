@@ -66,6 +66,7 @@ export interface MeterOverride {
 }
 
 export interface MeterRegistryRow {
+  organization_id?: string | null;
   raw_meter_name: string;
   utility_category: string;
   custom_display_name: string | null;
@@ -143,6 +144,7 @@ interface State {
   organisations: Organisation[];
   buildings: Building[];
   consumption: ConsumptionRow[];
+  meterRegistry: MeterRegistryRow[];
   schemaLabels: SchemaLabels;
   ingestion: IngestionSettings;
   meterOverrides: MeterOverride[];
@@ -154,6 +156,7 @@ function emptyState(): State {
     organisations: [],
     buildings: [],
     consumption: [],
+    meterRegistry: [],
     schemaLabels: DEFAULT_LABELS,
     ingestion: { scheduled_time: "10:00", last_synced_at: null, source_url: "" },
     meterOverrides: [],
@@ -217,18 +220,35 @@ function normNumArray(v: unknown): (number | null)[] {
   return v.map((x) => (x === null || x === undefined ? null : Number(x)));
 }
 
+function registryFromDb(r: Record<string, unknown>): MeterRegistryRow {
+  return {
+    organization_id: (r.organization_id as string | null) ?? null,
+    raw_meter_name: String(r.raw_meter_name ?? ""),
+    utility_category: String(r.utility_category ?? ""),
+    custom_display_name: (r.custom_display_name as string | null) ?? null,
+    effective_building_id: (r.effective_building_id as string | null) ?? null,
+    effective_building_name: String(r.effective_building_name ?? "Unassigned"),
+    effective_meter_factor: Number(r.effective_meter_factor ?? 1),
+    csv_meter_factor: Number(r.csv_meter_factor ?? 1),
+    has_override: Boolean(r.has_override),
+    row_count: Number(r.row_count ?? 0),
+  };
+}
+
 async function fetchAll(): Promise<State> {
-  const [orgs, bldgs, ovs, sch, lbls, ing] = await Promise.all([
+  const [orgs, bldgs, ovs, sch, lbls, ing, registry] = await Promise.all([
     supabase.from("organisations").select("*").order("created_at"),
     supabase.from("buildings").select("*").order("created_at"),
     supabase.from("meter_overrides").select("*"),
     supabase.from("schedules").select("*"),
     supabase.from("schema_labels").select("*"),
     supabase.from("ingestion_settings").select("*").eq("id", 1).maybeSingle(),
+    supabase.from("meter_registry").select("*").order("raw_meter_name"),
   ]);
   const s = emptyState();
   if (orgs.data) s.organisations = orgs.data as Organisation[];
   if (bldgs.data) s.buildings = bldgs.data as Building[];
+  if (registry.data) s.meterRegistry = (registry.data as Record<string, unknown>[]).map(registryFromDb).filter((r) => r.raw_meter_name);
   if (ovs.data)
     s.meterOverrides = ovs.data.map((r: Record<string, unknown>) => ({
       raw_meter_name: r.raw_meter_name as string,
@@ -264,21 +284,20 @@ async function fetchAll(): Promise<State> {
 
 async function fetchConsumption(): Promise<ConsumptionRow[]> {
     const PAGE = 1000;
-    let from = 0;
+    let lastId: string | null = null;
     const all: Record<string, unknown>[] = [];
-    let total = Infinity;
     while (true) {
-      const { data, error, count } = await supabase
+      let query = supabase
         .from("consumption_rows")
-        .select("*", { count: "exact" })
+        .select("*")
         .order("id")
-        .range(from, from + PAGE - 1);
+        .limit(PAGE);
+      if (lastId) query = query.gt("id", lastId);
+      const { data, error } = await query;
       if (error) { console.error("consumption fetch", error); break; }
       if (!data || data.length === 0) break;
       all.push(...(data as Record<string, unknown>[]));
-      if (typeof count === "number") total = count;
-      from += data.length;
-      if (from >= total) break;
+      lastId = String((data[data.length - 1] as Record<string, unknown>).id);
     }
   return all.map((r: Record<string, unknown>) => ({
       ...(r as unknown as ConsumptionRow),
@@ -471,14 +490,17 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
         const firstRow = s.consumption.find(
           (c) => c.organization_id === o.organization_id && c.meter_name === o.raw_meter_name,
         );
+        const registryRow = s.meterRegistry.find(
+          (m) => m.organization_id === o.organization_id && m.raw_meter_name === o.raw_meter_name,
+        );
         const csv_original_building_id =
           existing?.csv_original_building_id !== undefined
             ? existing.csv_original_building_id
-            : firstRow?.building_id ?? null;
+            : firstRow?.building_id ?? registryRow?.effective_building_id ?? null;
         const csv_original_meter_factor =
           existing?.csv_original_meter_factor !== undefined
             ? existing.csv_original_meter_factor
-            : firstRow?.meter_factor ?? 1;
+            : firstRow?.meter_factor ?? registryRow?.csv_meter_factor ?? 1;
         const next: MeterOverride = {
           ...o,
           csv_original_building_id,
@@ -678,16 +700,36 @@ export function useMeterRegistry(orgId?: string): MeterRegistryRow[] {
         .filter((m) => m.organization_id === orgId)
         .map((m) => [m.raw_meter_name, m] as const),
     );
+    const rowsByRaw = new Map<string, MeterRegistryRow>();
+    for (const base of state.meterRegistry.filter((m) => m.organization_id === orgId && m.raw_meter_name)) {
+      const o = overridesByRaw.get(base.raw_meter_name);
+      const csvFactor =
+        o && typeof o.csv_original_meter_factor === "number"
+          ? o.csv_original_meter_factor
+          : base.csv_meter_factor;
+      const effectiveBuildingId = o?.assigned_building_id ?? base.effective_building_id ?? null;
+      const effectiveBuilding = effectiveBuildingId ? buildingsById.get(effectiveBuildingId) : null;
+      rowsByRaw.set(base.raw_meter_name, {
+        ...base,
+        custom_display_name: o?.custom_display_name ?? base.custom_display_name,
+        effective_building_id: effectiveBuildingId,
+        effective_building_name: effectiveBuilding?.custom_display_name ?? base.effective_building_name ?? "Unassigned",
+        effective_meter_factor: o?.calibrated_meter_factor ?? base.effective_meter_factor ?? csvFactor,
+        csv_meter_factor: csvFactor,
+        has_override: !!o,
+      });
+    }
+
     const groups = new Map<string, { rows: ConsumptionRow[]; category: string; csvFactor: number }>();
     for (const c of state.consumption) {
       if (c.organization_id !== orgId) continue;
       const key = c.meter_name;
+      if (rowsByRaw.has(key)) continue;
       if (!key) continue;
       const existing = groups.get(key);
       if (existing) existing.rows.push(c);
       else groups.set(key, { rows: [c], category: c.variable_category, csvFactor: c.meter_factor });
     }
-    const out: MeterRegistryRow[] = [];
     for (const [raw, g] of groups) {
       const o = overridesByRaw.get(raw);
       const effectiveBuildingId = o?.assigned_building_id ?? g.rows[0]?.building_id ?? null;
@@ -698,7 +740,7 @@ export function useMeterRegistry(orgId?: string): MeterRegistryRow[] {
         o && typeof o.csv_original_meter_factor === "number"
           ? o.csv_original_meter_factor
           : g.csvFactor;
-      out.push({
+      rowsByRaw.set(raw, {
         raw_meter_name: raw,
         utility_category: g.category,
         custom_display_name: o?.custom_display_name ?? null,
@@ -710,8 +752,8 @@ export function useMeterRegistry(orgId?: string): MeterRegistryRow[] {
         row_count: g.rows.length,
       });
     }
-    return out.sort((a, b) => a.raw_meter_name.localeCompare(b.raw_meter_name));
-  }, [state.consumption, state.buildings, state.meterOverrides, orgId]);
+    return [...rowsByRaw.values()].sort((a, b) => a.raw_meter_name.localeCompare(b.raw_meter_name));
+  }, [state.meterRegistry, state.consumption, state.buildings, state.meterOverrides, orgId]);
 }
 
 export interface MeterSeries {

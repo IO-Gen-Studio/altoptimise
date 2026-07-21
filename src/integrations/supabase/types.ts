@@ -240,6 +240,57 @@ export type Database = {
           },
         ]
       }
+      meter_registry_cache: {
+        Row: {
+          csv_building_id: string | null
+          csv_meter_factor: number
+          current_meter_factor: number
+          latest_interval_date: string | null
+          organization_id: string
+          raw_meter_name: string
+          row_count: number
+          updated_at: string
+          utility_category: string
+        }
+        Insert: {
+          csv_building_id?: string | null
+          csv_meter_factor?: number
+          current_meter_factor?: number
+          latest_interval_date?: string | null
+          organization_id: string
+          raw_meter_name: string
+          row_count?: number
+          updated_at?: string
+          utility_category?: string
+        }
+        Update: {
+          csv_building_id?: string | null
+          csv_meter_factor?: number
+          current_meter_factor?: number
+          latest_interval_date?: string | null
+          organization_id?: string
+          raw_meter_name?: string
+          row_count?: number
+          updated_at?: string
+          utility_category?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meter_registry_cache_csv_building_id_fkey"
+            columns: ["csv_building_id"]
+            isOneToOne: false
+            referencedRelation: "buildings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meter_registry_cache_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organisations: {
         Row: {
           active_days: number[]
@@ -447,7 +498,29 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      meter_registry: {
+        Row: {
+          csv_meter_factor: number | null
+          custom_display_name: string | null
+          effective_building_id: string | null
+          effective_building_name: string | null
+          effective_meter_factor: number | null
+          has_override: boolean | null
+          organization_id: string | null
+          raw_meter_name: string | null
+          row_count: number | null
+          utility_category: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meter_registry_cache_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       can_access_org: {
@@ -466,6 +539,10 @@ export type Database = {
         Returns: boolean
       }
       is_manager: { Args: { _user_id: string }; Returns: boolean }
+      refresh_meter_registry_cache_one: {
+        Args: { _organization_id: string; _raw_meter_name: string }
+        Returns: undefined
+      }
     }
     Enums: {
       app_role: "super_admin" | "admin" | "user"

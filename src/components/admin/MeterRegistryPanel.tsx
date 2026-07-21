@@ -1,5 +1,5 @@
 import { Gauge, Pencil, Search } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,11 @@ export function MeterRegistryPanel() {
   const registry = useMeterRegistry(orgId);
   const [query, setQuery] = useState("");
   const [editing, setEditing] = useState<MeterRegistryRow | null>(null);
+
+  useEffect(() => {
+    if (!organisations.length) return;
+    if (!orgId || !organisations.some((o) => o.id === orgId)) setOrgId(organisations[0].id);
+  }, [organisations, orgId]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
