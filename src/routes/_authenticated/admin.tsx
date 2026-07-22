@@ -7,6 +7,7 @@ import { IngestionSchedulesPanel } from "@/components/admin/IngestionSchedulesPa
 import { MeterRegistryPanel } from "@/components/admin/MeterRegistryPanel";
 import { OrganisationsPanel } from "@/components/admin/OrganisationsPanel";
 import { SchemaLabelsEditor } from "@/components/admin/SchemaLabelsEditor";
+import { AppOrderPanel } from "@/components/admin/AppOrderPanel";
 import { AppShell } from "@/components/launcher/AppShell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -59,6 +60,7 @@ function AdminPage() {
               <TabsTrigger value="buildings">Buildings</TabsTrigger>
               <TabsTrigger value="meters">Meters</TabsTrigger>
               <TabsTrigger value="data">Data Update</TabsTrigger>
+              <TabsTrigger value="apps">Apps</TabsTrigger>
             </TabsList>
             <TabsContent value="orgs"><OrganisationsPanel /></TabsContent>
             <TabsContent value="buildings"><BuildingsPanel /></TabsContent>
@@ -68,6 +70,7 @@ function AdminPage() {
               <IngestionSchedulesPanel />
               <SchemaLabelsEditor />
             </TabsContent>
+            <TabsContent value="apps"><AppOrderPanel /></TabsContent>
           </Tabs>
         )}
       </div>
