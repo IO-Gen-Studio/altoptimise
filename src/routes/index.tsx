@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { APPS, canAccess, ROLE_LABEL, useLauncher, type MiniApp } from "@/lib/launcher-context";
+import { useAppOrder } from "@/lib/app-order";
 
 export const Route = createFileRoute("/")({
   component: LauncherHome,
@@ -32,6 +33,7 @@ const ICONS = {
 
 function LauncherHome() {
   const { persona, org, appAccess } = useLauncher();
+  const { orderedApps } = useAppOrder();
 
   return (
     <AppShell>
@@ -66,7 +68,7 @@ function LauncherHome() {
         </div>
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {APPS.map((app) => (
+          {orderedApps.map((app) => (
             <AppCard key={app.id} app={app} allowed={canAccess(app, persona.role, appAccess)} />
           ))}
         </div>

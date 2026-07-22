@@ -47,6 +47,9 @@ export function BuildingsPanel() {
       .filter((m) => m.effective_building_id === bid)
       .reduce((total, m) => total + m.row_count, 0);
 
+  const meterCount = (bid: string) =>
+    registry.filter((m) => m.effective_building_id === bid).length;
+
   // Roll up validation alerts across the building's meters over last 30 days.
   const alertsByBuilding = useMemo(() => {
     const map = new Map<string, { kind: "spike" | "drop" | "offline"; label: string }[]>();
@@ -136,6 +139,7 @@ export function BuildingsPanel() {
             <TableRow>
               <TableHead>Display Name</TableHead>
               <TableHead>Matched Name</TableHead>
+              <TableHead className="text-right">Meters</TableHead>
               <TableHead>Linked CSV Rows</TableHead>
               <TableHead className="w-10" />
             </TableRow>
@@ -170,6 +174,7 @@ export function BuildingsPanel() {
                   </div>
                 </TableCell>
                 <TableCell><code className="rounded bg-muted px-1.5 py-0.5 text-xs">{b.csv_matched_name}</code></TableCell>
+                <TableCell className="text-right font-medium tabular-nums">{meterCount(b.id)}</TableCell>
                 <TableCell>{linkedCount(b.id)}</TableCell>
                 <TableCell onClick={(e) => e.stopPropagation()}>
                   <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive"
@@ -181,7 +186,7 @@ export function BuildingsPanel() {
             ))}
             {buildings.length === 0 && (
               <TableRow>
-                <TableCell colSpan={4} className="py-8 text-center text-sm text-muted-foreground">
+                <TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
                   No buildings registered for this organisation.
                 </TableCell>
               </TableRow>
