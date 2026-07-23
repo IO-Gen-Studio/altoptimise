@@ -1,51 +1,65 @@
-import { useCallback, useEffect, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { APPS, type MiniApp } from "./launcher-context";
 
 const KEY = "launcher.app-order.v1";
-const listeners = new Set<() => void>();
+const listeners = new Set<(ids: string[]) => void>();
 
-function read(): string[] {
-  if (typeof window === "undefined") return APPS.map((a) => a.id);
+function defaults(): string[] {
+  return APPS.map((a) => a.id);
+}
+
+function normalise(ids: string[]): string[] {
+  const filtered = ids.filter((id) => APPS.some((a) => a.id === id));
+  const missing = APPS.filter((a) => !filtered.includes(a.id)).map((a) => a.id);
+  return [...filtered, ...missing];
+}
+
+function readFromStorage(): string[] {
+  if (typeof window === "undefined") return defaults();
   try {
     const raw = window.localStorage.getItem(KEY);
-    if (!raw) return APPS.map((a) => a.id);
-    const parsed = JSON.parse(raw) as string[];
-    if (!Array.isArray(parsed)) return APPS.map((a) => a.id);
-    return parsed.filter((id) => APPS.some((a) => a.id === id));
+    if (!raw) return defaults();
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return defaults();
+    return normalise(parsed as string[]);
   } catch {
-    return APPS.map((a) => a.id);
+    return defaults();
   }
 }
 
-function write(order: string[]) {
+function writeToStorage(order: string[]) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(KEY, JSON.stringify(order));
-  listeners.forEach((l) => l());
-}
-
-function subscribe(cb: () => void) {
-  listeners.add(cb);
-  return () => listeners.delete(cb);
-}
-
-function getSnapshot(): string {
-  return typeof window === "undefined" ? "" : window.localStorage.getItem(KEY) ?? "";
+  try {
+    window.localStorage.setItem(KEY, JSON.stringify(order));
+  } catch {
+    /* ignore quota / privacy errors */
+  }
+  listeners.forEach((l) => l(order));
 }
 
 export function useAppOrder(): { orderedApps: MiniApp[]; setOrder: (ids: string[]) => void } {
-  useSyncExternalStore(subscribe, getSnapshot, () => "");
-  const stored = read();
-  const missing = APPS.filter((a) => !stored.includes(a.id)).map((a) => a.id);
-  const full = [...stored, ...missing];
-  const orderedApps = full
+  // Start with defaults so SSR and initial client render match, then hydrate from storage in an effect.
+  const [order, setOrderState] = useState<string[]>(() => defaults());
+
+  useEffect(() => {
+    setOrderState(readFromStorage());
+    const cb = (next: string[]) => setOrderState(normalise(next));
+    listeners.add(cb);
+    return () => {
+      listeners.delete(cb);
+    };
+  }, []);
+
+  const setOrder = useCallback((ids: string[]) => {
+    const next = normalise(ids);
+    setOrderState(next);
+    writeToStorage(next);
+  }, []);
+
+  const orderedApps = order
     .map((id) => APPS.find((a) => a.id === id))
     .filter((a): a is MiniApp => !!a);
-  const setOrder = useCallback((ids: string[]) => write(ids), []);
-  // Persist normalised order once on mount if stale
-  useEffect(() => {
-    if (JSON.stringify(stored) !== JSON.stringify(full)) write(full);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+
   return { orderedApps, setOrder };
 }
