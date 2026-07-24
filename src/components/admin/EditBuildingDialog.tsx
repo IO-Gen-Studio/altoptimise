@@ -194,22 +194,14 @@ function MetersTab({ building }: { building: Building }) {
                       <ArrowRightLeft className="h-3.5 w-3.5" /> Move
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent align="end" className="w-56 p-1">
-                    <div className="px-2 py-1.5 text-xs uppercase tracking-widest text-muted-foreground">
+                  <PopoverContent align="end" className="w-64 p-1">
+                    <div className="sticky top-0 z-10 bg-popover px-2 py-1.5 text-xs uppercase tracking-widest text-muted-foreground border-b">
                       Move to building
                     </div>
-                    {otherBuildings.map((b) => (
-                      <button
-                        key={b.id}
-                        className="flex w-full items-center rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
-                        onClick={() => move(m, b.id)}
-                      >
-                        {b.custom_display_name}
-                      </button>
-                    ))}
-                    {otherBuildings.length === 0 && (
-                      <div className="px-2 py-1.5 text-xs text-muted-foreground">No other buildings.</div>
-                    )}
+                    <MoveToBuildingList
+                      buildings={otherBuildings}
+                      onSelect={(id) => move(m, id)}
+                    />
                   </PopoverContent>
                 </Popover>
               </TableCell>
