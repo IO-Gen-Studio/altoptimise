@@ -198,10 +198,20 @@ function MetersTab({ building }: { building: Building }) {
                     <div className="sticky top-0 z-10 bg-popover px-2 py-1.5 text-xs uppercase tracking-widest text-muted-foreground border-b">
                       Move to building
                     </div>
-                    <MoveToBuildingList
-                      buildings={otherBuildings}
-                      onSelect={(id) => move(m, id)}
-                    />
+                    <div className="max-h-64 overflow-y-auto py-1">
+                      {otherBuildings.map((b) => (
+                        <button
+                          key={b.id}
+                          className="flex w-full items-center rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent"
+                          onClick={() => move(m, b.id)}
+                        >
+                          {b.custom_display_name}
+                        </button>
+                      ))}
+                      {otherBuildings.length === 0 && (
+                        <div className="px-2 py-1.5 text-xs text-muted-foreground">No other buildings.</div>
+                      )}
+                    </div>
                   </PopoverContent>
                 </Popover>
               </TableCell>
