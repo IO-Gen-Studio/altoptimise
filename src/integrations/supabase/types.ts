@@ -434,6 +434,189 @@ export type Database = {
         }
         Relationships: []
       }
+      sustainability_categories: {
+        Row: {
+          code: string
+          id: string
+          name: string
+          scope: number
+          sort_order: number
+        }
+        Insert: {
+          code: string
+          id?: string
+          name: string
+          scope?: number
+          sort_order?: number
+        }
+        Update: {
+          code?: string
+          id?: string
+          name?: string
+          scope?: number
+          sort_order?: number
+        }
+        Relationships: []
+      }
+      sustainability_entries: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          entry_date: string
+          id: string
+          item_id: string
+          notes: string | null
+          organization_id: string
+          quantity: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          entry_date: string
+          id?: string
+          item_id: string
+          notes?: string | null
+          organization_id: string
+          quantity: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          entry_date?: string
+          id?: string
+          item_id?: string
+          notes?: string | null
+          organization_id?: string
+          quantity?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sustainability_entries_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "sustainability_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sustainability_entries_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sustainability_items: {
+        Row: {
+          active: boolean
+          category_id: string
+          created_at: string
+          emission_factor: number
+          factor_source: string | null
+          id: string
+          is_preset: boolean
+          name: string
+          organization_id: string | null
+          unit: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          category_id: string
+          created_at?: string
+          emission_factor: number
+          factor_source?: string | null
+          id?: string
+          is_preset?: boolean
+          name: string
+          organization_id?: string | null
+          unit: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          category_id?: string
+          created_at?: string
+          emission_factor?: number
+          factor_source?: string | null
+          id?: string
+          is_preset?: boolean
+          name?: string
+          organization_id?: string | null
+          unit?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sustainability_items_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "sustainability_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sustainability_items_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sustainability_targets: {
+        Row: {
+          category_id: string | null
+          created_at: string
+          id: string
+          organization_id: string
+          period_end: string
+          period_start: string
+          scope: number
+          target_tco2e: number
+          updated_at: string
+        }
+        Insert: {
+          category_id?: string | null
+          created_at?: string
+          id?: string
+          organization_id: string
+          period_end: string
+          period_start: string
+          scope: number
+          target_tco2e: number
+          updated_at?: string
+        }
+        Update: {
+          category_id?: string | null
+          created_at?: string
+          id?: string
+          organization_id?: string
+          period_end?: string
+          period_start?: string
+          scope?: number
+          target_tco2e?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sustainability_targets_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "sustainability_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sustainability_targets_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_app_access: {
         Row: {
           app_slug: string
