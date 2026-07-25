@@ -19,6 +19,16 @@ import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { APPS, canAccess, ROLE_LABEL, useLauncher, type MiniApp } from "@/lib/launcher-context";
 import { useAppOrder } from "@/lib/app-order";
+import { useMemo } from "react";
+import { useConsumption, useOrganisations } from "@/lib/data-store";
+import {
+  classifyUtility,
+  presetRange,
+  prevYearRange,
+  rowTotal,
+  rowsInRange,
+} from "@/lib/energy/league";
+import { computeScope12 } from "@/lib/energy/emissions";
 
 export const Route = createFileRoute("/")({
   component: LauncherHome,
@@ -34,6 +44,10 @@ const ICONS = {
 function LauncherHome() {
   const { persona, org, appAccess } = useLauncher();
   const { orderedApps } = useAppOrder();
+  const { consumption } = useConsumption();
+  const { organisations } = useOrganisations();
+
+  const stats = useMemo(() => computeOrgStats(consumption, organisations, org.id), [consumption, organisations, org.id]);
 
   return (
     <AppShell>
@@ -53,10 +67,34 @@ function LauncherHome() {
         </div>
 
         <div className="grid gap-4 pb-8 md:grid-cols-4">
-          <StatCard label="Total consumption" value="18.4 GWh" trend="-4.2%" positive icon={TrendingDown} />
-          <StatCard label="Baseload health" value="87 / 100" trend="+3 pts" positive icon={Gauge} />
-          <StatCard label="Carbon (Scope 1+2)" value="4,120 tCO₂e" trend="-6.1%" positive icon={Leaf} />
-          <StatCard label="Active anomalies" value="3" trend="+1 today" positive={false} icon={TrendingUp} />
+          <StatCard
+            label="Total consumption (YTD)"
+            value={stats.totalConsumption.value}
+            trend={stats.totalConsumption.trend}
+            positive={stats.totalConsumption.positive}
+            icon={stats.totalConsumption.positive ? TrendingDown : TrendingUp}
+          />
+          <StatCard
+            label="Data coverage"
+            value={stats.coverage.value}
+            trend={stats.coverage.trend}
+            positive={stats.coverage.positive}
+            icon={Gauge}
+          />
+          <StatCard
+            label="Carbon (Scope 1+2)"
+            value={stats.carbon.value}
+            trend={stats.carbon.trend}
+            positive={stats.carbon.positive}
+            icon={Leaf}
+          />
+          <StatCard
+            label="Offline meters (7d)"
+            value={stats.offline.value}
+            trend={stats.offline.trend}
+            positive={stats.offline.positive}
+            icon={stats.offline.positive ? TrendingDown : TrendingUp}
+          />
         </div>
 
         <div className="flex items-center justify-between pb-4">
@@ -75,6 +113,112 @@ function LauncherHome() {
       </div>
     </AppShell>
   );
+}
+
+interface Stat { value: string; trend: string; positive: boolean }
+interface OrgStats {
+  totalConsumption: Stat;
+  coverage: Stat;
+  carbon: Stat;
+  offline: Stat;
+}
+
+function formatEnergy(kwh: number): string {
+  if (kwh >= 1_000_000) return `${(kwh / 1_000_000).toFixed(2)} GWh`;
+  if (kwh >= 1_000) return `${(kwh / 1_000).toFixed(1)} MWh`;
+  return `${Math.round(kwh).toLocaleString()} kWh`;
+}
+
+function formatDelta(curr: number, prev: number): { trend: string; positive: boolean } {
+  if (prev <= 0) {
+    if (curr <= 0) return { trend: "No prior data", positive: true };
+    return { trend: "New data", positive: true };
+  }
+  const pct = ((curr - prev) / prev) * 100;
+  const sign = pct >= 0 ? "+" : "";
+  return { trend: `${sign}${pct.toFixed(1)}% YoY`, positive: pct <= 0 };
+}
+
+function computeOrgStats(
+  consumption: Array<import("@/lib/data-store").ConsumptionRow>,
+  organisations: Array<import("@/lib/data-store").Organisation>,
+  orgId: string,
+): OrgStats {
+  const empty: Stat = { value: "—", trend: "No data", positive: true };
+  const org = organisations.find((o) => o.id === orgId);
+  const rows = consumption.filter((r) => r.organization_id === orgId);
+  if (!rows.length) {
+    return { totalConsumption: empty, coverage: empty, carbon: empty, offline: empty };
+  }
+
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const ytd = presetRange("ytd", today);
+  const prev = prevYearRange(ytd);
+
+  // Electricity totals for total-consumption card
+  let elecCurr = 0;
+  let elecPrev = 0;
+  const rowsCurr = rowsInRange(rows, ytd);
+  const rowsPrev = rowsInRange(rows, prev);
+  for (const r of rowsCurr) {
+    if (classifyUtility(r.variable_category) === "electricity") elecCurr += rowTotal(r);
+  }
+  for (const r of rowsPrev) {
+    if (classifyUtility(r.variable_category) === "electricity") elecPrev += rowTotal(r);
+  }
+
+  // Carbon Scope 1+2 YTD vs previous year
+  const scopeCurr = computeScope12(rows, org, ytd.startISO, ytd.endISO);
+  const scopePrev = computeScope12(rows, org, prev.startISO, prev.endISO);
+
+  // Data coverage: non-null HH slots / expected slots across YTD rows
+  let present = 0;
+  let expected = 0;
+  for (const r of rowsCurr) {
+    expected += 48;
+    for (let i = 0; i < 48; i++) if (r.half_hourly_values[i] != null) present++;
+  }
+  const coveragePct = expected > 0 ? (present / expected) * 100 : 0;
+
+  // Offline meters: meter_name with no data in last 7 days
+  const sevenAgo = new Date(today);
+  sevenAgo.setUTCDate(sevenAgo.getUTCDate() - 6);
+  const sevenAgoISO = sevenAgo.toISOString().slice(0, 10);
+  const todayISO = today.toISOString().slice(0, 10);
+  const allMeters = new Set<string>();
+  const recentMeters = new Set<string>();
+  for (const r of rows) {
+    allMeters.add(r.meter_name);
+    if (r.interval_date >= sevenAgoISO && r.interval_date <= todayISO) recentMeters.add(r.meter_name);
+  }
+  const offline = allMeters.size - recentMeters.size;
+
+  const elecDelta = formatDelta(elecCurr, elecPrev);
+  const carbDelta = formatDelta(scopeCurr.totalScope12Tco2e, scopePrev.totalScope12Tco2e);
+
+  return {
+    totalConsumption: {
+      value: formatEnergy(elecCurr),
+      trend: elecDelta.trend,
+      positive: elecDelta.positive,
+    },
+    coverage: {
+      value: `${coveragePct.toFixed(1)}%`,
+      trend: coveragePct >= 90 ? "Healthy" : coveragePct >= 70 ? "Watch" : "Low",
+      positive: coveragePct >= 90,
+    },
+    carbon: {
+      value: `${scopeCurr.totalScope12Tco2e.toLocaleString(undefined, { maximumFractionDigits: 1 })} tCO₂e`,
+      trend: carbDelta.trend,
+      positive: carbDelta.positive,
+    },
+    offline: {
+      value: offline.toString(),
+      trend: `${allMeters.size} meters tracked`,
+      positive: offline === 0,
+    },
+  };
 }
 
 function StatCard({
