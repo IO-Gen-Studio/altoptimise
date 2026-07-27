@@ -3,7 +3,7 @@ import {
   AlertTriangle, ArrowDown, ArrowUp, Check, Droplet, PoundSterling, Settings2, ShieldCheck,
 } from "lucide-react";
 import {
-  Bar, BarChart, CartesianGrid, ReferenceLine, ResponsiveContainer,
+  Bar, BarChart, CartesianGrid, ReferenceArea, ReferenceLine, ResponsiveContainer,
   Tooltip as RTooltip, XAxis, YAxis,
 } from "recharts";
 import { toast } from "sonner";
@@ -179,6 +179,25 @@ export function WaterSentinelApp() {
     return meterIntervalSeries(chartInput, settings, endISO, chartDays, baseline);
   }, [chartInput, settings, endISO, chartDays, baseline]);
 
+  // Contiguous unoccupied blocks, rendered as translucent shaded bands.
+  const overnightBands = useMemo(() => {
+    const bands: Array<{ x1: string; x2: string }> = [];
+    let startLabel: string | null = null;
+    let prevLabel: string | null = null;
+    for (const p of chartData) {
+      if (p.overnight) {
+        if (startLabel == null) startLabel = p.label;
+        prevLabel = p.label;
+      } else if (startLabel != null && prevLabel != null) {
+        bands.push({ x1: startLabel, x2: prevLabel });
+        startLabel = null;
+        prevLabel = null;
+      }
+    }
+    if (startLabel != null && prevLabel != null) bands.push({ x1: startLabel, x2: prevLabel });
+    return bands;
+  }, [chartData]);
+
   function toggleSort(key: SortKey) {
     if (key === sortKey) setDir(dir === "asc" ? "desc" : "asc");
     else { setSortKey(key); setDir("desc"); }
@@ -346,8 +365,9 @@ export function WaterSentinelApp() {
                 <XAxis dataKey="label" tick={{ fontSize: 10 }} interval={7} />
                 <YAxis tick={{ fontSize: 11 }} unit=" m³" width={70} />
                 <RTooltip formatter={(v: number) => `${Number(v).toFixed(3)} m³`} />
-                {/* Unoccupied window shading rendered as a background bar band */}
-                <Bar dataKey={(d) => (d.overnight ? "shade" : null)} isAnimationActive={false} hide />
+                {overnightBands.map((b) => (
+                  <ReferenceArea key={b.x1} x1={b.x1} x2={b.x2} fill="#475569" fillOpacity={0.18} />
+                ))}
                 <Bar dataKey="value" fill="#3b82f6" isAnimationActive={false} />
                 <Bar dataKey="aboveBaseline" fill="#ef4444" isAnimationActive={false} />
                 {baseline > 0 && (
