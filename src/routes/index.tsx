@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   Activity,
   ArrowUpRight,
+  Droplet,
   Gauge,
   Leaf,
   Lock,
@@ -39,6 +40,7 @@ const ICONS = {
   sustainability: Leaf,
   completeness: ShieldCheck,
   league: Trophy,
+  water: Droplet,
 };
 
 function LauncherHome() {

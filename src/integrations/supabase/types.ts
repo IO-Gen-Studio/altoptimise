@@ -679,6 +679,78 @@ export type Database = {
         }
         Relationships: []
       }
+      water_leak_acknowledgements: {
+        Row: {
+          acknowledged_by: string | null
+          created_at: string
+          id: string
+          note: string | null
+          organization_id: string
+          period_end: string | null
+          period_start: string | null
+          raw_meter_name: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          acknowledged_by?: string | null
+          created_at?: string
+          id?: string
+          note?: string | null
+          organization_id: string
+          period_end?: string | null
+          period_start?: string | null
+          raw_meter_name: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          acknowledged_by?: string | null
+          created_at?: string
+          id?: string
+          note?: string | null
+          organization_id?: string
+          period_end?: string | null
+          period_start?: string | null
+          raw_meter_name?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      water_sentinel_settings: {
+        Row: {
+          consecutive_intervals: number
+          created_at: string
+          organization_id: string
+          sensitivity_m3: number
+          updated_at: string
+          wastewater_pence_per_m3: number
+          window_end: string
+          window_start: string
+        }
+        Insert: {
+          consecutive_intervals?: number
+          created_at?: string
+          organization_id: string
+          sensitivity_m3?: number
+          updated_at?: string
+          wastewater_pence_per_m3?: number
+          window_end?: string
+          window_start?: string
+        }
+        Update: {
+          consecutive_intervals?: number
+          created_at?: string
+          organization_id?: string
+          sensitivity_m3?: number
+          updated_at?: string
+          wastewater_pence_per_m3?: number
+          window_end?: string
+          window_start?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       meter_registry: {
