@@ -104,7 +104,7 @@ export interface MiniApp {
   tagline: string;
   description: string;
   category: string;
-  icon: "baseload" | "sustainability" | "completeness" | "league";
+  icon: "baseload" | "sustainability" | "completeness" | "league" | "water";
   allowedRoles: Role[];
   accent: string;
 }
@@ -157,6 +157,18 @@ export const APPS: MiniApp[] = [
     icon: "league",
     allowedRoles: ["super_admin", "admin", "user"],
     accent: "from-violet-500/15 to-fuchsia-500/10",
+  },
+  {
+    id: "water-sentinel",
+    slug: "water-sentinel",
+    name: "Overnight Water Sentinel",
+    tagline: "Continuous overnight flow & leak detection",
+    description:
+      "Isolates water meters and flags continuous overnight baseline flow, estimating leak rate, wasted volume and financial impact.",
+    category: "Detection",
+    icon: "water",
+    allowedRoles: ["super_admin", "admin", "user"],
+    accent: "from-blue-500/15 to-sky-500/10",
   },
 ];
 
