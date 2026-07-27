@@ -1,101 +1,44 @@
+## Overnight Water Sentinel & Leak Detector
 
-# Sustainability Tracker
+A new mini-app in the launcher that reads the existing shared half-hourly dataset, isolates water meters, and finds meters that never drop to zero flow overnight — the classic signature of a continuous leak.
 
-Turn the placeholder Sustainability app into a real one: Scope 1 & 2 computed from existing `consumption_rows`, plus a flexible Scope 3 module with presets, custom items, manual + CSV entry, and annual targets.
+### Detection engine (new `src/lib/energy/water-sentinel.ts`)
 
-## 1. Emission factors
+- **Meter filter:** reuse `classifyUtility` to keep only `water` meters for the selected organisation; apply the effective meter factor and building assignment from the meter registry (same as other apps).
+- **Overnight window:** derived per building from the resolved operational profile (org → building → system fallback, via `resolveProfile`). Default unoccupied window 23:00–05:30, plus all non-trading days (weekends/holidays counted fully unoccupied). Admins can override the default window in the app's settings panel.
+- **Per meter per night** (window spans two calendar rows, handled by stitching consecutive `interval_date` rows):
+  - minimum interval flow, total night volume (m³), and min hourly leak rate = `min interval m³ × 2`.
+  - **Critical Persistent Leak** — flow never hits 0.00 across every overnight interval.
+  - **Suspected Minor Leak** — flow stays above the sensitivity threshold (default 0.05 m³) for N consecutive intervals (default 3) but does reach zero at some point.
+  - **Normal / Zero Flow** — otherwise.
+  - **Data Incomplete** — missing intervals, all-null telemetry, or a fully zero/uncommissioned series; excluded from leak scoring and from KPI totals (shown separately).
+- **Extrapolation & cost:** daily loss = min rate × window hours; monthly = daily × 30. Cost = volume × (water supply tariff + wastewater discharge rate). Supply tariff defaults to the org's `tariff_water_pence_per_m3` (falling back to £2.50/m³); wastewater rate is a new configurable value. Carbon waste uses the org water CO₂ factor.
 
-- Ship UK DEFRA 2024 defaults in `src/lib/energy/emission-factors.ts`:
-  - Electricity: 0.20705 kgCO2e/kWh (Scope 2, location-based)
-  - Natural gas: 0.18293 kgCO2e/kWh
-  - Water supply: 0.149 kgCO2e/m³; treatment: 0.272 kgCO2e/m³
-- Extend `organisations` with optional overrides (`carbon_factor_electricity`, `_gas`, `_water` already partially exist — reuse; add missing).
-- Editable in `EditOrganisationDialog` under a "Carbon factors" section. Empty = use DEFRA default.
+### UI (`src/components/launcher/apps/WaterSentinelApp.tsx`)
 
-## 2. Scope 3 data model (new tables)
+- **KPI banner (3 cards):** Active Leaks Detected (count + red/amber badge), Estimated Overnight Water Lost (m³ for the period), Total Financial Impact (£ per night and per month).
+- **Charting canvas:** combined bar + line chart of 30-minute water usage over a selectable 24/48-hour period for the chosen meter. Translucent dark blue-grey shading over the unoccupied window, persistent dashed red horizontal line at the minimum overnight baseline, and red-filled bars for overnight intervals above baseline.
+- **Audit table:** Site/Building, Meter Reference, Min Overnight Flow (m³/hr), Total Night Volume (m³), Status badge, Estimated Cost Waste (£), Action Status (Open / Acknowledged / Dismissed + note). Sortable columns; filter buttons: All Sites, Active Leaks Only, High Waste (>1 m³/hr), plus Data Incomplete.
+- Period selector reuses the existing preset control (last 7/30 days, MTD, custom).
 
-```text
-sustainability_categories (seed: 15 GHG Protocol categories, read-only)
-  id, code, name, scope (fixed = 3), sort_order
+### Role gating
 
-sustainability_items          -- the catalogue (presets + custom)
-  id, organization_id (nullable = global preset), category_id,
-  name, unit (e.g. km, kg, night, £), emission_factor (kgCO2e/unit),
-  factor_source, is_preset, active, created_at, updated_at
+- **Super Admin & Admin:** edit sensitivity threshold, consecutive-interval count, overnight window, water tariff and wastewater rate (persisted per organisation); acknowledge/dismiss alerts via a notes modal.
+- **User (viewer):** read-only — KPIs, chart, and table visible; all controls disabled.
 
-sustainability_entries        -- logged data
-  id, organization_id, item_id, entry_date, quantity, notes,
-  created_by, created_at, updated_at
+### Backend
 
-sustainability_targets        -- period targets
-  id, organization_id, scope (1|2|3), category_id (nullable),
-  period_start, period_end, target_tco2e, created_at, updated_at
-```
+New migration:
+- `water_sentinel_settings` — per organisation: overnight window start/end, sensitivity threshold m³, consecutive intervals, wastewater rate p/m³.
+- `water_leak_acknowledgements` — organisation, meter name, night/period date, status (`acknowledged` / `dismissed`), note, acknowledged_by, timestamps.
+Both with grants, RLS via existing `can_access_org` (read) and `can_manage_org` (write) helpers, and `updated_at` triggers. Server functions in `src/lib/water-sentinel.functions.ts` for loading/saving settings and acknowledgements.
 
-RLS:
-- `sustainability_items`: SELECT for members of org OR where `organization_id IS NULL` (presets); INSERT/UPDATE/DELETE via `can_manage_org` (Admin+).
-- `sustainability_entries`: SELECT/INSERT for org members (all roles can log); UPDATE/DELETE own row, or Admin+ any.
-- `sustainability_targets`: SELECT for org members; write via `can_manage_org`.
-- Seed 15 Scope 3 categories + a starter set of presets (business travel car/rail/flight, hotel nights, waste-to-landfill, water, paper, etc.) with DEFRA factors in the same migration.
+### Wiring
 
-GRANTs to `authenticated` + `service_role` on every new table.
+- Register the app in `APPS` (`src/lib/launcher-context.tsx`) as slug `water-sentinel` so it appears in the launcher grid, the Apps reorder panel, and the per-user app-access assignment in User Management.
+- Render it from `src/routes/_authenticated/apps/$slug.tsx` alongside the other mini-apps.
 
-## 3. Server functions
+### Technical notes
 
-`src/lib/sustainability.functions.ts` (uses `requireSupabaseAuth`):
-- `listItems({ orgId })` — presets + org custom, active only.
-- `upsertItem`, `deleteItem` — Admin+ (checked via `can_manage_org`).
-- `listEntries({ orgId, from, to, categoryId? })`.
-- `upsertEntry`, `deleteEntry`.
-- `bulkImportEntries({ orgId, rows })` — CSV import path.
-- `listTargets`, `upsertTarget`, `deleteTarget`.
-
-## 4. Frontend
-
-Rewrite `src/components/launcher/apps/SustainabilityApp.tsx` into tabbed layout:
-
-**Overview**
-- KPI cards: YTD total tCO2e, Scope 1, Scope 2, Scope 3, intensity (tCO2e / floor area or / £ if available — else omit), YoY change.
-- Stacked bar: monthly emissions split by scope for last 12 months.
-- Donut: Scope 3 breakdown by category.
-- Target progress bars (current YTD vs target).
-
-**Scope 1 & 2 (auto)**
-- Sourced from `consumption_rows` × org factors. Table per utility with kWh/m³ → tCO2e, monthly rollup.
-
-**Scope 3 log**
-- Filter by category/date range. Table of entries with inline edit/delete. "Add entry" dialog: pick item → quantity → date → notes. Live tCO2e preview.
-- "Import CSV" button: columns `date,item,quantity,notes`. Match `item` by name; unmatched rows shown for review; toast progress like existing CSV flow.
-- All roles can add/edit their own entries; Admin+ can edit any.
-
-**Catalogue** (Admin+ only, hidden for `user`)
-- List presets (read-only, "Copy to custom" to override factor).
-- Custom items CRUD: name, category, unit, emission factor, source.
-
-**Targets** (Admin+ only)
-- Set annual targets total or per category/scope. Shows on Overview.
-
-## 5. Compute layer
-
-`src/lib/energy/emissions.ts`:
-- `computeScope12(consumptionRows, org, factors)` — reuse league aggregation; add tCO2e per period.
-- `computeScope3(entries, items)` — sum `quantity * emission_factor` grouped by category/month.
-- Memoised in the IndexedDB cache alongside league/baseload results, keyed on `(orgId, dataVersion, entriesVersion)`.
-
-## 6. Launcher wiring
-
-- `SustainabilityApp` already registered in `launcher-context.tsx` and routed via `/_authenticated/apps/$slug` — no routing changes.
-- Update icon accent copy if needed; keep existing slug `sustainability`.
-
-## Technical notes
-
-- Preset seeding lives in the same migration that creates the tables (rule: schema + deterministic seeds together).
-- Emission factors are numeric(12,6) to preserve DEFRA precision.
-- CSV importer reuses the multi-file drag-drop pattern from `CsvIngestion.tsx` but scoped to entries; no building/meter mapping needed.
-- All Scope 3 reads/writes go through `requireSupabaseAuth` server functions so RLS enforces org scoping.
-- Client cache: extend `idb-cache.ts` payload with `sustainability` slice (items, entries, targets) hydrated on boot, refreshed in background.
-
-## Out of scope for this pass
-
-- Scope 3 supply-chain integrations (spend-based purchased goods calc) — leave as future work; the flexible item builder can still capture it manually.
-- Assurance/audit export (PDF/CSV of full ledger) — easy follow-up once ledger exists.
+- All date maths stays UTC-based, consistent with the existing engine, so results don't shift by timezone.
+- Detection runs client-side over the already-cached consumption state (IndexedDB) — no extra load on page refresh; results are memoised per organisation/period.
