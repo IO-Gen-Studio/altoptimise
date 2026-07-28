@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import {
-  AlertTriangle, ArrowDown, ArrowUp, Check, Droplet, PoundSterling, Settings2, ShieldCheck,
+  AlertTriangle, ArrowDown, ArrowUp, Check, ChevronDown, ChevronRight, Droplet, PoundSterling,
+  Settings2, ShieldCheck,
 } from "lucide-react";
 import {
   Bar, BarChart, CartesianGrid, ReferenceArea, ReferenceLine, ResponsiveContainer,
@@ -379,9 +380,8 @@ export function WaterSentinelApp() {
                   const ack = ackByMeter.get(r.rawMeterName);
                   const expanded = chartMeterName === r.rawMeterName;
                   return (
-                    <>
+                    <Fragment key={r.rawMeterName}>
                     <tr
-                      key={r.rawMeterName}
                       className={cn(
                         "cursor-pointer border-b last:border-0 hover:bg-muted/40",
                         expanded && "bg-muted/50",
@@ -477,7 +477,7 @@ export function WaterSentinelApp() {
                         </td>
                       </tr>
                     )}
-                    </>
+                    </Fragment>
                   );
                 })}
                 {filtered.length === 0 && (
