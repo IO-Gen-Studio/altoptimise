@@ -333,70 +333,11 @@ export function WaterSentinelApp() {
         <CardContent className="p-4">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <div className="text-sm font-medium">
-              Half-hourly flow — {chartResult?.displayName ?? "—"}
+              Water leak audit
               <span className="ml-2 text-xs font-normal text-muted-foreground">
-                shaded = unoccupied window · dashed red = minimum overnight baseline
+                click a row to view its half-hourly flow chart
               </span>
             </div>
-            <div className="flex items-center gap-2">
-              <Select value={chartMeterName ?? ""} onValueChange={setSelectedMeter}>
-                <SelectTrigger className="w-64"><SelectValue placeholder="Select meter" /></SelectTrigger>
-                <SelectContent className="max-h-72">
-                  {results.map((r) => (
-                    <SelectItem key={r.rawMeterName} value={r.rawMeterName}>
-                      {r.buildingName} — {r.displayName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={String(chartDays)} onValueChange={(v) => setChartDays(Number(v))}>
-                <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="1">24 hours</SelectItem>
-                  <SelectItem value="2">48 hours</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} barCategoryGap={0}>
-                <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                <XAxis dataKey="label" tick={{ fontSize: 10 }} interval={7} />
-                <YAxis tick={{ fontSize: 11 }} unit=" m³" width={70} />
-                <RTooltip formatter={(v: number) => `${Number(v).toFixed(3)} m³`} />
-                {overnightBands.map((b) => (
-                  <ReferenceArea key={b.x1} x1={b.x1} x2={b.x2} fill="#475569" fillOpacity={0.18} />
-                ))}
-                <Bar dataKey="value" fill="#3b82f6" isAnimationActive={false} />
-                <Bar dataKey="aboveBaseline" fill="#ef4444" isAnimationActive={false} />
-                {baseline > 0 && (
-                  <ReferenceLine y={baseline} stroke="#ef4444" strokeDasharray="5 4" />
-                )}
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1.5">
-              <span className="inline-block h-2.5 w-2.5 rounded-sm bg-[#3b82f6]" /> Usage
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="inline-block h-2.5 w-2.5 rounded-sm bg-[#ef4444]" /> Overnight above baseline
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="inline-block h-2.5 w-2.5 rounded-sm bg-slate-500/25" /> Unoccupied window
-            </span>
-            {chartResult && (
-              <span>Baseline leak rate {chartResult.minFlowM3PerHour.toFixed(3)} m³/hr</span>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="p-4">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <div className="text-sm font-medium">Water leak audit</div>
             <div className="flex gap-1.5">
               {([["all", "All Sites"], ["leaks", "Active Leaks Only"], ["high", "High Waste (>1 m³/hr)"]] as const).map(
                 ([key, label]) => (
