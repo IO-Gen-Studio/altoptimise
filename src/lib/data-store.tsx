@@ -323,7 +323,10 @@ interface StoreCtx {
   addBuilding: (b: Omit<Building, "id" | "created_at">) => Building;
   updateBuilding: (id: string, patch: Partial<Building>) => void;
   deleteBuilding: (id: string) => void;
-  bulkInsertConsumption: (rows: Omit<ConsumptionRow, "id">[]) => Promise<number>;
+  bulkInsertConsumption: (
+    rows: Omit<ConsumptionRow, "id">[],
+    mode?: "merge" | "replace",
+  ) => Promise<number>;
   setSchemaLabel: (key: string, label: string) => void;
   setIngestion: (patch: Partial<IngestionSettings>) => void;
   markSynced: () => void;
@@ -510,23 +513,55 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
         if (error) { handleDbError("Delete building", error); void refresh(); }
       });
     },
-    bulkInsertConsumption: async (rows) => {
+    bulkInsertConsumption: async (rows, mode = "merge") => {
       const withIds = rows.map((r) => ({ ...r, id: uid() }));
-      // Merge semantics: latest upload wins per (organization, meter, date).
+      // merge  → latest upload wins per (organization, meter, date).
+      // replace → every existing row for the organisation on the dates covered
+      //           by the upload is removed first, including meters absent from
+      //           the file, then the file's rows are inserted.
       // Remove existing rows for those exact tuples before inserting, both in
       // local state and in the database, so re-uploading a file replaces
       // matching rows without aggregating and without touching unrelated data.
       const keyOf = (r: { organization_id: string; meter_name: string; interval_date: string }) =>
         `${r.organization_id}\u0000${r.meter_name}\u0000${r.interval_date}`;
+      const orgDateKey = (r: { organization_id: string; interval_date: string }) =>
+        `${r.organization_id}\u0000${r.interval_date}`;
       const incomingKeys = new Set(withIds.map(keyOf));
+      const incomingOrgDates = new Set(withIds.map(orgDateKey));
+      const isStale = (r: ConsumptionRow) =>
+        mode === "replace" ? incomingOrgDates.has(orgDateKey(r)) : incomingKeys.has(keyOf(r));
       setState((s) => ({
         ...s,
         consumption: [
-          ...s.consumption.filter((r) => !incomingKeys.has(keyOf(r))),
+          ...s.consumption.filter((r) => !isStale(r)),
           ...withIds,
         ],
       }));
 
+      if (mode === "replace") {
+        // Delete all rows for the org on each covered date.
+        const perOrgDates = new Map<string, Set<string>>();
+        for (const r of withIds) {
+          if (!perOrgDates.has(r.organization_id)) perOrgDates.set(r.organization_id, new Set());
+          perOrgDates.get(r.organization_id)!.add(r.interval_date);
+        }
+        for (const [org, dates] of perOrgDates) {
+          const dateArr = Array.from(dates);
+          const DCHUNK = 500;
+          for (let i = 0; i < dateArr.length; i += DCHUNK) {
+            const { error: delErr } = await supabase
+              .from("consumption_rows")
+              .delete()
+              .eq("organization_id", org)
+              .in("interval_date", dateArr.slice(i, i + DCHUNK));
+            if (delErr) {
+              handleDbError("Replace existing rows", delErr);
+              void refresh();
+              throw new Error(delErr.message);
+            }
+          }
+        }
+      } else {
       // Group by (org, meter) and delete matching dates from the DB.
       const perOrgMeter = new Map<string, { org: string; meter: string; dates: Set<string> }>();
       for (const r of withIds) {
@@ -550,6 +585,7 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
             throw new Error(delErr.message);
           }
         }
+      }
       }
 
       // Insert in batches to keep payloads manageable.
