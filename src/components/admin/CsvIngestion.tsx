@@ -29,6 +29,7 @@ export function CsvIngestion() {
   const [files, setFiles] = useState<ParsedFile[]>([]);
   const [processing, setProcessing] = useState<{ current: number; total: number; name: string } | null>(null);
   const [importing, setImporting] = useState(false);
+  const [importMode, setImportMode] = useState<"merge" | "replace">("merge");
   const [selectedUnits, setSelectedUnits] = useState<Record<string, boolean>>({});
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -141,7 +142,7 @@ export function CsvIngestion() {
       for (const f of files) {
         allRows.push(...pivotRows(f.parsed, orgId, buildings, overrides));
       }
-      const n = await bulkInsertConsumption(allRows);
+      const n = await bulkInsertConsumption(allRows, importMode);
       markSynced();
       const applied = overrides.length
         ? allRows.filter((r) => overrides.some((o) => o.raw_meter_name === r.meter_name)).length
@@ -396,6 +397,35 @@ export function CsvIngestion() {
                   </TableBody>
                 </Table>
               </div>
+            </div>
+
+            <div className="rounded-lg border p-4">
+              <Label className="text-sm font-medium">How should this data be applied?</Label>
+              <RadioGroup
+                value={importMode}
+                onValueChange={(v) => setImportMode(v as "merge" | "replace")}
+                className="mt-3 space-y-3"
+              >
+                <div className="flex items-start gap-3">
+                  <RadioGroupItem value="merge" id="mode-merge" className="mt-1" />
+                  <Label htmlFor="mode-merge" className="cursor-pointer font-normal">
+                    <span className="block text-sm font-medium">Merge with existing data</span>
+                    <span className="block text-xs text-muted-foreground">
+                      Only meters and dates present in the file are updated. Everything else stays untouched.
+                    </span>
+                  </Label>
+                </div>
+                <div className="flex items-start gap-3">
+                  <RadioGroupItem value="replace" id="mode-replace" className="mt-1" />
+                  <Label htmlFor="mode-replace" className="cursor-pointer font-normal">
+                    <span className="block text-sm font-medium">Replace data for the dates in this file</span>
+                    <span className="block text-xs text-muted-foreground">
+                      Deletes all existing rows for this organisation on every date covered by the file — including
+                      meters missing from it — then imports the file. Use this to re-import a bad month.
+                    </span>
+                  </Label>
+                </div>
+              </RadioGroup>
             </div>
 
             <div className="flex justify-end gap-2">
