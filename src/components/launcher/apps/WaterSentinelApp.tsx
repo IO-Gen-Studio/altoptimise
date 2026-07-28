@@ -377,16 +377,22 @@ export function WaterSentinelApp() {
               <tbody>
                 {filtered.map((r) => {
                   const ack = ackByMeter.get(r.rawMeterName);
+                  const expanded = chartMeterName === r.rawMeterName;
                   return (
+                    <>
                     <tr
                       key={r.rawMeterName}
                       className={cn(
-                        "border-b last:border-0 hover:bg-muted/40",
-                        chartMeterName === r.rawMeterName && "bg-muted/50",
+                        "cursor-pointer border-b last:border-0 hover:bg-muted/40",
+                        expanded && "bg-muted/50",
                       )}
+                      onClick={() => setSelectedMeter(expanded ? null : r.rawMeterName)}
                     >
-                      <td className="cursor-pointer px-2 py-2" onClick={() => setSelectedMeter(r.rawMeterName)}>
-                        <div className="font-medium">{r.buildingName}</div>
+                      <td className="px-2 py-2">
+                        <div className="flex items-center gap-1.5 font-medium">
+                          {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                          {r.buildingName}
+                        </div>
                         <div className="font-mono text-xs text-muted-foreground">{r.displayName}</div>
                       </td>
                       <td className="px-2 py-2 tabular-nums">
@@ -397,7 +403,7 @@ export function WaterSentinelApp() {
                       <td className="px-2 py-2 tabular-nums">
                         {r.totalCostGbp > 0 ? `£${r.totalCostGbp.toFixed(2)}` : "—"}
                       </td>
-                      <td className="px-2 py-2">
+                      <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
                         {ack ? (
                           <div className="flex items-center gap-2">
                             <Badge variant="outline" className="capitalize">
@@ -418,6 +424,60 @@ export function WaterSentinelApp() {
                         )}
                       </td>
                     </tr>
+                    {expanded && (
+                      <tr key={`${r.rawMeterName}-chart`} className="border-b bg-muted/20 last:border-0">
+                        <td colSpan={6} className="px-2 py-4">
+                          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                            <div className="text-sm font-medium">
+                              Half-hourly flow — {r.displayName}
+                              <span className="ml-2 text-xs font-normal text-muted-foreground">
+                                shaded = unoccupied window · dashed red = minimum overnight baseline
+                              </span>
+                            </div>
+                            <div onClick={(e) => e.stopPropagation()}>
+                              <Select value={String(chartDays)} onValueChange={(v) => setChartDays(Number(v))}>
+                                <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="1">24 hours</SelectItem>
+                                  <SelectItem value="2">48 hours</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                          <div className="h-72">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <BarChart data={chartData} barCategoryGap={0}>
+                                <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                                <XAxis dataKey="label" tick={{ fontSize: 10 }} interval={7} />
+                                <YAxis tick={{ fontSize: 11 }} unit=" m³" width={70} />
+                                <RTooltip formatter={(v: number) => `${Number(v).toFixed(3)} m³`} />
+                                {overnightBands.map((b) => (
+                                  <ReferenceArea key={b.x1} x1={b.x1} x2={b.x2} fill="#475569" fillOpacity={0.18} />
+                                ))}
+                                <Bar dataKey="value" fill="#3b82f6" isAnimationActive={false} />
+                                <Bar dataKey="aboveBaseline" fill="#ef4444" isAnimationActive={false} />
+                                {baseline > 0 && (
+                                  <ReferenceLine y={baseline} stroke="#ef4444" strokeDasharray="5 4" />
+                                )}
+                              </BarChart>
+                            </ResponsiveContainer>
+                          </div>
+                          <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
+                            <span className="flex items-center gap-1.5">
+                              <span className="inline-block h-2.5 w-2.5 rounded-sm bg-[#3b82f6]" /> Usage
+                            </span>
+                            <span className="flex items-center gap-1.5">
+                              <span className="inline-block h-2.5 w-2.5 rounded-sm bg-[#ef4444]" /> Overnight above baseline
+                            </span>
+                            <span className="flex items-center gap-1.5">
+                              <span className="inline-block h-2.5 w-2.5 rounded-sm bg-slate-500/25" /> Unoccupied window
+                            </span>
+                            <span>Baseline leak rate {r.minFlowM3PerHour.toFixed(3)} m³/hr</span>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    </>
                   );
                 })}
                 {filtered.length === 0 && (
