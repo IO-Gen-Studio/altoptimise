@@ -169,7 +169,7 @@ export function WaterSentinelApp() {
     return sorted;
   }, [results, filter, sortKey, dir]);
 
-  const chartMeterName = selectedMeter ?? filtered[0]?.rawMeterName ?? null;
+  const chartMeterName = selectedMeter;
   const chartInput = meterInputs.find((m) => m.rawMeterName === chartMeterName);
   const chartResult = results.find((r) => r.rawMeterName === chartMeterName);
   const baseline = chartResult?.minFlowM3PerHour ? chartResult.minFlowM3PerHour / 2 : 0;
