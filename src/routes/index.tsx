@@ -11,6 +11,7 @@ import {
   TrendingDown,
   TrendingUp,
   Trophy,
+  Zap,
 } from "lucide-react";
 
 import { AppShell } from "@/components/launcher/AppShell";
@@ -41,6 +42,7 @@ const ICONS = {
   completeness: ShieldCheck,
   league: Trophy,
   water: Droplet,
+  pricing: Zap,
 };
 
 function LauncherHome() {
