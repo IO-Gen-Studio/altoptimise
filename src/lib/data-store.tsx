@@ -27,7 +27,7 @@ export interface Organisation {
   /** Default Octopus GSP region letter (A–P) for Agile pricing */
   default_gsp_region_code?: string | null;
   /** Share of peak-window load assumed movable in the shift advisor */
-  shiftable_load_pct?: number | null;
+  shiftable_load_pct?: number;
 }
 
 export interface Building {
