@@ -127,10 +127,10 @@ export async function activeRegions(): Promise<string[]> {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     supabaseAdmin.from("organisations" as any).select("default_gsp_region_code"),
   ]);
-  for (const r of (b.data ?? []) as Array<{ gsp_region_code: string | null }>) {
+  for (const r of (b.data ?? []) as unknown as Array<{ gsp_region_code: string | null }>) {
     if (r.gsp_region_code) set.add(r.gsp_region_code);
   }
-  for (const r of (o.data ?? []) as Array<{ default_gsp_region_code: string | null }>) {
+  for (const r of (o.data ?? []) as unknown as Array<{ default_gsp_region_code: string | null }>) {
     if (r.default_gsp_region_code) set.add(r.default_gsp_region_code);
   }
   if (set.size === 0) set.add("C"); // London fallback so the app always has data
