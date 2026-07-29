@@ -91,17 +91,20 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       {
         property: "og:description",
         content:
-          "Central hub for advanced energy analysis mini-apps across your organisations.",
+          "Optimise is the central launcher for intelligent energy analysis apps — baseload scoring, sustainability tracking and more, over one shared data stream.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "Optimise — Energy Management Suite" },
+      { name: "twitter:description", content: "Optimise is the central launcher for intelligent energy analysis apps — baseload scoring, sustainability tracking and more, over one shared data stream." },
+      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/ItEeGKe45VPxqWjLPBtzEoJ6SMk2/social-images/social-1785309539450-io-gen_logo_with_text.webp" },
+      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/ItEeGKe45VPxqWjLPBtzEoJ6SMk2/social-images/social-1785309539450-io-gen_logo_with_text.webp" },
     ],
     links: [
       {
         rel: "stylesheet",
         href: appCss,
       },
-      { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
     ],
   }),
   shellComponent: RootShell,
