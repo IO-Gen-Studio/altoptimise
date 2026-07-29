@@ -33,6 +33,22 @@ import {
 import { computeScope12 } from "@/lib/energy/emissions";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
+  head: () => ({
+    meta: [
+      { title: "Dashboard — Optimise Energy Suite" },
+      {
+        name: "description",
+        content:
+          "Your organisation's live energy KPIs and mini-app launcher: consumption, data coverage, carbon and offline meters.",
+      },
+      { property: "og:title", content: "Dashboard — Optimise Energy Suite" },
+      {
+        property: "og:description",
+        content:
+          "Live energy KPIs and the Optimise mini-app launcher for your organisation.",
+      },
+    ],
+  }),
   component: LauncherHome,
 });
 
