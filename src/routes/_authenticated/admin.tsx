@@ -49,7 +49,7 @@ function AdminPage() {
                 Ask an admin to grant you access.
               </p>
               <Button asChild size="sm" variant="outline" className="mt-2">
-                <Link to="/">Return to launcher</Link>
+                <Link to="/dashboard">Return to launcher</Link>
               </Button>
             </CardContent>
           </Card>
