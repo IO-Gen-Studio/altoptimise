@@ -105,7 +105,7 @@ function UsersPage() {
                 Your role ({ROLE_LABEL[persona.role]}) doesn't include user management.
               </p>
               <Button asChild size="sm" variant="outline" className="mt-2">
-                <Link to="/">Return to launcher</Link>
+                <Link to="/dashboard">Return to launcher</Link>
               </Button>
             </CardContent>
           </Card>

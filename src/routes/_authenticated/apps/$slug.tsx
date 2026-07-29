@@ -31,7 +31,7 @@ function AppView() {
       <div className="mx-auto max-w-7xl px-4 py-6 md:px-8">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <Button asChild variant="ghost" size="sm" className="gap-1.5">
-            <Link to="/">
+            <Link to="/dashboard">
               <ArrowLeft className="h-4 w-4" /> Back to Launcher
             </Link>
           </Button>
@@ -53,7 +53,7 @@ function AppView() {
                 try again.
               </p>
               <Button asChild size="sm" variant="outline" className="mt-2">
-                <Link to="/">Return to launcher</Link>
+                <Link to="/dashboard">Return to launcher</Link>
               </Button>
             </CardContent>
           </Card>

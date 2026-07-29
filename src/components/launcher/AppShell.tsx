@@ -33,9 +33,9 @@ import { cn } from "@/lib/utils";
 import { ROLE_LABEL, useLauncher } from "@/lib/launcher-context";
 import { supabase } from "@/integrations/supabase/client";
 
-type NavItem = { to: "/" | "/admin" | "/users"; label: string; icon: typeof LayoutGrid; adminOnly?: boolean };
+type NavItem = { to: "/dashboard" | "/admin" | "/users"; label: string; icon: typeof LayoutGrid; adminOnly?: boolean };
 const NAV: NavItem[] = [
-  { to: "/", label: "Launcher", icon: LayoutGrid },
+  { to: "/dashboard", label: "Launcher", icon: LayoutGrid },
   { to: "/admin", label: "Settings", icon: Cog, adminOnly: true },
   { to: "/users", label: "Users", icon: Users, adminOnly: true },
 ];
