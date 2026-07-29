@@ -104,7 +104,7 @@ export interface MiniApp {
   tagline: string;
   description: string;
   category: string;
-  icon: "baseload" | "sustainability" | "completeness" | "league" | "water";
+  icon: "baseload" | "sustainability" | "completeness" | "league" | "water" | "pricing";
   allowedRoles: Role[];
   accent: string;
 }
@@ -169,6 +169,18 @@ export const APPS: MiniApp[] = [
     icon: "water",
     allowedRoles: ["super_admin", "admin", "user"],
     accent: "from-blue-500/15 to-sky-500/10",
+  },
+  {
+    id: "agile-pricing",
+    slug: "agile-pricing",
+    name: "Agile Pricing & Shift Advisor",
+    tagline: "Live Octopus Agile rates, cost overlay & load shifting",
+    description:
+      "Tracks live and day-ahead Octopus Agile prices for each site's grid region, costs your half-hourly electricity against Agile, Tracker and Flexible, and models savings from shifting load to cheaper windows.",
+    category: "Pricing",
+    icon: "pricing",
+    allowedRoles: ["super_admin", "admin", "user"],
+    accent: "from-amber-500/15 to-yellow-500/10",
   },
 ];
 
