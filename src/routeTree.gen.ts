@@ -15,6 +15,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedUsersRouteImport } from './routes/_authenticated/users'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as AuthenticatedAppsSlugRouteImport } from './routes/_authenticated/apps/$slug'
+import { Route as ApiPublicHooksSyncAgilePricesRouteImport } from './routes/api/public/hooks/sync-agile-prices'
 import { Route as ApiPublicHooksRunDueIngestionsRouteImport } from './routes/api/public/hooks/run-due-ingestions'
 
 const AuthRoute = AuthRouteImport.update({
@@ -46,6 +47,12 @@ const AuthenticatedAppsSlugRoute = AuthenticatedAppsSlugRouteImport.update({
   path: '/apps/$slug',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const ApiPublicHooksSyncAgilePricesRoute =
+  ApiPublicHooksSyncAgilePricesRouteImport.update({
+    id: '/api/public/hooks/sync-agile-prices',
+    path: '/api/public/hooks/sync-agile-prices',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksRunDueIngestionsRoute =
   ApiPublicHooksRunDueIngestionsRouteImport.update({
     id: '/api/public/hooks/run-due-ingestions',
@@ -60,6 +67,7 @@ export interface FileRoutesByFullPath {
   '/users': typeof AuthenticatedUsersRoute
   '/apps/$slug': typeof AuthenticatedAppsSlugRoute
   '/api/public/hooks/run-due-ingestions': typeof ApiPublicHooksRunDueIngestionsRoute
+  '/api/public/hooks/sync-agile-prices': typeof ApiPublicHooksSyncAgilePricesRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -68,6 +76,7 @@ export interface FileRoutesByTo {
   '/users': typeof AuthenticatedUsersRoute
   '/apps/$slug': typeof AuthenticatedAppsSlugRoute
   '/api/public/hooks/run-due-ingestions': typeof ApiPublicHooksRunDueIngestionsRoute
+  '/api/public/hooks/sync-agile-prices': typeof ApiPublicHooksSyncAgilePricesRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -78,6 +87,7 @@ export interface FileRoutesById {
   '/_authenticated/users': typeof AuthenticatedUsersRoute
   '/_authenticated/apps/$slug': typeof AuthenticatedAppsSlugRoute
   '/api/public/hooks/run-due-ingestions': typeof ApiPublicHooksRunDueIngestionsRoute
+  '/api/public/hooks/sync-agile-prices': typeof ApiPublicHooksSyncAgilePricesRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -88,6 +98,7 @@ export interface FileRouteTypes {
     | '/users'
     | '/apps/$slug'
     | '/api/public/hooks/run-due-ingestions'
+    | '/api/public/hooks/sync-agile-prices'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -96,6 +107,7 @@ export interface FileRouteTypes {
     | '/users'
     | '/apps/$slug'
     | '/api/public/hooks/run-due-ingestions'
+    | '/api/public/hooks/sync-agile-prices'
   id:
     | '__root__'
     | '/'
@@ -105,6 +117,7 @@ export interface FileRouteTypes {
     | '/_authenticated/users'
     | '/_authenticated/apps/$slug'
     | '/api/public/hooks/run-due-ingestions'
+    | '/api/public/hooks/sync-agile-prices'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -112,6 +125,7 @@ export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
   ApiPublicHooksRunDueIngestionsRoute: typeof ApiPublicHooksRunDueIngestionsRoute
+  ApiPublicHooksSyncAgilePricesRoute: typeof ApiPublicHooksSyncAgilePricesRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -158,6 +172,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAppsSlugRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/api/public/hooks/sync-agile-prices': {
+      id: '/api/public/hooks/sync-agile-prices'
+      path: '/api/public/hooks/sync-agile-prices'
+      fullPath: '/api/public/hooks/sync-agile-prices'
+      preLoaderRoute: typeof ApiPublicHooksSyncAgilePricesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/run-due-ingestions': {
       id: '/api/public/hooks/run-due-ingestions'
       path: '/api/public/hooks/run-due-ingestions'
@@ -188,17 +209,8 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
   ApiPublicHooksRunDueIngestionsRoute: ApiPublicHooksRunDueIngestionsRoute,
+  ApiPublicHooksSyncAgilePricesRoute: ApiPublicHooksSyncAgilePricesRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

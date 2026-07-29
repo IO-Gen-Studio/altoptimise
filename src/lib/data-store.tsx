@@ -24,6 +24,10 @@ export interface Organisation {
   co2_factor_electricity_kg_per_kwh?: number | null;
   co2_factor_gas_kg_per_kwh?: number | null;
   co2_factor_water_kg_per_m3?: number | null;
+  /** Default Octopus GSP region letter (A–P) for Agile pricing */
+  default_gsp_region_code?: string | null;
+  /** Share of peak-window load assumed movable in the shift advisor */
+  shiftable_load_pct?: number;
 }
 
 export interface Building {
@@ -34,6 +38,8 @@ export interface Building {
   address?: string;
   created_at: string;
   schedule_override_enabled?: boolean;
+  /** Octopus GSP region letter (A–P); falls back to the org default */
+  gsp_region_code?: string | null;
 }
 
 export interface ConsumptionRow {

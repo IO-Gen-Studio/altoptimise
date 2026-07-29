@@ -14,12 +14,31 @@ export type Database = {
   }
   public: {
     Tables: {
+      agile_regions: {
+        Row: {
+          code: string
+          name: string
+          sort_order: number
+        }
+        Insert: {
+          code: string
+          name: string
+          sort_order?: number
+        }
+        Update: {
+          code?: string
+          name?: string
+          sort_order?: number
+        }
+        Relationships: []
+      }
       buildings: {
         Row: {
           address: string | null
           created_at: string
           csv_matched_name: string
           custom_display_name: string
+          gsp_region_code: string | null
           id: string
           organization_id: string
           schedule_override_enabled: boolean
@@ -29,6 +48,7 @@ export type Database = {
           created_at?: string
           csv_matched_name?: string
           custom_display_name: string
+          gsp_region_code?: string | null
           id?: string
           organization_id: string
           schedule_override_enabled?: boolean
@@ -38,6 +58,7 @@ export type Database = {
           created_at?: string
           csv_matched_name?: string
           custom_display_name?: string
+          gsp_region_code?: string | null
           id?: string
           organization_id?: string
           schedule_override_enabled?: boolean
@@ -114,6 +135,75 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      energy_price_sync_log: {
+        Row: {
+          created_at: string
+          error: string | null
+          id: string
+          product_code: string
+          region_code: string
+          rows_written: number
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          error?: string | null
+          id?: string
+          product_code: string
+          region_code: string
+          rows_written?: number
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          error?: string | null
+          id?: string
+          product_code?: string
+          region_code?: string
+          rows_written?: number
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      energy_unit_rates: {
+        Row: {
+          created_at: string
+          id: string
+          product_code: string
+          region_code: string
+          updated_at: string
+          valid_from: string
+          valid_to: string | null
+          value_exc_vat: number
+          value_inc_vat: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          product_code: string
+          region_code: string
+          updated_at?: string
+          valid_from: string
+          valid_to?: string | null
+          value_exc_vat: number
+          value_inc_vat: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          product_code?: string
+          region_code?: string
+          updated_at?: string
+          valid_from?: string
+          valid_to?: string | null
+          value_exc_vat?: number
+          value_inc_vat?: number
+        }
+        Relationships: []
       }
       ingestion_schedules: {
         Row: {
@@ -302,12 +392,14 @@ export type Database = {
           completeness_flatline_hours: number
           completeness_missing_pct: number
           created_at: string
+          default_gsp_region_code: string | null
           holidays: string[]
           id: string
           location: string | null
           organization_name: string
           peak_season_months: number[]
           profile_type: string
+          shiftable_load_pct: number
           summer_gas_months: number[]
           tariff_electricity_pence_per_kwh: number | null
           tariff_gas_pence_per_kwh: number | null
@@ -323,12 +415,14 @@ export type Database = {
           completeness_flatline_hours?: number
           completeness_missing_pct?: number
           created_at?: string
+          default_gsp_region_code?: string | null
           holidays?: string[]
           id?: string
           location?: string | null
           organization_name: string
           peak_season_months?: number[]
           profile_type?: string
+          shiftable_load_pct?: number
           summer_gas_months?: number[]
           tariff_electricity_pence_per_kwh?: number | null
           tariff_gas_pence_per_kwh?: number | null
@@ -344,12 +438,14 @@ export type Database = {
           completeness_flatline_hours?: number
           completeness_missing_pct?: number
           created_at?: string
+          default_gsp_region_code?: string | null
           holidays?: string[]
           id?: string
           location?: string | null
           organization_name?: string
           peak_season_months?: number[]
           profile_type?: string
+          shiftable_load_pct?: number
           summer_gas_months?: number[]
           tariff_electricity_pence_per_kwh?: number | null
           tariff_gas_pence_per_kwh?: number | null
