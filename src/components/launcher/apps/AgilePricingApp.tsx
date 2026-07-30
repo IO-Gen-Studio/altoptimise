@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  Activity, ArrowRightLeft, Clock, Gauge, RefreshCw, Sparkles, TrendingDown, TrendingUp, Zap,
+  Activity, ArrowRightLeft, ChevronLeft, ChevronRight, Clock, Gauge, RefreshCw, Sparkles,
+  TrendingDown, TrendingUp, Zap,
 } from "lucide-react";
 import {
-  Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ReferenceLine, ResponsiveContainer,
-  Tooltip as RTooltip, XAxis, YAxis,
+  Area, Bar, BarChart, CartesianGrid, Cell, ComposedChart, Line, LineChart, ReferenceLine,
+  ResponsiveContainer, Tooltip as RTooltip, XAxis, YAxis,
 } from "recharts";
 import { toast } from "sonner";
 
@@ -20,13 +21,19 @@ import { DEFAULT_TARIFF, orgTariff } from "@/lib/energy/league";
 import {
   bestWindow, buildElectricityLoad, buildSeries, costFlat, costLoad, dayStats, fmtGbp, fmtPence,
   GSP_REGIONS, HALF_HOUR_MS, priceAt, priceBand, PRODUCTS, regionName, shiftAdvice, slotsForWindow,
-  ukDateLabel, ukMidnight, ukTimeLabel, type ProductKey, type RateSeries, type UnitRate,
+  ukDateLabel, ukMidnight, ukTimeLabel, weekdayProfile, type ProductKey, type RateSeries,
+  type UnitRate,
 } from "@/lib/energy/pricing";
 import { useLauncher } from "@/lib/launcher-context";
 import { getUnitRates, syncPricesNow } from "@/lib/pricing.functions";
 import { cn } from "@/lib/utils";
 
 const PERIOD_DAYS = [7, 14, 30, 60, 90];
+
+function ukWeekday(ms: number): string {
+  return new Intl.DateTimeFormat("en-GB", { weekday: "long", timeZone: "Europe/London" })
+    .format(new Date(ms));
+}
 
 const BAND_FILL: Record<string, string> = {
   plunge: "hsl(160 84% 39%)",
@@ -80,6 +87,7 @@ export function AgilePricingApp() {
   const [syncing, setSyncing] = useState(false);
   const [shiftPct, setShiftPct] = useState(orgFull?.shiftable_load_pct ?? 20);
   const [now, setNow] = useState(() => Date.now());
+  const [dayOffset, setDayOffset] = useState(0);
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 30_000);
@@ -128,11 +136,16 @@ export function AgilePricingApp() {
   }, [consumption, org.id, days]);
 
   // Fetch stored rates: the analysis period plus the live/day-ahead window.
+  const curveFromISO = useMemo(() => {
+    const viewISO = new Date(ukMidnight(Date.now(), dayOffset)).toISOString().slice(0, 10);
+    return viewISO < fromISO ? viewISO : fromISO;
+  }, [fromISO, dayOffset]);
+
   useEffect(() => {
     if (!org.id || org.id === "none") return;
     let cancelled = false;
     setLoading(true);
-    const from = `${fromISO}T00:00:00Z`;
+    const from = `${curveFromISO}T00:00:00Z`;
     const to = new Date(Date.now() + 3 * 86_400_000).toISOString();
     getUnitRates({
       data: {
@@ -150,7 +163,7 @@ export function AgilePricingApp() {
       .catch(() => { if (!cancelled) toast.error("Could not load Octopus prices"); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [org.id, fromISO, regionsInUse]);
+  }, [org.id, curveFromISO, regionsInUse]);
 
   const seriesFor = useMemo(() => {
     const cache = new Map<string, RateSeries>();
@@ -176,6 +189,12 @@ export function AgilePricingApp() {
   const today = useMemo(() => dayStats(todaySlots), [todaySlots]);
   const tomorrow = useMemo(() => dayStats(tomorrowSlots), [tomorrowSlots]);
 
+  // Day being charted (0 = today, negative = earlier days).
+  const viewStart = useMemo(() => ukMidnight(now, dayOffset), [now, dayOffset]);
+  const viewISO = useMemo(() => new Date(viewStart).toISOString().slice(0, 10), [viewStart]);
+  const viewSlots = useMemo(() => slotsForWindow(agile, viewStart, 24), [agile, viewStart]);
+  const viewStats = useMemo(() => dayStats(viewSlots), [viewSlots]);
+
   const slotNow = Math.floor(now / HALF_HOUR_MS) * HALF_HOUR_MS;
   const priceNow = priceAt(agile, slotNow);
   const priceNext = priceAt(agile, slotNow + HALF_HOUR_MS);
@@ -183,16 +202,35 @@ export function AgilePricingApp() {
   const minsToChange = Math.max(0, Math.ceil((slotNow + HALF_HOUR_MS - now) / 60000));
   const band = priceNow != null ? priceBand(priceNow, today) : "mid";
 
-  const curveData = useMemo(
-    () => [...todaySlots.map((s) => ({ ...s, day: "Today" })), ...tomorrowSlots.map((s) => ({ ...s, day: "Tomorrow" }))]
-      .map((s) => ({
-        name: `${s.day === "Tomorrow" ? "+" : ""}${s.label}`,
-        price: Number(s.price.toFixed(3)),
-        start: s.start,
-        band: priceBand(s.price, s.day === "Today" ? today : tomorrow),
-      })),
-    [todaySlots, tomorrowSlots, today, tomorrow],
+  // Typical consumption for the same weekday (last 4 matching days with data).
+  const profile = useMemo(
+    () => weekdayProfile({
+      rows: consumption,
+      orgId: org.id,
+      targetISO: viewISO,
+      buildingId,
+      buildingIdFor: (name) => meterMeta.get(name)?.buildingId ?? null,
+      factorFor: (name) => meterMeta.get(name)?.factor ?? 1,
+    }),
+    [consumption, org.id, viewISO, buildingId, meterMeta],
   );
+
+  const showProfile = (profile.samples ?? 0) >= 3 && profile.bySlot != null;
+
+  const curveData = useMemo(() => {
+    const rows = dayOffset === 0
+      ? [...viewSlots.map((s) => ({ ...s, next: false })), ...tomorrowSlots.map((s) => ({ ...s, next: true }))]
+      : viewSlots.map((s) => ({ ...s, next: false }));
+    return rows.map((s) => ({
+      name: `${s.next ? "+" : ""}${s.label}`,
+      price: Number(s.price.toFixed(3)),
+      kwh: !s.next && showProfile && profile.bySlot
+        ? Number(profile.bySlot[s.index].toFixed(3))
+        : null,
+      start: s.start,
+      band: priceBand(s.price, s.next ? tomorrow : viewStats),
+    }));
+  }, [viewSlots, tomorrowSlots, viewStats, tomorrow, dayOffset, showProfile, profile]);
 
   // --- Cost overlay ---------------------------------------------------------
   const loads = useMemo(
@@ -439,36 +477,67 @@ export function AgilePricingApp() {
             <CardContent className="p-4">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <h2 className="text-sm font-semibold">Half-hourly Agile price</h2>
+                  <h2 className="text-sm font-semibold">Half-hourly Agile price &amp; typical consumption</h2>
                   <p className="text-xs text-muted-foreground">
-                    {ukDateLabel(todayStart)}{tomorrowSlots.length ? ` → ${ukDateLabel(tomorrowStart)}` : ""} ·
-                    {" "}green = cheap, red = expensive. Dashed line = today's average.
+                    {ukDateLabel(viewStart)}
+                    {dayOffset === 0 && tomorrowSlots.length ? ` → ${ukDateLabel(tomorrowStart)}` : ""} ·
+                    {" "}green = cheap, amber/red = expensive. Dashed line = day average.
+                    {showProfile
+                      ? ` Line = average kWh across the last ${profile.samples} ${ukWeekday(viewStart)}s with data.`
+                      : " Not enough matching weekdays with data for a consumption overlay."}
                   </p>
                 </div>
-                {tomorrowSlots.length === 0 ? (
-                  <Badge variant="outline" className="text-muted-foreground">
-                    <Clock className="mr-1 h-3 w-3" /> Tomorrow publishes ~16:00
-                  </Badge>
-                ) : null}
+                <div className="flex items-center gap-1.5">
+                  {dayOffset === 0 && tomorrowSlots.length === 0 ? (
+                    <Badge variant="outline" className="text-muted-foreground">
+                      <Clock className="mr-1 h-3 w-3" /> Tomorrow publishes ~16:00
+                    </Badge>
+                  ) : null}
+                  <Button variant="outline" size="icon" className="h-8 w-8"
+                    onClick={() => setDayOffset((d) => d - 1)} aria-label="Previous day">
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <Button variant="outline" size="sm" className="h-8"
+                    onClick={() => setDayOffset(0)} disabled={dayOffset === 0}>
+                    Today
+                  </Button>
+                  <Button variant="outline" size="icon" className="h-8 w-8"
+                    onClick={() => setDayOffset((d) => Math.min(0, d + 1))}
+                    disabled={dayOffset >= 0} aria-label="Next day">
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
               <div className="h-72">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={curveData} margin={{ top: 8, right: 8, bottom: 4, left: -12 }}>
+                  <ComposedChart data={curveData} margin={{ top: 8, right: 0, bottom: 4, left: -12 }}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
                     <XAxis dataKey="name" tick={{ fontSize: 10 }} interval={3} />
-                    <YAxis tick={{ fontSize: 10 }} unit="p" />
+                    <YAxis yAxisId="kwh" orientation="left" tick={{ fontSize: 10 }} width={48}
+                      label={{ value: "kWh", angle: -90, position: "insideLeft", fontSize: 10 }} />
+                    <YAxis yAxisId="price" orientation="right" tick={{ fontSize: 10 }} unit="p" width={48} />
                     <RTooltip
-                      formatter={(v: number) => [`${v.toFixed(2)}p/kWh`, "Price"]}
+                      formatter={(v: number, key: string) =>
+                        key === "kwh"
+                          ? [`${v.toFixed(2)} kWh`, "Typical consumption"]
+                          : [`${v.toFixed(2)}p/kWh`, "Price"]}
                       contentStyle={{ fontSize: 12 }}
                     />
-                    <ReferenceLine y={Number(today.avg.toFixed(2))} stroke="hsl(var(--muted-foreground))" strokeDasharray="4 4" />
-                    <ReferenceLine y={0} stroke="hsl(var(--border))" />
-                    <Bar dataKey="price" radius={[2, 2, 0, 0]}>
+                    <ReferenceLine yAxisId="price" y={Number(viewStats.avg.toFixed(2))}
+                      stroke="hsl(var(--muted-foreground))" strokeDasharray="4 4" />
+                    <ReferenceLine yAxisId="price" y={0} stroke="hsl(var(--border))" />
+                    {showProfile ? (
+                      <Area yAxisId="kwh" dataKey="kwh" type="monotone" connectNulls
+                        stroke="hsl(var(--primary))" strokeWidth={2}
+                        fill="hsl(var(--primary))" fillOpacity={0.12} />
+                    ) : null}
+                    <Bar yAxisId="price" dataKey="price" radius={[2, 2, 0, 0]}>
                       {curveData.map((d, i) => (
-                        <Cell key={i} fill={BAND_FILL[d.band]} opacity={d.start <= slotNow ? 0.55 : 1} />
+                        <Cell key={i} fill={BAND_FILL[d.band]}
+                          opacity={dayOffset === 0 && d.start <= slotNow ? 0.55 : 1} />
                       ))}
                     </Bar>
-                  </BarChart>
+                  </ComposedChart>
                 </ResponsiveContainer>
               </div>
             </CardContent>
@@ -476,27 +545,29 @@ export function AgilePricingApp() {
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <KpiCard
-              label="Cheapest 1 hour today"
-              value={today.cheapest1h ? fmtPence(today.cheapest1h.avgPrice) : "—"}
-              sub={today.cheapest1h ? `${ukTimeLabel(today.cheapest1h.startMs)}–${ukTimeLabel(today.cheapest1h.endMs)}` : undefined}
+              label={`Cheapest 1 hour · ${ukDateLabel(viewStart)}`}
+              value={viewStats.cheapest1h ? fmtPence(viewStats.cheapest1h.avgPrice) : "—"}
+              sub={viewStats.cheapest1h ? `${ukTimeLabel(viewStats.cheapest1h.startMs)}–${ukTimeLabel(viewStats.cheapest1h.endMs)}` : undefined}
               icon={TrendingDown} tone="good"
             />
             <KpiCard
-              label="Cheapest 3 hours today"
-              value={today.cheapest3h ? fmtPence(today.cheapest3h.avgPrice) : "—"}
-              sub={today.cheapest3h ? `${ukTimeLabel(today.cheapest3h.startMs)}–${ukTimeLabel(today.cheapest3h.endMs)}` : undefined}
+              label="Cheapest 3 hours"
+              value={viewStats.cheapest3h ? fmtPence(viewStats.cheapest3h.avgPrice) : "—"}
+              sub={viewStats.cheapest3h ? `${ukTimeLabel(viewStats.cheapest3h.startMs)}–${ukTimeLabel(viewStats.cheapest3h.endMs)}` : undefined}
               icon={Sparkles} tone="good"
             />
             <KpiCard
               label="Peak 3-hour block"
-              value={today.peakBlock ? fmtPence(today.peakBlock.avgPrice) : "—"}
-              sub={today.peakBlock ? `${ukTimeLabel(today.peakBlock.startMs)}–${ukTimeLabel(today.peakBlock.endMs)}` : undefined}
+              value={viewStats.peakBlock ? fmtPence(viewStats.peakBlock.avgPrice) : "—"}
+              sub={viewStats.peakBlock ? `${ukTimeLabel(viewStats.peakBlock.startMs)}–${ukTimeLabel(viewStats.peakBlock.endMs)}` : undefined}
               icon={TrendingUp} tone="bad"
             />
             <KpiCard
-              label="Today average / negative slots"
-              value={fmtPence(today.avg)}
-              sub={`${today.negativeSlots} slot(s) at or below 0p`}
+              label="Day average / typical use"
+              value={fmtPence(viewStats.avg)}
+              sub={showProfile
+                ? `${Math.round(profile.totalKwh).toLocaleString()} kWh typical · ${viewStats.negativeSlots} slot(s) ≤ 0p`
+                : `${viewStats.negativeSlots} slot(s) at or below 0p`}
               icon={Gauge}
             />
           </div>

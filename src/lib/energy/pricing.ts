@@ -478,3 +478,80 @@ export function priceBand(price: number, stats: DayStats): "cheap" | "mid" | "ex
   if (pos >= 0.75) return "expensive";
   return "mid";
 }
+
+// --- Typical weekday consumption profile ------------------------------------
+
+export interface WeekdayProfile {
+  /** 48 slots of mean kWh for the same weekday, or null when unavailable. */
+  bySlot: number[] | null;
+  /** ISO dates that fed the average, most recent first. */
+  dates: string[];
+  samples: number;
+  totalKwh: number;
+}
+
+/**
+ * Average half-hourly electricity consumption for the same day of week as
+ * `targetISO`, using the last 4 matching dates that have data. Mirrors the
+ * baseline rule used by the data-integrity check.
+ */
+export function weekdayProfile(opts: {
+  rows: ConsumptionRow[];
+  orgId: string;
+  targetISO: string;
+  buildingId?: string | "all";
+  buildingIdFor?: (meterName: string) => string | null;
+  factorFor?: (meterName: string) => number;
+}): WeekdayProfile {
+  const { rows, orgId, targetISO } = opts;
+  const want = opts.buildingId && opts.buildingId !== "all" ? opts.buildingId : null;
+
+  // date -> 48 slot totals (kWh) across all matching meters
+  const byDate = new Map<string, number[]>();
+  for (const r of rows) {
+    if (r.organization_id !== orgId) continue;
+    if (classifyUtility(r.variable_category) !== "electricity") continue;
+    const bid = opts.buildingIdFor?.(r.meter_name) ?? r.building_id ?? null;
+    if (want && bid !== want) continue;
+    const f = opts.factorFor?.(r.meter_name) ?? r.meter_factor ?? 1;
+    let acc = byDate.get(r.interval_date);
+    if (!acc) {
+      acc = new Array(48).fill(0);
+      byDate.set(r.interval_date, acc);
+    }
+    for (let i = 0; i < 48; i++) {
+      const v = r.half_hourly_values[i];
+      if (v == null) continue;
+      acc[i] += v * f;
+    }
+  }
+
+  const [ty, tm, td] = targetISO.split("-").map(Number);
+  const cursor = new Date(Date.UTC(ty, tm - 1, td));
+  cursor.setUTCDate(cursor.getUTCDate() - 7); // skip the target day itself (may be partial)
+  const dates: string[] = [];
+  const totals: number[][] = [];
+  let scanned = 0;
+  while (totals.length < 4 && scanned < 26) {
+    const iso = cursor.toISOString().slice(0, 10);
+    const acc = byDate.get(iso);
+    if (acc && acc.some((v) => v > 0)) {
+      dates.push(iso);
+      totals.push(acc);
+    }
+    cursor.setUTCDate(cursor.getUTCDate() - 7);
+    scanned++;
+  }
+
+  if (totals.length === 0) return { bySlot: null, dates: [], samples: 0, totalKwh: 0 };
+
+  const bySlot = new Array(48).fill(0);
+  for (const t of totals) for (let i = 0; i < 48; i++) bySlot[i] += t[i];
+  for (let i = 0; i < 48; i++) bySlot[i] /= totals.length;
+  return {
+    bySlot,
+    dates,
+    samples: totals.length,
+    totalKwh: bySlot.reduce((a, b) => a + b, 0),
+  };
+}
