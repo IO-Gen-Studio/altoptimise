@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  Activity, ArrowRightLeft, Clock, Gauge, RefreshCw, Sparkles, TrendingDown, TrendingUp, Zap,
+  Activity, ArrowRightLeft, ChevronLeft, ChevronRight, Clock, Gauge, RefreshCw, Sparkles,
+  TrendingDown, TrendingUp, Zap,
 } from "lucide-react";
 import {
-  Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ReferenceLine, ResponsiveContainer,
-  Tooltip as RTooltip, XAxis, YAxis,
+  Area, Bar, BarChart, CartesianGrid, Cell, ComposedChart, Line, LineChart, ReferenceLine,
+  ResponsiveContainer, Tooltip as RTooltip, XAxis, YAxis,
 } from "recharts";
 import { toast } from "sonner";
 
@@ -20,7 +21,8 @@ import { DEFAULT_TARIFF, orgTariff } from "@/lib/energy/league";
 import {
   bestWindow, buildElectricityLoad, buildSeries, costFlat, costLoad, dayStats, fmtGbp, fmtPence,
   GSP_REGIONS, HALF_HOUR_MS, priceAt, priceBand, PRODUCTS, regionName, shiftAdvice, slotsForWindow,
-  ukDateLabel, ukMidnight, ukTimeLabel, type ProductKey, type RateSeries, type UnitRate,
+  ukDateLabel, ukMidnight, ukTimeLabel, weekdayProfile, type ProductKey, type RateSeries,
+  type UnitRate,
 } from "@/lib/energy/pricing";
 import { useLauncher } from "@/lib/launcher-context";
 import { getUnitRates, syncPricesNow } from "@/lib/pricing.functions";
