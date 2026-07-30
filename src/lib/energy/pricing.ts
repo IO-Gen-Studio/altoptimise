@@ -528,6 +528,7 @@ export function weekdayProfile(opts: {
 
   const [ty, tm, td] = targetISO.split("-").map(Number);
   const cursor = new Date(Date.UTC(ty, tm - 1, td));
+  cursor.setUTCDate(cursor.getUTCDate() - 7); // skip the target day itself (may be partial)
   const dates: string[] = [];
   const totals: number[][] = [];
   let scanned = 0;
