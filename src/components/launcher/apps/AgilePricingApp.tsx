@@ -82,6 +82,7 @@ export function AgilePricingApp() {
   const [syncing, setSyncing] = useState(false);
   const [shiftPct, setShiftPct] = useState(orgFull?.shiftable_load_pct ?? 20);
   const [now, setNow] = useState(() => Date.now());
+  const [dayOffset, setDayOffset] = useState(0);
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 30_000);
@@ -130,11 +131,16 @@ export function AgilePricingApp() {
   }, [consumption, org.id, days]);
 
   // Fetch stored rates: the analysis period plus the live/day-ahead window.
+  const curveFromISO = useMemo(() => {
+    const viewISO = new Date(ukMidnight(Date.now(), dayOffset)).toISOString().slice(0, 10);
+    return viewISO < fromISO ? viewISO : fromISO;
+  }, [fromISO, dayOffset]);
+
   useEffect(() => {
     if (!org.id || org.id === "none") return;
     let cancelled = false;
     setLoading(true);
-    const from = `${fromISO}T00:00:00Z`;
+    const from = `${curveFromISO}T00:00:00Z`;
     const to = new Date(Date.now() + 3 * 86_400_000).toISOString();
     getUnitRates({
       data: {
@@ -152,7 +158,7 @@ export function AgilePricingApp() {
       .catch(() => { if (!cancelled) toast.error("Could not load Octopus prices"); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [org.id, fromISO, regionsInUse]);
+  }, [org.id, curveFromISO, regionsInUse]);
 
   const seriesFor = useMemo(() => {
     const cache = new Map<string, RateSeries>();
@@ -178,6 +184,12 @@ export function AgilePricingApp() {
   const today = useMemo(() => dayStats(todaySlots), [todaySlots]);
   const tomorrow = useMemo(() => dayStats(tomorrowSlots), [tomorrowSlots]);
 
+  // Day being charted (0 = today, negative = earlier days).
+  const viewStart = useMemo(() => ukMidnight(now, dayOffset), [now, dayOffset]);
+  const viewISO = useMemo(() => new Date(viewStart).toISOString().slice(0, 10), [viewStart]);
+  const viewSlots = useMemo(() => slotsForWindow(agile, viewStart, 24), [agile, viewStart]);
+  const viewStats = useMemo(() => dayStats(viewSlots), [viewSlots]);
+
   const slotNow = Math.floor(now / HALF_HOUR_MS) * HALF_HOUR_MS;
   const priceNow = priceAt(agile, slotNow);
   const priceNext = priceAt(agile, slotNow + HALF_HOUR_MS);
@@ -185,16 +197,35 @@ export function AgilePricingApp() {
   const minsToChange = Math.max(0, Math.ceil((slotNow + HALF_HOUR_MS - now) / 60000));
   const band = priceNow != null ? priceBand(priceNow, today) : "mid";
 
-  const curveData = useMemo(
-    () => [...todaySlots.map((s) => ({ ...s, day: "Today" })), ...tomorrowSlots.map((s) => ({ ...s, day: "Tomorrow" }))]
-      .map((s) => ({
-        name: `${s.day === "Tomorrow" ? "+" : ""}${s.label}`,
-        price: Number(s.price.toFixed(3)),
-        start: s.start,
-        band: priceBand(s.price, s.day === "Today" ? today : tomorrow),
-      })),
-    [todaySlots, tomorrowSlots, today, tomorrow],
+  // Typical consumption for the same weekday (last 4 matching days with data).
+  const profile = useMemo(
+    () => weekdayProfile({
+      rows: consumption,
+      orgId: org.id,
+      targetISO: viewISO,
+      buildingId,
+      buildingIdFor: (name) => meterMeta.get(name)?.buildingId ?? null,
+      factorFor: (name) => meterMeta.get(name)?.factor ?? 1,
+    }),
+    [consumption, org.id, viewISO, buildingId, meterMeta],
   );
+
+  const showProfile = (profile.samples ?? 0) >= 3 && profile.bySlot != null;
+
+  const curveData = useMemo(() => {
+    const rows = dayOffset === 0
+      ? [...viewSlots.map((s) => ({ ...s, next: false })), ...tomorrowSlots.map((s) => ({ ...s, next: true }))]
+      : viewSlots.map((s) => ({ ...s, next: false }));
+    return rows.map((s) => ({
+      name: `${s.next ? "+" : ""}${s.label}`,
+      price: Number(s.price.toFixed(3)),
+      kwh: !s.next && showProfile && profile.bySlot
+        ? Number(profile.bySlot[s.index].toFixed(3))
+        : null,
+      start: s.start,
+      band: priceBand(s.price, s.next ? tomorrow : viewStats),
+    }));
+  }, [viewSlots, tomorrowSlots, viewStats, tomorrow, dayOffset, showProfile, profile]);
 
   // --- Cost overlay ---------------------------------------------------------
   const loads = useMemo(
