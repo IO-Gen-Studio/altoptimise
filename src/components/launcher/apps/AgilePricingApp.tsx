@@ -30,6 +30,11 @@ import { cn } from "@/lib/utils";
 
 const PERIOD_DAYS = [7, 14, 30, 60, 90];
 
+function ukWeekday(ms: number): string {
+  return new Intl.DateTimeFormat("en-GB", { weekday: "long", timeZone: "Europe/London" })
+    .format(new Date(ms));
+}
+
 const BAND_FILL: Record<string, string> = {
   plunge: "hsl(160 84% 39%)",
   cheap: "hsl(142 71% 45%)",
