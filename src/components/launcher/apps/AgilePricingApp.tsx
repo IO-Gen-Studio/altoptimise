@@ -472,36 +472,67 @@ export function AgilePricingApp() {
             <CardContent className="p-4">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <h2 className="text-sm font-semibold">Half-hourly Agile price</h2>
+                  <h2 className="text-sm font-semibold">Half-hourly Agile price &amp; typical consumption</h2>
                   <p className="text-xs text-muted-foreground">
-                    {ukDateLabel(todayStart)}{tomorrowSlots.length ? ` → ${ukDateLabel(tomorrowStart)}` : ""} ·
-                    {" "}green = cheap, red = expensive. Dashed line = today's average.
+                    {ukDateLabel(viewStart)}
+                    {dayOffset === 0 && tomorrowSlots.length ? ` → ${ukDateLabel(tomorrowStart)}` : ""} ·
+                    {" "}green = cheap, amber/red = expensive. Dashed line = day average.
+                    {showProfile
+                      ? ` Line = average kWh across the last ${profile.samples} ${ukWeekday(viewStart)}s with data.`
+                      : " Not enough matching weekdays with data for a consumption overlay."}
                   </p>
                 </div>
-                {tomorrowSlots.length === 0 ? (
-                  <Badge variant="outline" className="text-muted-foreground">
-                    <Clock className="mr-1 h-3 w-3" /> Tomorrow publishes ~16:00
-                  </Badge>
-                ) : null}
+                <div className="flex items-center gap-1.5">
+                  {dayOffset === 0 && tomorrowSlots.length === 0 ? (
+                    <Badge variant="outline" className="text-muted-foreground">
+                      <Clock className="mr-1 h-3 w-3" /> Tomorrow publishes ~16:00
+                    </Badge>
+                  ) : null}
+                  <Button variant="outline" size="icon" className="h-8 w-8"
+                    onClick={() => setDayOffset((d) => d - 1)} aria-label="Previous day">
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <Button variant="outline" size="sm" className="h-8"
+                    onClick={() => setDayOffset(0)} disabled={dayOffset === 0}>
+                    Today
+                  </Button>
+                  <Button variant="outline" size="icon" className="h-8 w-8"
+                    onClick={() => setDayOffset((d) => Math.min(0, d + 1))}
+                    disabled={dayOffset >= 0} aria-label="Next day">
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
               <div className="h-72">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={curveData} margin={{ top: 8, right: 8, bottom: 4, left: -12 }}>
+                  <ComposedChart data={curveData} margin={{ top: 8, right: 0, bottom: 4, left: -12 }}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
                     <XAxis dataKey="name" tick={{ fontSize: 10 }} interval={3} />
-                    <YAxis tick={{ fontSize: 10 }} unit="p" />
+                    <YAxis yAxisId="kwh" orientation="left" tick={{ fontSize: 10 }} width={48}
+                      label={{ value: "kWh", angle: -90, position: "insideLeft", fontSize: 10 }} />
+                    <YAxis yAxisId="price" orientation="right" tick={{ fontSize: 10 }} unit="p" width={48} />
                     <RTooltip
-                      formatter={(v: number) => [`${v.toFixed(2)}p/kWh`, "Price"]}
+                      formatter={(v: number, key: string) =>
+                        key === "kwh"
+                          ? [`${v.toFixed(2)} kWh`, "Typical consumption"]
+                          : [`${v.toFixed(2)}p/kWh`, "Price"]}
                       contentStyle={{ fontSize: 12 }}
                     />
-                    <ReferenceLine y={Number(today.avg.toFixed(2))} stroke="hsl(var(--muted-foreground))" strokeDasharray="4 4" />
-                    <ReferenceLine y={0} stroke="hsl(var(--border))" />
-                    <Bar dataKey="price" radius={[2, 2, 0, 0]}>
+                    <ReferenceLine yAxisId="price" y={Number(viewStats.avg.toFixed(2))}
+                      stroke="hsl(var(--muted-foreground))" strokeDasharray="4 4" />
+                    <ReferenceLine yAxisId="price" y={0} stroke="hsl(var(--border))" />
+                    {showProfile ? (
+                      <Area yAxisId="kwh" dataKey="kwh" type="monotone" connectNulls
+                        stroke="hsl(var(--primary))" strokeWidth={2}
+                        fill="hsl(var(--primary))" fillOpacity={0.12} />
+                    ) : null}
+                    <Bar yAxisId="price" dataKey="price" radius={[2, 2, 0, 0]}>
                       {curveData.map((d, i) => (
-                        <Cell key={i} fill={BAND_FILL[d.band]} opacity={d.start <= slotNow ? 0.55 : 1} />
+                        <Cell key={i} fill={BAND_FILL[d.band]}
+                          opacity={dayOffset === 0 && d.start <= slotNow ? 0.55 : 1} />
                       ))}
                     </Bar>
-                  </BarChart>
+                  </ComposedChart>
                 </ResponsiveContainer>
               </div>
             </CardContent>
@@ -509,27 +540,29 @@ export function AgilePricingApp() {
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <KpiCard
-              label="Cheapest 1 hour today"
-              value={today.cheapest1h ? fmtPence(today.cheapest1h.avgPrice) : "—"}
-              sub={today.cheapest1h ? `${ukTimeLabel(today.cheapest1h.startMs)}–${ukTimeLabel(today.cheapest1h.endMs)}` : undefined}
+              label={`Cheapest 1 hour · ${ukDateLabel(viewStart)}`}
+              value={viewStats.cheapest1h ? fmtPence(viewStats.cheapest1h.avgPrice) : "—"}
+              sub={viewStats.cheapest1h ? `${ukTimeLabel(viewStats.cheapest1h.startMs)}–${ukTimeLabel(viewStats.cheapest1h.endMs)}` : undefined}
               icon={TrendingDown} tone="good"
             />
             <KpiCard
-              label="Cheapest 3 hours today"
-              value={today.cheapest3h ? fmtPence(today.cheapest3h.avgPrice) : "—"}
-              sub={today.cheapest3h ? `${ukTimeLabel(today.cheapest3h.startMs)}–${ukTimeLabel(today.cheapest3h.endMs)}` : undefined}
+              label="Cheapest 3 hours"
+              value={viewStats.cheapest3h ? fmtPence(viewStats.cheapest3h.avgPrice) : "—"}
+              sub={viewStats.cheapest3h ? `${ukTimeLabel(viewStats.cheapest3h.startMs)}–${ukTimeLabel(viewStats.cheapest3h.endMs)}` : undefined}
               icon={Sparkles} tone="good"
             />
             <KpiCard
               label="Peak 3-hour block"
-              value={today.peakBlock ? fmtPence(today.peakBlock.avgPrice) : "—"}
-              sub={today.peakBlock ? `${ukTimeLabel(today.peakBlock.startMs)}–${ukTimeLabel(today.peakBlock.endMs)}` : undefined}
+              value={viewStats.peakBlock ? fmtPence(viewStats.peakBlock.avgPrice) : "—"}
+              sub={viewStats.peakBlock ? `${ukTimeLabel(viewStats.peakBlock.startMs)}–${ukTimeLabel(viewStats.peakBlock.endMs)}` : undefined}
               icon={TrendingUp} tone="bad"
             />
             <KpiCard
-              label="Today average / negative slots"
-              value={fmtPence(today.avg)}
-              sub={`${today.negativeSlots} slot(s) at or below 0p`}
+              label="Day average / typical use"
+              value={fmtPence(viewStats.avg)}
+              sub={showProfile
+                ? `${Math.round(profile.totalKwh).toLocaleString()} kWh typical · ${viewStats.negativeSlots} slot(s) ≤ 0p`
+                : `${viewStats.negativeSlots} slot(s) at or below 0p`}
               icon={Gauge}
             />
           </div>
