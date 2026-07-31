@@ -384,14 +384,13 @@ function AppCard({ app, allowed, kpi }: { app: MiniApp; allowed: boolean; kpi?: 
             <Icon className="h-5 w-5 text-primary" />
           </div>
           {allowed ? (
-            <div className="flex items-start gap-2">
+            <div className="flex flex-col items-end text-right">
               {kpi ? (
-                <div className="rounded-lg bg-background/80 px-2.5 py-1 text-right ring-1 ring-border">
-                  <div className="text-sm font-semibold leading-tight tracking-tight">{kpi.value}</div>
-                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{kpi.label}</div>
+                <div className="leading-none">
+                  <div className="text-2xl font-semibold tracking-tight text-foreground">{kpi.value}</div>
+                  <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{kpi.label}</div>
                 </div>
               ) : null}
-              <ArrowUpRight className="mt-1 h-5 w-5 text-muted-foreground transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-primary" />
             </div>
           ) : (
             <div className="flex items-center gap-1 rounded-full bg-background/90 px-2 py-1 text-[10px] font-medium text-muted-foreground ring-1 ring-border">
