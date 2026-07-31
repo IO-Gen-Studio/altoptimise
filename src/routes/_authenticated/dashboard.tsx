@@ -66,7 +66,7 @@ function LauncherHome() {
   const { orderedApps } = useAppOrder();
   const { consumption } = useConsumption();
   const { organisations } = useOrganisations();
-  const buildings = useBuildings(org.id);
+  const { buildings } = useBuildings(org.id);
 
   const stats = useMemo(() => computeOrgStats(consumption, organisations, org.id), [consumption, organisations, org.id]);
   const kpis = useMemo(
@@ -287,7 +287,81 @@ function StatCard({
   );
 }
 
-function AppCard({ app, allowed }: { app: MiniApp; allowed: boolean }) {
+interface AppKpi { value: string; label: string }
+
+function computeAppKpis(
+  consumption: Array<import("@/lib/data-store").ConsumptionRow>,
+  orgId: string,
+  siteCount: number,
+  stats: OrgStats,
+): Record<string, AppKpi> {
+  const rows = consumption.filter((r) => r.organization_id === orgId);
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const iso = (d: number) => {
+    const dt = new Date(today);
+    dt.setUTCDate(dt.getUTCDate() - d);
+    return dt.toISOString().slice(0, 10);
+  };
+  const from30 = iso(30);
+  const from7 = iso(7);
+
+  let overnightSum = 0;
+  let overnightSlots = 0;
+  let elec7 = 0;
+  const elec7Days = new Set<string>();
+  let waterNight = 0;
+  const waterNights = new Set<string>();
+
+  for (const r of rows) {
+    const util = classifyUtility(r.variable_category);
+    if (r.interval_date >= from30) {
+      if (util === "electricity") {
+        for (let i = 0; i < 10; i++) {
+          const v = r.half_hourly_values[i];
+          if (v != null) { overnightSum += Number(v); overnightSlots++; }
+        }
+      }
+      if (util === "water") {
+        let night = 0;
+        let any = false;
+        for (const i of [46, 47, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]) {
+          const v = r.half_hourly_values[i];
+          if (v != null) { night += Number(v); any = true; }
+        }
+        if (any) { waterNight += night; waterNights.add(r.interval_date); }
+      }
+    }
+    if (r.interval_date >= from7 && util === "electricity") {
+      elec7 += rowTotal(r);
+      elec7Days.add(r.interval_date);
+    }
+  }
+
+  const baseloadKw = overnightSlots ? (overnightSum / overnightSlots) * 2 : 0;
+  const elecPerDay = elec7Days.size ? elec7 / elec7Days.size : 0;
+  const waterPerNight = waterNights.size ? waterNight / waterNights.size : 0;
+
+  return {
+    baseload: {
+      value: baseloadKw ? `${baseloadKw.toLocaleString(undefined, { maximumFractionDigits: baseloadKw < 10 ? 1 : 0 })} kW` : "—",
+      label: "Avg baseload",
+    },
+    "data-validation": { value: stats.coverage.value, label: "Coverage" },
+    sustainability: { value: stats.carbon.value, label: "YTD carbon" },
+    "league-table": { value: `${siteCount}`, label: siteCount === 1 ? "Site ranked" : "Sites ranked" },
+    "water-sentinel": {
+      value: waterPerNight ? `${waterPerNight.toFixed(2)} m³` : "—",
+      label: "Overnight/night",
+    },
+    "agile-pricing": {
+      value: elecPerDay ? formatEnergy(elecPerDay) : "—",
+      label: "Elec / day",
+    },
+  };
+}
+
+function AppCard({ app, allowed, kpi }: { app: MiniApp; allowed: boolean; kpi?: AppKpi }) {
   const Icon = ICONS[app.icon];
   const inner = (
     <Card
@@ -310,7 +384,15 @@ function AppCard({ app, allowed }: { app: MiniApp; allowed: boolean }) {
             <Icon className="h-5 w-5 text-primary" />
           </div>
           {allowed ? (
-            <ArrowUpRight className="h-5 w-5 text-muted-foreground transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-primary" />
+            <div className="flex items-start gap-2">
+              {kpi ? (
+                <div className="rounded-lg bg-background/80 px-2.5 py-1 text-right ring-1 ring-border">
+                  <div className="text-sm font-semibold leading-tight tracking-tight">{kpi.value}</div>
+                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{kpi.label}</div>
+                </div>
+              ) : null}
+              <ArrowUpRight className="mt-1 h-5 w-5 text-muted-foreground transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-primary" />
+            </div>
           ) : (
             <div className="flex items-center gap-1 rounded-full bg-background/90 px-2 py-1 text-[10px] font-medium text-muted-foreground ring-1 ring-border">
               <Lock className="h-3 w-3" /> Restricted
