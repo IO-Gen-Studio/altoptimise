@@ -351,7 +351,7 @@ function computeAppKpis(
     sustainability: { value: stats.carbon.value, label: "YTD carbon" },
     "league-table": { value: `${siteCount}`, label: siteCount === 1 ? "Site ranked" : "Sites ranked" },
     "water-sentinel": {
-      value: waterPerNight ? `${waterPerNight.toFixed(2)} m³` : "—",
+      value: waterPerNight ? `${waterPerNight.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m³` : "—",
       label: "Overnight/night",
     },
     "agile-pricing": {
