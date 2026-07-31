@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils";
 import { APPS, canAccess, ROLE_LABEL, useLauncher, type MiniApp } from "@/lib/launcher-context";
 import { useAppOrder } from "@/lib/app-order";
 import { useMemo } from "react";
-import { useConsumption, useOrganisations } from "@/lib/data-store";
+import { useBuildings, useConsumption, useOrganisations } from "@/lib/data-store";
 import {
   classifyUtility,
   presetRange,
@@ -66,8 +66,13 @@ function LauncherHome() {
   const { orderedApps } = useAppOrder();
   const { consumption } = useConsumption();
   const { organisations } = useOrganisations();
+  const buildings = useBuildings(org.id);
 
   const stats = useMemo(() => computeOrgStats(consumption, organisations, org.id), [consumption, organisations, org.id]);
+  const kpis = useMemo(
+    () => computeAppKpis(consumption, org.id, buildings.length, stats),
+    [consumption, org.id, buildings.length, stats],
+  );
 
   return (
     <AppShell>
@@ -127,7 +132,12 @@ function LauncherHome() {
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {orderedApps.map((app) => (
-            <AppCard key={app.id} app={app} allowed={canAccess(app, persona.role, appAccess)} />
+            <AppCard
+              key={app.id}
+              app={app}
+              allowed={canAccess(app, persona.role, appAccess)}
+              kpi={kpis[app.slug]}
+            />
           ))}
         </div>
       </div>
