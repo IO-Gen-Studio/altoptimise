@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import {
-  AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, Download, Leaf, Moon, PoundSterling, Sun, Zap,
+  AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, Download, Gauge, Leaf, Moon, PoundSterling, Sun, Zap,
 } from "lucide-react";
 import {
   Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip as RTooltip, XAxis, YAxis,
@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import type { NeutralHomeBundle } from "@/lib/neutral-home.functions";
 import {
@@ -55,6 +56,7 @@ export function NeutralHomeDashboard({ bundle }: { bundle: NeutralHomeBundle }) 
   const [shiftPct, setShiftPct] = useState(10);
   const [manualDay, setManualDay] = useState("");
   const [manualNight, setManualNight] = useState("");
+  const [showAggregates, setShowAggregates] = useState(true);
 
   const period = sitePeriods.find((p) => p.id === periodId) ?? sitePeriods[0];
   const comparePeriod =
@@ -82,7 +84,7 @@ export function NeutralHomeDashboard({ bundle }: { bundle: NeutralHomeBundle }) 
 
   const categories = useMemo(() => {
     const set = new Set<CircuitCategory>();
-    for (const c of detailCircuits(circuits)) set.add(c.category);
+    for (const c of circuits) set.add(c.category);
     return Array.from(set).sort();
   }, [circuits]);
 
@@ -101,16 +103,18 @@ export function NeutralHomeDashboard({ bundle }: { bundle: NeutralHomeBundle }) 
   );
 
   const leaderboard = useMemo(() => {
+    const base = showAggregates ? circuits : detailCircuits(circuits);
+    const rows = category === "all" ? base : base.filter((c) => c.category === category);
     const dir = sortDir === "asc" ? 1 : -1;
     const text = (c: CircuitRecord) =>
       sortKey === "category" ? CATEGORY_LABEL[c.category] : c.circuit_name;
     const val = (c: CircuitRecord) => (sortKey === "night" ? nightShareOf(c) : Number(c[sortKey as keyof CircuitRecord] ?? 0));
-    return [...filtered].sort((a, b) =>
+    return [...rows].sort((a, b) =>
       sortKey === "circuit_name" || sortKey === "category"
         ? text(a).localeCompare(text(b)) * dir
         : (val(a) - val(b)) * dir,
     );
-  }, [filtered, sortKey, sortDir]);
+  }, [circuits, category, showAggregates, sortKey, sortDir]);
 
   const toggleSort = (key: SortKey) => {
     if (key === sortKey) {
@@ -207,7 +211,9 @@ export function NeutralHomeDashboard({ bundle }: { bundle: NeutralHomeBundle }) 
         </Card>
       ) : (
         <>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <Kpi label="Meters imported" value={num(circuits.length)} icon={Gauge}
+              sub={`${circuits.filter((c) => !c.is_aggregate).length} sub-circuits · ${circuits.filter((c) => c.is_aggregate).length} totals/incomers`} />
             <Kpi label="Total consumption" value={`${num(kpis.totalKwh)} kWh`} icon={Zap}
               badge={variancePct(variance, "Total consumption")} />
             <Card className="border-border/60">
@@ -377,8 +383,14 @@ export function NeutralHomeDashboard({ bundle }: { bundle: NeutralHomeBundle }) 
                 <div>
                   <h2 className="text-base font-semibold tracking-tight">Intensity & efficiency leaderboard</h2>
                   <p className="text-sm text-muted-foreground">
-                    Aggregate/incomer rows are excluded. Click any column header to sort.
+                    {showAggregates
+                      ? "Showing every imported meter, including totals, incomers and inverters."
+                      : "Totals, incomers and inverters are hidden."} Click any column header to sort.
                   </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Switch id="nh-aggs" checked={showAggregates} onCheckedChange={setShowAggregates} />
+                  <Label htmlFor="nh-aggs" className="text-xs">Include totals & incomers</Label>
                 </div>
                 <Select value={sortKey} onValueChange={(v) => toggleSort(v as SortKey)}>
                   <SelectTrigger className="w-52"><SelectValue /></SelectTrigger>
@@ -413,7 +425,12 @@ export function NeutralHomeDashboard({ bundle }: { bundle: NeutralHomeBundle }) 
                       const nightShare = nightShareOf(c);
                       return (
                         <tr key={c.id} className="border-t">
-                          <td className="py-2 pr-3">{c.circuit_name}</td>
+                          <td className="py-2 pr-3">
+                            {c.circuit_name}
+                            {c.is_aggregate ? (
+                              <Badge variant="outline" className="ml-2 text-[10px]">total</Badge>
+                            ) : null}
+                          </td>
                           <td className="py-2 text-xs text-muted-foreground">{CATEGORY_LABEL[c.category]}</td>
                           <td className="py-2 text-right">{num(c.usage_kwh ?? 0, 1)}</td>
                           <td className="py-2 text-right">{c.usage_kwh_per_m2 == null ? "—" : num(c.usage_kwh_per_m2, 2)}</td>
