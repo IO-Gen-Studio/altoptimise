@@ -37,7 +37,7 @@ export function NeutralHomeApp() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Neutral Home</h1>
         <p className="text-sm text-muted-foreground">
-          Executive energy, carbon, cost and day/night analytics built from your Envisij exports.
+          Reporting for Excel Utilities
         </p>
       </div>
 
