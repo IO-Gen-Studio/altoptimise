@@ -322,11 +322,14 @@ function UploadDrawer({
   const [busy, setBusy] = useState(false);
 
   const analyse = async () => {
-    if (!headline || !daynight) { toast.error("Both reports are required"); return; }
+    if (!headline) { toast.error("The Headline Usage Report is required"); return; }
     setBusy(true);
     const t = toast.loading("Parsing reports…");
     try {
-      const [h, d] = await Promise.all([parseHeadlineReport(headline), parseDayNightReport(daynight)]);
+      const [h, d] = await Promise.all([
+        parseHeadlineReport(headline),
+        daynight ? parseDayNightReport(daynight) : Promise.resolve(null),
+      ]);
       const merged = mergeReports(h, d);
       setResult(merged);
       setLabel(merged.range?.label ?? "");
