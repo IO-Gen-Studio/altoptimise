@@ -11,6 +11,7 @@ import { DataValidationApp } from "@/components/launcher/apps/DataValidationApp"
 import { LeagueTableApp } from "@/components/launcher/apps/LeagueTableApp";
 import { WaterSentinelApp } from "@/components/launcher/apps/WaterSentinelApp";
 import { AgilePricingApp } from "@/components/launcher/apps/AgilePricingApp";
+import { NeutralHomeApp } from "@/components/launcher/apps/NeutralHomeApp";
 
 export const Route = createFileRoute("/_authenticated/apps/$slug")({
   loader: ({ params }) => {
@@ -69,6 +70,8 @@ function AppView() {
           <WaterSentinelApp />
         ) : app.slug === "agile-pricing" ? (
           <AgilePricingApp />
+        ) : app.slug === "neutral-home" ? (
+          <NeutralHomeApp />
         ) : (
           <Card>
             <CardContent className="p-8 text-sm text-muted-foreground">

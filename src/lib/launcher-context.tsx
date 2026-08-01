@@ -104,7 +104,7 @@ export interface MiniApp {
   tagline: string;
   description: string;
   category: string;
-  icon: "baseload" | "sustainability" | "completeness" | "league" | "water" | "pricing";
+  icon: "baseload" | "sustainability" | "completeness" | "league" | "water" | "pricing" | "neutral";
   allowedRoles: Role[];
   accent: string;
 }
@@ -181,6 +181,18 @@ export const APPS: MiniApp[] = [
     icon: "pricing",
     allowedRoles: ["super_admin", "admin", "user"],
     accent: "from-amber-500/15 to-yellow-500/10",
+  },
+  {
+    id: "neutral-home",
+    slug: "neutral-home",
+    name: "Neutral Home",
+    tagline: "Executive Envisij energy, cost & carbon dashboard",
+    description:
+      "Ingests Envisij headline usage and day/night group exports per site, then reports consumption, cost, carbon, day/night waste and intensity leaderboards with period-on-period comparison.",
+    category: "Executive",
+    icon: "neutral",
+    allowedRoles: ["super_admin", "admin", "user"],
+    accent: "from-slate-500/15 to-emerald-500/10",
   },
 ];
 
