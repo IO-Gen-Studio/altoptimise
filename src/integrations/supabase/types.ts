@@ -381,6 +381,203 @@ export type Database = {
           },
         ]
       }
+      neutral_home_circuits: {
+        Row: {
+          blended_p_kwh: number | null
+          category: string
+          circuit_name: string
+          co2_kg: number | null
+          co2_kg_per_m2: number | null
+          co2_kg_per_person: number | null
+          cost_p_per_m2: number | null
+          cost_p_per_person: number | null
+          created_at: string
+          day_kwh: number | null
+          day_p_kwh: number | null
+          day_pct: number | null
+          daynight_total_kwh: number | null
+          id: string
+          is_aggregate: boolean
+          night_kwh: number | null
+          night_p_kwh: number | null
+          night_pct: number | null
+          organization_id: string
+          period_id: string
+          total_cost_p: number | null
+          usage_kwh: number | null
+          usage_kwh_per_m2: number | null
+          usage_kwh_per_person: number | null
+        }
+        Insert: {
+          blended_p_kwh?: number | null
+          category?: string
+          circuit_name: string
+          co2_kg?: number | null
+          co2_kg_per_m2?: number | null
+          co2_kg_per_person?: number | null
+          cost_p_per_m2?: number | null
+          cost_p_per_person?: number | null
+          created_at?: string
+          day_kwh?: number | null
+          day_p_kwh?: number | null
+          day_pct?: number | null
+          daynight_total_kwh?: number | null
+          id?: string
+          is_aggregate?: boolean
+          night_kwh?: number | null
+          night_p_kwh?: number | null
+          night_pct?: number | null
+          organization_id: string
+          period_id: string
+          total_cost_p?: number | null
+          usage_kwh?: number | null
+          usage_kwh_per_m2?: number | null
+          usage_kwh_per_person?: number | null
+        }
+        Update: {
+          blended_p_kwh?: number | null
+          category?: string
+          circuit_name?: string
+          co2_kg?: number | null
+          co2_kg_per_m2?: number | null
+          co2_kg_per_person?: number | null
+          cost_p_per_m2?: number | null
+          cost_p_per_person?: number | null
+          created_at?: string
+          day_kwh?: number | null
+          day_p_kwh?: number | null
+          day_pct?: number | null
+          daynight_total_kwh?: number | null
+          id?: string
+          is_aggregate?: boolean
+          night_kwh?: number | null
+          night_p_kwh?: number | null
+          night_pct?: number | null
+          organization_id?: string
+          period_id?: string
+          total_cost_p?: number | null
+          usage_kwh?: number | null
+          usage_kwh_per_m2?: number | null
+          usage_kwh_per_person?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "neutral_home_circuits_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "neutral_home_circuits_period_id_fkey"
+            columns: ["period_id"]
+            isOneToOne: false
+            referencedRelation: "neutral_home_periods"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      neutral_home_periods: {
+        Row: {
+          created_at: string
+          id: string
+          label: string
+          organization_id: string
+          period_end: string
+          period_start: string
+          site_id: string
+          source_daynight_filename: string | null
+          source_headline_filename: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          label: string
+          organization_id: string
+          period_end: string
+          period_start: string
+          site_id: string
+          source_daynight_filename?: string | null
+          source_headline_filename?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          label?: string
+          organization_id?: string
+          period_end?: string
+          period_start?: string
+          site_id?: string
+          source_daynight_filename?: string | null
+          source_headline_filename?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "neutral_home_periods_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "neutral_home_periods_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "neutral_home_sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      neutral_home_sites: {
+        Row: {
+          address: string | null
+          created_at: string
+          floor_area_m2: number | null
+          id: string
+          name: string
+          notes: string | null
+          occupancy: number | null
+          organization_id: string
+          postcode: string | null
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          created_at?: string
+          floor_area_m2?: number | null
+          id?: string
+          name: string
+          notes?: string | null
+          occupancy?: number | null
+          organization_id: string
+          postcode?: string | null
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          created_at?: string
+          floor_area_m2?: number | null
+          id?: string
+          name?: string
+          notes?: string | null
+          occupancy?: number | null
+          organization_id?: string
+          postcode?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "neutral_home_sites_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organisations: {
         Row: {
           active_days: number[]

@@ -8,6 +8,7 @@ import {
   Lock,
   ShieldCheck,
   Sparkles,
+  Building2,
   TrendingDown,
   TrendingUp,
   Trophy,
@@ -21,7 +22,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { APPS, canAccess, ROLE_LABEL, useLauncher, type MiniApp } from "@/lib/launcher-context";
 import { useAppOrder } from "@/lib/app-order";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { loadNeutralHome } from "@/lib/neutral-home.functions";
+import { computeKpis } from "@/lib/neutral-home/analytics";
 import { useBuildings, useConsumption, useOrganisations } from "@/lib/data-store";
 import {
   classifyUtility,
@@ -59,6 +62,7 @@ const ICONS = {
   league: Trophy,
   water: Droplet,
   pricing: Zap,
+  neutral: Building2,
 };
 
 function LauncherHome() {
@@ -69,9 +73,25 @@ function LauncherHome() {
   const { buildings } = useBuildings(org.id);
 
   const stats = useMemo(() => computeOrgStats(consumption, organisations, org.id), [consumption, organisations, org.id]);
+  const [neutralKwh, setNeutralKwh] = useState<number | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!org.id || org.id === "none") { setNeutralKwh(null); return; }
+    loadNeutralHome({ data: { orgId: org.id } })
+      .then((b) => {
+        if (cancelled) return;
+        const latest = b.periods[0];
+        if (!latest) { setNeutralKwh(null); return; }
+        setNeutralKwh(computeKpis(b.circuits.filter((c) => c.period_id === latest.id)).totalKwh);
+      })
+      .catch(() => { if (!cancelled) setNeutralKwh(null); });
+    return () => { cancelled = true; };
+  }, [org.id]);
+
   const kpis = useMemo(
-    () => computeAppKpis(consumption, org.id, buildings.length, stats),
-    [consumption, org.id, buildings.length, stats],
+    () => computeAppKpis(consumption, org.id, buildings.length, stats, neutralKwh),
+    [consumption, org.id, buildings.length, stats, neutralKwh],
   );
 
   return (
@@ -294,6 +314,7 @@ function computeAppKpis(
   orgId: string,
   siteCount: number,
   stats: OrgStats,
+  neutralKwh: number | null,
 ): Record<string, AppKpi> {
   const rows = consumption.filter((r) => r.organization_id === orgId);
   const today = new Date();
@@ -357,6 +378,10 @@ function computeAppKpis(
     "agile-pricing": {
       value: elecPerDay ? formatEnergy(elecPerDay) : "—",
       label: "Elec / day",
+    },
+    "neutral-home": {
+      value: neutralKwh ? formatEnergy(neutralKwh) : "—",
+      label: "Latest period",
     },
   };
 }

@@ -4,13 +4,14 @@ A new mini-app in the launcher with two tabs: **Dashboard** and **Settings**. An
 
 ## Settings tab
 
-1. **Sites** — create/edit/delete Neutral Home sites (name, optional notes, floor area m² and occupancy stored for reference only). Sites are scoped to the currently selected organisation.
+1. **Sites** — create/edit/delete Neutral Home sites (name, optional notes, floor area m² and occupancy stored for reference only). Sites are scoped to the currently selected organisation. - include a field for address & postcode. Later on I want to use postcode for HDD
 2. **Upload drawer (per site)** — a dual drag-and-drop zone taking both Envisij exports at once (.xlsx or .csv):
-   - Slot 1: Headline Usage Report
-   - Slot 2: Day/Night Group Overview Report
+  - Slot 1: Headline Usage Report - allow for multiple upload. Option for fully replaced uploaded file or merged with existing.
+  - Slot 2: Day/Night Group Overview Report - - allow for multiple upload. Option for fully replaced uploaded file or merged with existing.
 3. **Stored periods** — list of everything ingested for the site (label, date range, circuit count, uploaded at), with delete and re-upload.
 
 ### Parsing rules
+
 - Metadata rows above the header row are skipped automatically by scanning for the header row (`Project Groups` / `Date/Time`), so the differing row offsets between the two reports are handled.
 - Date range is read from the header strings (`From: 1st July, 2026 00:00:00`, `Selected Date Range from:`) and normalised into a period start/end. The period label is derived from it (e.g. "Jul 2026").
 - Join key is column A (circuit/group name), trimmed and case-insensitive.
@@ -28,6 +29,7 @@ Filters across the top: Site, Period, comparison Period, and circuit category.
 **B. Period comparison engine** — pick any two stored periods for the site. Cards plus a table showing % variance in total kWh, day/night ratio shift, cost and CO₂, colour-coded green for reductions and red for increases.
 
 **C. Day/Night load & waste analyzer**
+
 - Stacked horizontal bars of Day vs Night kWh per circuit, sorted by total.
 - Circuits with night share above 20% are flagged, with stronger emphasis on non-essential categories (offices, HVAC, storage heaters, storage/retail).
 - Tariff shift simulator: slider (0–20%) moving Day usage to the Night rate, showing modelled £ saving using the period's Day and Night p/kWh. Where the file carries no Day/Night rates, the app says so and lets you enter rates manually for the simulation.
