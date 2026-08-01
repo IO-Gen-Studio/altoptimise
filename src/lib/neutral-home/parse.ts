@@ -454,7 +454,7 @@ export function mergeReports(
   return {
     circuits,
     range,
-    projectName: headline.projectName ?? daynight.projectName,
+    projectName: headline.projectName ?? daynight?.projectName ?? null,
     validation: {
       errors,
       warnings,
