@@ -381,7 +381,7 @@ export function NeutralHomeDashboard({ bundle }: { bundle: NeutralHomeBundle }) 
             <CardContent className="p-5">
               <div className="flex flex-wrap items-center justify-between gap-3 pb-4">
                 <div>
-                  <h2 className="text-base font-semibold tracking-tight">Intensity & efficiency leaderboard</h2>
+                  <h2 className="text-base font-semibold tracking-tight">Efficiency Legue Table</h2>
                   <p className="text-sm text-muted-foreground">
                     {showAggregates
                       ? "Showing every imported meter, including totals, incomers and inverters."
