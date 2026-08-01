@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import {
-  AlertTriangle, ArrowDown, ArrowUp, Download, Leaf, Moon, PoundSterling, Sun, Zap,
+  AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, Download, Leaf, Moon, PoundSterling, Sun, Zap,
 } from "lucide-react";
 import {
   Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip as RTooltip, XAxis, YAxis,
@@ -480,18 +480,6 @@ function SortTh({
       </button>
     </th>
   );
-}
-
-function unusedVariancePct(
-  rows: ReturnType<typeof compareKpis>,
-  metric: string,
-): { text: string; good: boolean } | null {
-  const row = rows.find((r) => r.metric === metric);
-  if (!row || row.pct == null || row.previous === 0) return null;
-  return {
-    text: `${row.pct >= 0 ? "+" : ""}${row.pct.toFixed(1)}%`,
-    good: row.lowerIsBetter ? row.delta <= 0 : row.delta >= 0,
-  };
 }
 
 function Kpi({
