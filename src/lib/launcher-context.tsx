@@ -186,7 +186,7 @@ export const APPS: MiniApp[] = [
     id: "neutral-home",
     slug: "neutral-home",
     name: "Neutral Home",
-    tagline: "Executive Envisij energy, cost & carbon dashboard",
+    tagline: "Reporting for Excel Utilities",
     description:
       "Ingests Envisij headline usage and day/night group exports per site, then reports consumption, cost, carbon, day/night waste and intensity leaderboards with period-on-period comparison.",
     category: "Executive",
