@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import {
-  AlertTriangle, ArrowDown, ArrowUp, Download, Leaf, Moon, PoundSterling, Sun, Zap,
+  AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, Download, Leaf, Moon, PoundSterling, Sun, Zap,
 } from "lucide-react";
 import {
   Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip as RTooltip, XAxis, YAxis,
@@ -21,7 +21,22 @@ import {
 } from "@/lib/neutral-home/analytics";
 import { CATEGORY_LABEL, type CircuitCategory } from "@/lib/neutral-home/parse";
 
-type SortKey = "usage_kwh" | "usage_kwh_per_m2" | "cost_p_per_m2" | "co2_kg_per_m2" | "night";
+type SortKey =
+  | "circuit_name"
+  | "category"
+  | "usage_kwh"
+  | "usage_kwh_per_m2"
+  | "cost_p_per_m2"
+  | "co2_kg_per_m2"
+  | "total_cost_p"
+  | "night";
+
+type SortDir = "asc" | "desc";
+
+const nightShareOf = (c: CircuitRecord) => {
+  const t = (c.day_kwh ?? 0) + (c.night_kwh ?? 0);
+  return t > 0 ? ((c.night_kwh ?? 0) / t) * 100 : 0;
+};
 
 const num = (v: number, dp = 0) =>
   v.toLocaleString(undefined, { minimumFractionDigits: dp, maximumFractionDigits: dp });
@@ -36,6 +51,7 @@ export function NeutralHomeDashboard({ bundle }: { bundle: NeutralHomeBundle }) 
   const [comparePeriodId, setComparePeriodId] = useState<string>("");
   const [category, setCategory] = useState<string>("all");
   const [sortKey, setSortKey] = useState<SortKey>("usage_kwh");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [shiftPct, setShiftPct] = useState(10);
   const [manualDay, setManualDay] = useState("");
   const [manualNight, setManualNight] = useState("");
@@ -85,15 +101,25 @@ export function NeutralHomeDashboard({ bundle }: { bundle: NeutralHomeBundle }) 
   );
 
   const leaderboard = useMemo(() => {
-    const val = (c: CircuitRecord) => {
-      if (sortKey === "night") {
-        const t = (c.day_kwh ?? 0) + (c.night_kwh ?? 0);
-        return t > 0 ? ((c.night_kwh ?? 0) / t) * 100 : 0;
-      }
-      return c[sortKey] ?? 0;
-    };
-    return [...filtered].sort((a, b) => Number(val(b)) - Number(val(a)));
-  }, [filtered, sortKey]);
+    const dir = sortDir === "asc" ? 1 : -1;
+    const text = (c: CircuitRecord) =>
+      sortKey === "category" ? CATEGORY_LABEL[c.category] : c.circuit_name;
+    const val = (c: CircuitRecord) => (sortKey === "night" ? nightShareOf(c) : Number(c[sortKey as keyof CircuitRecord] ?? 0));
+    return [...filtered].sort((a, b) =>
+      sortKey === "circuit_name" || sortKey === "category"
+        ? text(a).localeCompare(text(b)) * dir
+        : (val(a) - val(b)) * dir,
+    );
+  }, [filtered, sortKey, sortDir]);
+
+  const toggleSort = (key: SortKey) => {
+    if (key === sortKey) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir(key === "circuit_name" || key === "category" ? "asc" : "desc");
+    }
+  };
 
   const dayRate = kpis.dayRate ?? (manualDay ? Number(manualDay) : null);
   const nightRate = kpis.nightRate ?? (manualNight ? Number(manualNight) : null);
@@ -350,15 +376,20 @@ export function NeutralHomeDashboard({ bundle }: { bundle: NeutralHomeBundle }) 
               <div className="flex flex-wrap items-center justify-between gap-3 pb-4">
                 <div>
                   <h2 className="text-base font-semibold tracking-tight">Intensity & efficiency leaderboard</h2>
-                  <p className="text-sm text-muted-foreground">Aggregate/incomer rows are excluded.</p>
+                  <p className="text-sm text-muted-foreground">
+                    Aggregate/incomer rows are excluded. Click any column header to sort.
+                  </p>
                 </div>
-                <Select value={sortKey} onValueChange={(v) => setSortKey(v as SortKey)}>
+                <Select value={sortKey} onValueChange={(v) => toggleSort(v as SortKey)}>
                   <SelectTrigger className="w-52"><SelectValue /></SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="circuit_name">Circuit name</SelectItem>
+                    <SelectItem value="category">Category</SelectItem>
                     <SelectItem value="usage_kwh">Usage (kWh)</SelectItem>
                     <SelectItem value="usage_kwh_per_m2">Usage (kWh/m²)</SelectItem>
                     <SelectItem value="cost_p_per_m2">Cost (p/m²)</SelectItem>
                     <SelectItem value="co2_kg_per_m2">CO₂ (kg/m²)</SelectItem>
+                    <SelectItem value="total_cost_p">Cost (£)</SelectItem>
                     <SelectItem value="night">Night share</SelectItem>
                   </SelectContent>
                 </Select>
@@ -367,20 +398,19 @@ export function NeutralHomeDashboard({ bundle }: { bundle: NeutralHomeBundle }) 
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="text-left text-xs text-muted-foreground">
-                      <th className="py-2 font-medium">Circuit</th>
-                      <th className="py-2 font-medium">Category</th>
-                      <th className="py-2 text-right font-medium">kWh</th>
-                      <th className="py-2 text-right font-medium">kWh/m²</th>
-                      <th className="py-2 text-right font-medium">p/m²</th>
-                      <th className="py-2 text-right font-medium">kg/m²</th>
-                      <th className="py-2 text-right font-medium">Cost £</th>
-                      <th className="py-2 text-right font-medium">Night %</th>
+                      <SortTh label="Circuit" col="circuit_name" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} align="left" />
+                      <SortTh label="Category" col="category" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} align="left" />
+                      <SortTh label="kWh" col="usage_kwh" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                      <SortTh label="kWh/m²" col="usage_kwh_per_m2" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                      <SortTh label="p/m²" col="cost_p_per_m2" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                      <SortTh label="kg/m²" col="co2_kg_per_m2" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                      <SortTh label="Cost £" col="total_cost_p" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                      <SortTh label="Night %" col="night" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                     </tr>
                   </thead>
                   <tbody>
                     {leaderboard.map((c) => {
-                      const t = (c.day_kwh ?? 0) + (c.night_kwh ?? 0);
-                      const nightShare = t > 0 ? ((c.night_kwh ?? 0) / t) * 100 : 0;
+                      const nightShare = nightShareOf(c);
                       return (
                         <tr key={c.id} className="border-t">
                           <td className="py-2 pr-3">{c.circuit_name}</td>
@@ -417,6 +447,39 @@ function variancePct(
     text: `${row.pct >= 0 ? "+" : ""}${row.pct.toFixed(1)}%`,
     good: row.lowerIsBetter ? row.delta <= 0 : row.delta >= 0,
   };
+}
+
+function SortTh({
+  label, col, sortKey, sortDir, onSort, align = "right",
+}: {
+  label: string;
+  col: SortKey;
+  sortKey: SortKey;
+  sortDir: SortDir;
+  onSort: (k: SortKey) => void;
+  align?: "left" | "right";
+}) {
+  const active = sortKey === col;
+  return (
+    <th className={cn("py-2 font-medium", align === "right" ? "text-right" : "text-left")}>
+      <button
+        type="button"
+        onClick={() => onSort(col)}
+        className={cn(
+          "inline-flex items-center gap-1 hover:text-foreground",
+          align === "right" ? "justify-end" : "",
+          active ? "text-foreground" : "",
+        )}
+      >
+        {label}
+        {active ? (
+          sortDir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+        ) : (
+          <ArrowUpDown className="h-3 w-3 opacity-40" />
+        )}
+      </button>
+    </th>
+  );
 }
 
 function Kpi({

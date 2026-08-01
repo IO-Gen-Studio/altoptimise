@@ -378,23 +378,28 @@ export interface MergeResult {
 
 export function mergeReports(
   headline: ParsedReport<HeadlineRow>,
-  daynight: ParsedReport<DayNightRow>,
+  daynight: ParsedReport<DayNightRow> | null,
 ): MergeResult {
   const errors: string[] = [];
   const warnings: string[] = [];
 
   if (!headline.rows.length) errors.push("Headline Usage Report has no data rows.");
-  if (!daynight.rows.length) errors.push("Day/Night Group Overview Report has no data rows.");
   if (headline.missingColumns.length)
     errors.push(`Headline report is missing columns: ${headline.missingColumns.join(", ")}.`);
-  if (daynight.missingColumns.length)
-    errors.push(`Day/Night report is missing columns: ${daynight.missingColumns.join(", ")}.`);
+  if (!daynight) {
+    warnings.push("No Day/Night report supplied — circuits are saved without a day/night split.");
+  } else {
+    if (!daynight.rows.length)
+      warnings.push("Day/Night Group Overview Report has no data rows — day/night values are left blank.");
+    if (daynight.missingColumns.length)
+      warnings.push(`Day/Night report is missing columns: ${daynight.missingColumns.join(", ")}.`);
+  }
 
-  const range = headline.range ?? daynight.range;
+  const range = headline.range ?? daynight?.range ?? null;
   if (!range) errors.push("Could not read the reporting date range from either file header.");
   if (
     headline.range &&
-    daynight.range &&
+    daynight?.range &&
     (headline.range.startISO !== daynight.range.startISO ||
       headline.range.endISO !== daynight.range.endISO)
   ) {
@@ -404,21 +409,25 @@ export function mergeReports(
   }
 
   const dnMap = new Map<string, DayNightRow>();
-  for (const r of daynight.rows) dnMap.set(keyOf(r.name), r);
+  for (const r of daynight?.rows ?? []) dnMap.set(keyOf(r.name), r);
   const hlKeys = new Set(headline.rows.map((r) => keyOf(r.name)));
 
   const onlyInHeadline = headline.rows
     .filter((r) => !dnMap.has(keyOf(r.name)))
     .map((r) => r.name);
-  const onlyInDayNight = daynight.rows.filter((r) => !hlKeys.has(keyOf(r.name))).map((r) => r.name);
+  const onlyInDayNight = (daynight?.rows ?? [])
+    .filter((r) => !hlKeys.has(keyOf(r.name)))
+    .map((r) => r.name);
 
-  if (headline.rows.length !== daynight.rows.length) {
+  if (daynight && headline.rows.length !== daynight.rows.length) {
     warnings.push(
       `Meter counts differ: ${headline.rows.length} rows in the headline report vs ${daynight.rows.length} in the day/night report.`,
     );
   }
-  if (onlyInHeadline.length)
-    warnings.push(`${onlyInHeadline.length} circuit(s) have no day/night data and will show as day-only unknown.`);
+  if (daynight && onlyInHeadline.length)
+    warnings.push(
+      `${onlyInHeadline.length} circuit(s) are missing from the day/night report — they are still imported, without a day/night split.`,
+    );
   if (onlyInDayNight.length)
     warnings.push(`${onlyInDayNight.length} circuit(s) appear only in the day/night report and were skipped.`);
 
@@ -445,12 +454,12 @@ export function mergeReports(
   return {
     circuits,
     range,
-    projectName: headline.projectName ?? daynight.projectName,
+    projectName: headline.projectName ?? daynight?.projectName ?? null,
     validation: {
       errors,
       warnings,
       headlineCount: headline.rows.length,
-      daynightCount: daynight.rows.length,
+      daynightCount: daynight?.rows.length ?? 0,
       onlyInHeadline,
       onlyInDayNight,
     },
