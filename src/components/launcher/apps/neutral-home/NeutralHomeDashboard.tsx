@@ -449,6 +449,51 @@ function variancePct(
   };
 }
 
+function SortTh({
+  label, col, sortKey, sortDir, onSort, align = "right",
+}: {
+  label: string;
+  col: SortKey;
+  sortKey: SortKey;
+  sortDir: SortDir;
+  onSort: (k: SortKey) => void;
+  align?: "left" | "right";
+}) {
+  const active = sortKey === col;
+  return (
+    <th className={cn("py-2 font-medium", align === "right" ? "text-right" : "text-left")}>
+      <button
+        type="button"
+        onClick={() => onSort(col)}
+        className={cn(
+          "inline-flex items-center gap-1 hover:text-foreground",
+          align === "right" ? "justify-end" : "",
+          active ? "text-foreground" : "",
+        )}
+      >
+        {label}
+        {active ? (
+          sortDir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+        ) : (
+          <ArrowUpDown className="h-3 w-3 opacity-40" />
+        )}
+      </button>
+    </th>
+  );
+}
+
+function unusedVariancePct(
+  rows: ReturnType<typeof compareKpis>,
+  metric: string,
+): { text: string; good: boolean } | null {
+  const row = rows.find((r) => r.metric === metric);
+  if (!row || row.pct == null || row.previous === 0) return null;
+  return {
+    text: `${row.pct >= 0 ? "+" : ""}${row.pct.toFixed(1)}%`,
+    good: row.lowerIsBetter ? row.delta <= 0 : row.delta >= 0,
+  };
+}
+
 function Kpi({
   label, value, sub, icon: Icon, badge,
 }: {
