@@ -287,7 +287,7 @@ export function NeutralHomeDashboard({ bundle }: { bundle: NeutralHomeBundle }) 
 
           <Card>
             <CardContent className="p-5">
-              <h2 className="pb-1 text-base font-semibold tracking-tight">Day / night load & waste</h2>
+              <h2 className="pb-1 text-base font-semibold tracking-tight">Day / Night Load & Waste</h2>
               <p className="pb-4 text-sm text-muted-foreground">
                 Top circuits by total usage. Night share above {NIGHT_FLAG_THRESHOLD}% is flagged below.
               </p>
