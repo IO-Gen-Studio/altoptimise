@@ -398,13 +398,14 @@ function UploadDrawer({
         <DialogHeader>
           <DialogTitle>Upload Envisij reports — {site.name}</DialogTitle>
           <DialogDescription>
-            Drop both exports. Metadata rows and the date range are detected automatically.
+            The Headline Usage Report is the key upload; the Day/Night report is optional and only
+            adds the day/night split. Metadata rows and the date range are detected automatically.
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-3 sm:grid-cols-2">
           <FileSlot label="1. Headline Usage Report" file={headline} onPick={setHeadline} />
-          <FileSlot label="2. Day/Night Group Overview" file={daynight} onPick={setDaynight} />
+          <FileSlot label="2. Day/Night Group Overview (optional)" file={daynight} onPick={setDaynight} />
         </div>
 
         <div className="grid gap-2">
@@ -452,7 +453,7 @@ function UploadDrawer({
             ) : null}
             {!v?.errors.length && !v?.warnings.length ? (
               <div className="flex items-center gap-2 text-sm text-emerald-600">
-                <CheckCircle2 className="h-4 w-4" /> Both files matched cleanly.
+                <CheckCircle2 className="h-4 w-4" /> All circuits matched cleanly.
               </div>
             ) : null}
           </div>
@@ -460,7 +461,7 @@ function UploadDrawer({
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button variant="secondary" onClick={analyse} disabled={busy || !headline || !daynight}>
+          <Button variant="secondary" onClick={analyse} disabled={busy || !headline}>
             {busy ? "Working…" : "Validate"}
           </Button>
           <Button onClick={commit} disabled={busy || blocked}>Save period</Button>
