@@ -31,6 +31,45 @@ export interface NeutralHomeBundle {
   sites: NhSite[];
   periods: NhPeriod[];
   circuits: CircuitRecord[];
+  categories: NhCategoryRow[];
+  meterCategories: NhMeterCategory[];
+  metrics: NhMetric[];
+  settings: NhSiteSettings[];
+}
+
+export interface NhCategoryRow {
+  id: string;
+  organization_id: string;
+  site_id: string;
+  code: string;
+  label: string;
+  hidden: boolean;
+  sort_order: number;
+}
+
+export interface NhMeterCategory {
+  site_id: string;
+  organization_id: string;
+  circuit_name: string;
+  category: string;
+}
+
+export interface NhMetric {
+  id: string;
+  organization_id: string;
+  site_id: string;
+  name: string;
+  source: string;
+  unit: string;
+  circuit_names: string[];
+  lower_is_better: boolean;
+  sort_order: number;
+}
+
+export interface NhSiteSettings {
+  site_id: string;
+  organization_id: string;
+  comparison_metrics: string[];
 }
 
 const OrgInput = z.object({ orgId: z.string().uuid() });
@@ -41,7 +80,7 @@ export const loadNeutralHome = createServerFn({ method: "POST" })
   .handler(async ({ data, context }): Promise<NeutralHomeBundle> => {
     const { supabase } = context;
     /* eslint-disable @typescript-eslint/no-explicit-any */
-    const [sites, periods] = await Promise.all([
+    const [sites, periods, cats, meterCats, metrics, settings] = await Promise.all([
       supabase
         .from("neutral_home_sites" as any)
         .select("*")
@@ -52,9 +91,31 @@ export const loadNeutralHome = createServerFn({ method: "POST" })
         .select("*")
         .eq("organization_id", data.orgId)
         .order("period_start", { ascending: false }),
+      supabase
+        .from("neutral_home_categories" as any)
+        .select("*")
+        .eq("organization_id", data.orgId)
+        .order("sort_order"),
+      supabase
+        .from("neutral_home_meter_categories" as any)
+        .select("*")
+        .eq("organization_id", data.orgId),
+      supabase
+        .from("neutral_home_metrics" as any)
+        .select("*")
+        .eq("organization_id", data.orgId)
+        .order("sort_order"),
+      supabase
+        .from("neutral_home_site_settings" as any)
+        .select("*")
+        .eq("organization_id", data.orgId),
     ]);
     if (sites.error) throw new Error(sites.error.message);
     if (periods.error) throw new Error(periods.error.message);
+    if (cats.error) throw new Error(cats.error.message);
+    if (meterCats.error) throw new Error(meterCats.error.message);
+    if (metrics.error) throw new Error(metrics.error.message);
+    if (settings.error) throw new Error(settings.error.message);
 
     const circuits: CircuitRecord[] = [];
     const pageSize = 1000;
@@ -76,6 +137,10 @@ export const loadNeutralHome = createServerFn({ method: "POST" })
       sites: (sites.data ?? []) as unknown as NhSite[],
       periods: (periods.data ?? []) as unknown as NhPeriod[],
       circuits,
+      categories: (cats.data ?? []) as unknown as NhCategoryRow[],
+      meterCategories: (meterCats.data ?? []) as unknown as NhMeterCategory[],
+      metrics: (metrics.data ?? []) as unknown as NhMetric[],
+      settings: (settings.data ?? []) as unknown as NhSiteSettings[],
     };
   });
 
