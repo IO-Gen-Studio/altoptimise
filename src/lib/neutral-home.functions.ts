@@ -306,3 +306,172 @@ export const deleteNhPeriod = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+
+/* ------------------------------------------------------------------ */
+/* Per-site configuration: categories, meter mapping, user metrics     */
+/* ------------------------------------------------------------------ */
+
+const CategoryInput = z.object({
+  id: z.string().uuid().optional(),
+  organization_id: z.string().uuid(),
+  site_id: z.string().uuid(),
+  code: z.string().trim().min(1).max(60),
+  label: z.string().trim().min(1).max(120),
+  hidden: z.boolean().optional(),
+  sort_order: z.number().int().optional(),
+});
+
+export const upsertNhCategory = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => CategoryInput.parse(d))
+  .handler(async ({ data, context }): Promise<NhCategoryRow> => {
+    const payload = {
+      organization_id: data.organization_id,
+      site_id: data.site_id,
+      code: data.code,
+      label: data.label,
+      hidden: data.hidden ?? false,
+      sort_order: data.sort_order ?? 100,
+      updated_at: new Date().toISOString(),
+    };
+    const { data: row, error } = await context.supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .from("neutral_home_categories" as any)
+      .upsert(payload, { onConflict: "site_id,code" })
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return row as unknown as NhCategoryRow;
+  });
+
+export const deleteNhCategory = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { error } = await context.supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .from("neutral_home_categories" as any)
+      .delete()
+      .eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+const MeterCategoryInput = z.object({
+  organization_id: z.string().uuid(),
+  site_id: z.string().uuid(),
+  circuit_name: z.string().trim().min(1).max(300),
+  /** null clears the override and falls back to the auto-detected category */
+  category: z.string().trim().max(60).nullable(),
+});
+
+export const setNhMeterCategory = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => MeterCategoryInput.parse(d))
+  .handler(async ({ data, context }) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const table = context.supabase.from("neutral_home_meter_categories" as any);
+    if (!data.category) {
+      const { error } = await table
+        .delete()
+        .eq("site_id", data.site_id)
+        .eq("circuit_name", data.circuit_name);
+      if (error) throw new Error(error.message);
+      return { ok: true };
+    }
+    const { error } = await table.upsert(
+      {
+        organization_id: data.organization_id,
+        site_id: data.site_id,
+        circuit_name: data.circuit_name,
+        category: data.category,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "site_id,circuit_name" },
+    );
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+const MetricInput = z.object({
+  id: z.string().uuid().optional(),
+  organization_id: z.string().uuid(),
+  site_id: z.string().uuid(),
+  name: z.string().trim().min(1).max(120),
+  source: z.enum([
+    "usage_kwh",
+    "co2_kg",
+    "total_cost_p",
+    "day_kwh",
+    "night_kwh",
+    "night_share",
+  ]),
+  unit: z.string().trim().max(20),
+  circuit_names: z.array(z.string().trim().min(1).max(300)).max(2000),
+  lower_is_better: z.boolean().optional(),
+  sort_order: z.number().int().optional(),
+});
+
+export const upsertNhMetric = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => MetricInput.parse(d))
+  .handler(async ({ data, context }): Promise<NhMetric> => {
+    const payload = {
+      organization_id: data.organization_id,
+      site_id: data.site_id,
+      name: data.name,
+      source: data.source,
+      unit: data.unit,
+      circuit_names: data.circuit_names,
+      lower_is_better: data.lower_is_better ?? true,
+      sort_order: data.sort_order ?? 100,
+      updated_at: new Date().toISOString(),
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const table = context.supabase.from("neutral_home_metrics" as any);
+    const q = data.id
+      ? table.update(payload).eq("id", data.id).select().single()
+      : table.insert(payload).select().single();
+    const { data: row, error } = await q;
+    if (error) throw new Error(error.message);
+    return row as unknown as NhMetric;
+  });
+
+export const deleteNhMetric = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { error } = await context.supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .from("neutral_home_metrics" as any)
+      .delete()
+      .eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+const SiteSettingsInput = z.object({
+  organization_id: z.string().uuid(),
+  site_id: z.string().uuid(),
+  comparison_metrics: z.array(z.string().min(1).max(80)).max(60),
+});
+
+export const saveNhSiteSettings = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => SiteSettingsInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const { error } = await context.supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .from("neutral_home_site_settings" as any)
+      .upsert(
+        {
+          site_id: data.site_id,
+          organization_id: data.organization_id,
+          comparison_metrics: data.comparison_metrics,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "site_id" },
+      );
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });

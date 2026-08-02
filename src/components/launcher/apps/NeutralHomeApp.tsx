@@ -8,7 +8,9 @@ import { loadNeutralHome, type NeutralHomeBundle } from "@/lib/neutral-home.func
 import { NeutralHomeDashboard } from "./neutral-home/NeutralHomeDashboard";
 import { NeutralHomeSettings } from "./neutral-home/NeutralHomeSettings";
 
-const EMPTY: NeutralHomeBundle = { sites: [], periods: [], circuits: [] };
+const EMPTY: NeutralHomeBundle = {
+  sites: [], periods: [], circuits: [], categories: [], meterCategories: [], metrics: [], settings: [],
+};
 
 export function NeutralHomeApp() {
   const { org, persona } = useLauncher();
