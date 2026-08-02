@@ -7,20 +7,41 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  deleteNhCategory, deleteNhMetric, saveNhSiteSettings, setNhMeterCategory, upsertNhCategory,
-  upsertNhMetric, type NeutralHomeBundle, type NhMetric,
+  deleteNhCategory,
+  deleteNhMetric,
+  saveNhSiteSettings,
+  setNhMeterCategory,
+  upsertNhCategory,
+  upsertNhMetric,
+  type NeutralHomeBundle,
+  type NhMetric,
 } from "@/lib/neutral-home.functions";
 import {
-  allMetricDefs, categoryOptions, METRIC_SOURCE_LABEL, METRIC_SOURCE_UNIT, type MetricSource,
+  allMetricDefs,
+  categoryOptions,
+  METRIC_SOURCE_LABEL,
+  METRIC_SOURCE_UNIT,
+  type MetricSource,
 } from "@/lib/neutral-home/config";
 
 interface Props {
@@ -33,7 +54,12 @@ interface Props {
 const SOURCES = Object.keys(METRIC_SOURCE_LABEL) as MetricSource[];
 
 const slug = (s: string) =>
-  s.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
+  s
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 40);
 
 export function NeutralHomeConfig({ orgId, bundle, canEdit, onChanged }: Props) {
   const [siteId, setSiteId] = useState(bundle.sites[0]?.id ?? "");
@@ -41,20 +67,28 @@ export function NeutralHomeConfig({ orgId, bundle, canEdit, onChanged }: Props) 
   const [newCat, setNewCat] = useState("");
   const [metricDialog, setMetricDialog] = useState<MetricDraft | null>(null);
 
-  const siteCats = useMemo(() => bundle.categories.filter((c) => c.site_id === siteId), [bundle.categories, siteId]);
+  const siteCats = useMemo(
+    () => bundle.categories.filter((c) => c.site_id === siteId),
+    [bundle.categories, siteId],
+  );
   const options = useMemo(() => categoryOptions(siteCats), [siteCats]);
-  const siteMetrics = useMemo(() => bundle.metrics.filter((m) => m.site_id === siteId), [bundle.metrics, siteId]);
+  const siteMetrics = useMemo(
+    () => bundle.metrics.filter((m) => m.site_id === siteId),
+    [bundle.metrics, siteId],
+  );
   const settings = bundle.settings.find((s) => s.site_id === siteId);
 
   const circuitNames = useMemo(() => {
     const periodIds = new Set(bundle.periods.filter((p) => p.site_id === siteId).map((p) => p.id));
     const map = new Map<string, string>();
-    for (const c of bundle.circuits) if (periodIds.has(c.period_id)) map.set(c.circuit_name, c.category);
+    for (const c of bundle.circuits)
+      if (periodIds.has(c.period_id)) map.set(c.circuit_name, c.category);
     return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   }, [bundle.circuits, bundle.periods, siteId]);
 
   const overrideOf = (name: string) =>
-    bundle.meterCategories.find((o) => o.site_id === siteId && o.circuit_name === name)?.category ?? "";
+    bundle.meterCategories.find((o) => o.site_id === siteId && o.circuit_name === name)?.category ??
+    "";
 
   const metricDefs = useMemo(() => allMetricDefs(siteMetrics), [siteMetrics]);
   const selected = settings?.comparison_metrics?.length
@@ -92,9 +126,15 @@ export function NeutralHomeConfig({ orgId, bundle, canEdit, onChanged }: Props) 
           <div className="grid gap-1.5">
             <Label className="text-xs">Site</Label>
             <Select value={siteId} onValueChange={setSiteId}>
-              <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-56">
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
-                {bundle.sites.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                {bundle.sites.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -112,22 +152,33 @@ export function NeutralHomeConfig({ orgId, bundle, canEdit, onChanged }: Props) 
             <div className="flex flex-wrap items-end gap-2">
               <div className="grid gap-1.5">
                 <Label className="text-xs">New category name</Label>
-                <Input value={newCat} onChange={(e) => setNewCat(e.target.value)} className="w-64"
-                  placeholder="e.g. Server room" />
+                <Input
+                  value={newCat}
+                  onChange={(e) => setNewCat(e.target.value)}
+                  className="w-64"
+                  placeholder="e.g. Server room"
+                />
               </div>
-              <Button size="sm" className="gap-1.5" disabled={disabled || !newCat.trim()}
+              <Button
+                size="sm"
+                className="gap-1.5"
+                disabled={disabled || !newCat.trim()}
                 onClick={() =>
                   run("Adding category…", async () => {
                     await upsertNhCategory({
                       data: {
-                        organization_id: orgId, site_id: siteId,
-                        code: slug(newCat) || `cat-${Date.now()}`, label: newCat.trim(),
-                        hidden: false, sort_order: 200 + options.length,
+                        organization_id: orgId,
+                        site_id: siteId,
+                        code: slug(newCat) || `cat-${Date.now()}`,
+                        label: newCat.trim(),
+                        hidden: false,
+                        sort_order: 200 + options.length,
                       },
                     });
                     setNewCat("");
                   })
-                }>
+                }
+              >
                 <Plus className="h-3.5 w-3.5" /> Add
               </Button>
             </div>
@@ -144,13 +195,20 @@ export function NeutralHomeConfig({ orgId, bundle, canEdit, onChanged }: Props) 
                 </thead>
                 <tbody>
                   {options.map((o) => (
-                    <CategoryRow key={o.code} option={o} disabled={disabled}
+                    <CategoryRow
+                      key={o.code}
+                      option={o}
+                      disabled={disabled}
                       onRename={(label) =>
                         run("Renaming category…", () =>
                           upsertNhCategory({
                             data: {
-                              organization_id: orgId, site_id: siteId, code: o.code, label,
-                              hidden: false, sort_order: o.row?.sort_order ?? 100,
+                              organization_id: orgId,
+                              site_id: siteId,
+                              code: o.code,
+                              label,
+                              hidden: false,
+                              sort_order: o.row?.sort_order ?? 100,
                             },
                           }),
                         )
@@ -160,13 +218,18 @@ export function NeutralHomeConfig({ orgId, bundle, canEdit, onChanged }: Props) 
                           o.builtin
                             ? upsertNhCategory({
                                 data: {
-                                  organization_id: orgId, site_id: siteId, code: o.code,
-                                  label: o.label, hidden: true, sort_order: o.row?.sort_order ?? 100,
+                                  organization_id: orgId,
+                                  site_id: siteId,
+                                  code: o.code,
+                                  label: o.label,
+                                  hidden: true,
+                                  sort_order: o.row?.sort_order ?? 100,
                                 },
                               })
                             : deleteNhCategory({ data: { id: o.row!.id } }),
                         )
-                      } />
+                      }
+                    />
                   ))}
                 </tbody>
               </table>
@@ -176,21 +239,32 @@ export function NeutralHomeConfig({ orgId, bundle, canEdit, onChanged }: Props) 
               <div className="space-y-2">
                 <Label className="text-xs text-muted-foreground">Hidden categories</Label>
                 <div className="flex flex-wrap gap-2">
-                  {siteCats.filter((c) => c.hidden).map((c) => (
-                    <Button key={c.id} size="sm" variant="outline" disabled={disabled}
-                      onClick={() =>
-                        run("Restoring category…", () =>
-                          upsertNhCategory({
-                            data: {
-                              organization_id: orgId, site_id: siteId, code: c.code,
-                              label: c.label, hidden: false, sort_order: c.sort_order,
-                            },
-                          }),
-                        )
-                      }>
-                      {c.label} · restore
-                    </Button>
-                  ))}
+                  {siteCats
+                    .filter((c) => c.hidden)
+                    .map((c) => (
+                      <Button
+                        key={c.id}
+                        size="sm"
+                        variant="outline"
+                        disabled={disabled}
+                        onClick={() =>
+                          run("Restoring category…", () =>
+                            upsertNhCategory({
+                              data: {
+                                organization_id: orgId,
+                                site_id: siteId,
+                                code: c.code,
+                                label: c.label,
+                                hidden: false,
+                                sort_order: c.sort_order,
+                              },
+                            }),
+                          )
+                        }
+                      >
+                        {c.label} · restore
+                      </Button>
+                    ))}
                 </div>
               </div>
             ) : null}
@@ -215,22 +289,31 @@ export function NeutralHomeConfig({ orgId, bundle, canEdit, onChanged }: Props) 
                         <tr key={name} className="border-t">
                           <td className="px-4 py-2">{name}</td>
                           <td className="px-4 py-2">
-                            <Select value={override || "auto"} disabled={disabled}
+                            <Select
+                              value={override || "auto"}
+                              disabled={disabled}
                               onValueChange={(v) =>
                                 run("Updating category…", () =>
                                   setNhMeterCategory({
                                     data: {
-                                      organization_id: orgId, site_id: siteId, circuit_name: name,
+                                      organization_id: orgId,
+                                      site_id: siteId,
+                                      circuit_name: name,
                                       category: v === "auto" ? null : v,
                                     },
                                   }),
                                 )
-                              }>
-                              <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
+                              }
+                            >
+                              <SelectTrigger className="w-56">
+                                <SelectValue />
+                              </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="auto">Auto ({autoCat})</SelectItem>
                                 {options.map((o) => (
-                                  <SelectItem key={o.code} value={o.code}>{o.label}</SelectItem>
+                                  <SelectItem key={o.code} value={o.code}>
+                                    {o.label}
+                                  </SelectItem>
                                 ))}
                               </SelectContent>
                             </Select>
@@ -248,39 +331,66 @@ export function NeutralHomeConfig({ orgId, bundle, canEdit, onChanged }: Props) 
             <div>
               <h3 className="text-sm font-semibold">System metrics</h3>
               <div className="mt-2 flex flex-wrap gap-2">
-                {metricDefs.filter((d) => d.system).map((d) => (
-                  <Badge key={d.key} variant="outline">{d.label} ({d.unit})</Badge>
-                ))}
+                {metricDefs
+                  .filter((d) => d.system)
+                  .map((d) => (
+                    <Badge key={d.key} variant="outline">
+                      {d.label} ({d.unit})
+                    </Badge>
+                  ))}
               </div>
             </div>
             <div>
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-semibold">User metrics</h3>
-                <Button size="sm" className="gap-1.5" disabled={disabled}
-                  onClick={() => setMetricDialog(emptyMetric())}>
+                <Button
+                  size="sm"
+                  className="gap-1.5"
+                  disabled={disabled}
+                  onClick={() => setMetricDialog(emptyMetric())}
+                >
                   <Plus className="h-3.5 w-3.5" /> New metric
                 </Button>
               </div>
               {!siteMetrics.length ? (
                 <p className="mt-2 text-sm text-muted-foreground">
-                  No user metrics yet. A user metric sums a chosen value across the meters you map to it.
+                  No user metrics yet. A user metric sums a chosen value across the meters you map
+                  to it.
                 </p>
               ) : (
                 <div className="mt-2 space-y-2">
                   {siteMetrics.map((m) => (
-                    <div key={m.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3">
+                    <div
+                      key={m.id}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3"
+                    >
                       <div>
                         <div className="text-sm font-medium">{m.name}</div>
                         <div className="text-xs text-muted-foreground">
                           {METRIC_SOURCE_LABEL[m.source as MetricSource] ?? m.source} · {m.unit} ·{" "}
-                          {m.circuit_names.length ? `${m.circuit_names.length} meters` : "all sub-circuits"}
+                          {m.circuit_names.length
+                            ? `${m.circuit_names.length} meters`
+                            : "all sub-circuits"}
                         </div>
                       </div>
                       <div className="flex gap-1">
-                        <Button size="sm" variant="ghost" disabled={disabled}
-                          onClick={() => setMetricDialog(draftFrom(m))}>Edit</Button>
-                        <Button size="sm" variant="ghost" className="text-destructive" disabled={disabled}
-                          onClick={() => run("Removing metric…", () => deleteNhMetric({ data: { id: m.id } }))}>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={disabled}
+                          onClick={() => setMetricDialog(draftFrom(m))}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-destructive"
+                          disabled={disabled}
+                          onClick={() =>
+                            run("Removing metric…", () => deleteNhMetric({ data: { id: m.id } }))
+                          }
+                        >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       </div>
@@ -297,7 +407,10 @@ export function NeutralHomeConfig({ orgId, bundle, canEdit, onChanged }: Props) 
             </p>
             <div className="grid gap-2 sm:grid-cols-2">
               {metricDefs.map((d) => (
-                <label key={d.key} className="flex items-center gap-2 rounded-lg border p-3 text-sm">
+                <label
+                  key={d.key}
+                  className="flex items-center gap-2 rounded-lg border p-3 text-sm"
+                >
                   <Checkbox
                     checked={selected.includes(d.key)}
                     disabled={disabled}
@@ -305,7 +418,11 @@ export function NeutralHomeConfig({ orgId, bundle, canEdit, onChanged }: Props) 
                       const next = v ? [...selected, d.key] : selected.filter((k) => k !== d.key);
                       void run("Saving comparison metrics…", () =>
                         saveNhSiteSettings({
-                          data: { organization_id: orgId, site_id: siteId, comparison_metrics: next },
+                          data: {
+                            organization_id: orgId,
+                            site_id: siteId,
+                            comparison_metrics: next,
+                          },
                         }),
                       );
                     }}
@@ -331,10 +448,14 @@ export function NeutralHomeConfig({ orgId, bundle, canEdit, onChanged }: Props) 
             run("Saving metric…", async () => {
               await upsertNhMetric({
                 data: {
-                  id: d.id, organization_id: orgId, site_id: siteId,
-                  name: d.name.trim(), source: d.source,
+                  id: d.id,
+                  organization_id: orgId,
+                  site_id: siteId,
+                  name: d.name.trim(),
+                  source: d.source,
                   unit: d.unit.trim() || METRIC_SOURCE_UNIT[d.source],
-                  circuit_names: d.circuit_names, lower_is_better: d.lower_is_better,
+                  circuit_names: d.circuit_names,
+                  lower_is_better: d.lower_is_better,
                   sort_order: 200,
                 },
               });
@@ -357,7 +478,11 @@ interface MetricDraft {
 }
 
 const emptyMetric = (): MetricDraft => ({
-  name: "", source: "usage_kwh", unit: "", circuit_names: [], lower_is_better: true,
+  name: "",
+  source: "usage_kwh",
+  unit: "",
+  circuit_names: [],
+  lower_is_better: true,
 });
 
 const draftFrom = (m: NhMetric): MetricDraft => ({
@@ -370,7 +495,11 @@ const draftFrom = (m: NhMetric): MetricDraft => ({
 });
 
 function MetricDialog({
-  draft, circuitNames, busy, onClose, onSave,
+  draft,
+  circuitNames,
+  busy,
+  onClose,
+  onSave,
 }: {
   draft: MetricDraft;
   circuitNames: string[];
@@ -388,7 +517,12 @@ function MetricDialog({
     }));
 
   return (
-    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+    <Dialog
+      open
+      onOpenChange={(o) => {
+        if (!o) onClose();
+      }}
+    >
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{d.id ? "Edit metric" : "New metric"}</DialogTitle>
@@ -404,24 +538,39 @@ function MetricDialog({
           </div>
           <div className="grid gap-1.5">
             <Label>Value</Label>
-            <Select value={d.source} onValueChange={(v) => setD({ ...d, source: v as MetricSource })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+            <Select
+              value={d.source}
+              onValueChange={(v) => setD({ ...d, source: v as MetricSource })}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 {SOURCES.map((s) => (
-                  <SelectItem key={s} value={s}>{METRIC_SOURCE_LABEL[s]}</SelectItem>
+                  <SelectItem key={s} value={s}>
+                    {METRIC_SOURCE_LABEL[s]}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           <div className="grid gap-1.5">
             <Label>Unit</Label>
-            <Input value={d.unit} placeholder={METRIC_SOURCE_UNIT[d.source]}
-              onChange={(e) => setD({ ...d, unit: e.target.value })} />
+            <Input
+              value={d.unit}
+              placeholder={METRIC_SOURCE_UNIT[d.source]}
+              onChange={(e) => setD({ ...d, unit: e.target.value })}
+            />
           </div>
           <div className="flex items-center gap-2">
-            <Switch id="nh-lower" checked={d.lower_is_better}
-              onCheckedChange={(v) => setD({ ...d, lower_is_better: v })} />
-            <Label htmlFor="nh-lower" className="font-normal">A decrease is an improvement</Label>
+            <Switch
+              id="nh-lower"
+              checked={d.lower_is_better}
+              onCheckedChange={(v) => setD({ ...d, lower_is_better: v })}
+            />
+            <Label htmlFor="nh-lower" className="font-normal">
+              A decrease is an improvement
+            </Label>
           </div>
           <div className="grid gap-1.5">
             <Label>Mapped meters ({d.circuit_names.length})</Label>
@@ -429,7 +578,10 @@ function MetricDialog({
               <div className="space-y-1">
                 {circuitNames.map((n) => (
                   <label key={n} className="flex items-center gap-2 text-sm">
-                    <Checkbox checked={d.circuit_names.includes(n)} onCheckedChange={() => toggle(n)} />
+                    <Checkbox
+                      checked={d.circuit_names.includes(n)}
+                      onCheckedChange={() => toggle(n)}
+                    />
                     <span className="truncate">{n}</span>
                   </label>
                 ))}
@@ -438,7 +590,9 @@ function MetricDialog({
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
           <Button className="gap-1.5" disabled={busy || !d.name.trim()} onClick={() => onSave(d)}>
             <Save className="h-3.5 w-3.5" /> Save metric
           </Button>
@@ -449,7 +603,10 @@ function MetricDialog({
 }
 
 function CategoryRow({
-  option, disabled, onRename, onRemove,
+  option,
+  disabled,
+  onRename,
+  onRemove,
 }: {
   option: ReturnType<typeof categoryOptions>[number];
   disabled: boolean;
@@ -460,15 +617,33 @@ function CategoryRow({
   return (
     <tr className="border-t">
       <td className="px-4 py-2">
-        <Input value={label} disabled={disabled} className="w-56"
-          onChange={(e) => setLabel(e.target.value)} />
+        <Input
+          value={label}
+          disabled={disabled}
+          className="w-56"
+          onChange={(e) => setLabel(e.target.value)}
+        />
       </td>
       <td className="px-4 py-2 text-xs text-muted-foreground">{option.code}</td>
-      <td className="px-4 py-2 text-xs text-muted-foreground">{option.builtin ? "Built-in" : "User"}</td>
+      <td className="px-4 py-2 text-xs text-muted-foreground">
+        {option.builtin ? "Built-in" : "User"}
+      </td>
       <td className="px-4 py-2 text-right">
-        <Button size="sm" variant="ghost" disabled={disabled || label.trim() === option.label || !label.trim()}
-          onClick={() => onRename(label.trim())}>Save</Button>
-        <Button size="sm" variant="ghost" className="text-destructive" disabled={disabled} onClick={onRemove}>
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={disabled || label.trim() === option.label || !label.trim()}
+          onClick={() => onRename(label.trim())}
+        >
+          Save
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="text-destructive"
+          disabled={disabled}
+          onClick={onRemove}
+        >
           <Trash2 className="h-3.5 w-3.5" />
         </Button>
       </td>

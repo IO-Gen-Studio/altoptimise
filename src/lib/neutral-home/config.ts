@@ -86,13 +86,62 @@ export interface MetricDef {
 const kpiOf = (rows: CircuitRecord[]): PeriodKpis => computeKpis(rows);
 
 export const SYSTEM_METRICS: MetricDef[] = [
-  { key: "sys:totalKwh", label: "Total consumption", unit: "kWh", lowerIsBetter: true, system: true, evaluate: (r) => kpiOf(r).totalKwh },
-  { key: "sys:dayKwh", label: "Day consumption", unit: "kWh", lowerIsBetter: true, system: true, evaluate: (r) => kpiOf(r).dayKwh },
-  { key: "sys:nightKwh", label: "Night consumption", unit: "kWh", lowerIsBetter: true, system: true, evaluate: (r) => kpiOf(r).nightKwh },
-  { key: "sys:nightPct", label: "Night share", unit: "%", lowerIsBetter: true, system: true, evaluate: (r) => kpiOf(r).nightPct },
-  { key: "sys:costGbp", label: "Total cost", unit: "£", lowerIsBetter: true, system: true, evaluate: (r) => kpiOf(r).totalCostGbp },
-  { key: "sys:blended", label: "Blended cost", unit: "p/kWh", lowerIsBetter: true, system: true, evaluate: (r) => kpiOf(r).blendedPPerKwh },
-  { key: "sys:co2", label: "Carbon", unit: "kg", lowerIsBetter: true, system: true, evaluate: (r) => kpiOf(r).co2Kg },
+  {
+    key: "sys:totalKwh",
+    label: "Total consumption",
+    unit: "kWh",
+    lowerIsBetter: true,
+    system: true,
+    evaluate: (r) => kpiOf(r).totalKwh,
+  },
+  {
+    key: "sys:dayKwh",
+    label: "Day consumption",
+    unit: "kWh",
+    lowerIsBetter: true,
+    system: true,
+    evaluate: (r) => kpiOf(r).dayKwh,
+  },
+  {
+    key: "sys:nightKwh",
+    label: "Night consumption",
+    unit: "kWh",
+    lowerIsBetter: true,
+    system: true,
+    evaluate: (r) => kpiOf(r).nightKwh,
+  },
+  {
+    key: "sys:nightPct",
+    label: "Night share",
+    unit: "%",
+    lowerIsBetter: true,
+    system: true,
+    evaluate: (r) => kpiOf(r).nightPct,
+  },
+  {
+    key: "sys:costGbp",
+    label: "Total cost",
+    unit: "£",
+    lowerIsBetter: true,
+    system: true,
+    evaluate: (r) => kpiOf(r).totalCostGbp,
+  },
+  {
+    key: "sys:blended",
+    label: "Blended cost",
+    unit: "p/kWh",
+    lowerIsBetter: true,
+    system: true,
+    evaluate: (r) => kpiOf(r).blendedPPerKwh,
+  },
+  {
+    key: "sys:co2",
+    label: "Carbon",
+    unit: "kg",
+    lowerIsBetter: true,
+    system: true,
+    evaluate: (r) => kpiOf(r).co2Kg,
+  },
 ];
 
 const sumOf = (rows: CircuitRecord[], source: MetricSource): number => {
@@ -141,7 +190,11 @@ export interface ComparisonRow {
   baseline: ComparisonCell | null;
 }
 
-function cell(def: MetricDef, current: number, rows: CircuitRecord[] | null): ComparisonCell | null {
+function cell(
+  def: MetricDef,
+  current: number,
+  rows: CircuitRecord[] | null,
+): ComparisonCell | null {
   if (!rows || !rows.length) return null;
   const value = def.evaluate(rows);
   const delta = current - value;
@@ -175,7 +228,10 @@ export function buildComparison(
 /* ---------------- period helpers ---------------- */
 
 /** Same calendar month/period one year earlier, when it exists. */
-export function findLastYearPeriod(period: NhPeriod | undefined, periods: NhPeriod[]): NhPeriod | undefined {
+export function findLastYearPeriod(
+  period: NhPeriod | undefined,
+  periods: NhPeriod[],
+): NhPeriod | undefined {
   if (!period) return undefined;
   const start = new Date(`${period.period_start}T00:00:00Z`);
   const targetYear = start.getUTCFullYear() - 1;

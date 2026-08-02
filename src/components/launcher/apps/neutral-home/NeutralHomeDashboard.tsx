@@ -1,9 +1,26 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, Download, Gauge, Leaf, Moon, PoundSterling, Sun, Zap,
+  AlertTriangle,
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  Download,
+  Gauge,
+  Leaf,
+  Moon,
+  PoundSterling,
+  Sun,
+  Zap,
 } from "lucide-react";
 import {
-  Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip as RTooltip, XAxis, YAxis,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Legend,
+  ResponsiveContainer,
+  Tooltip as RTooltip,
+  XAxis,
+  YAxis,
 } from "recharts";
 
 import { Badge } from "@/components/ui/badge";
@@ -11,27 +28,36 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import type { NeutralHomeBundle } from "@/lib/neutral-home.functions";
 import {
-  compareKpis, computeKpis, detailCircuits, mergedCsv, nightFlags, simulateShift,
-  NIGHT_FLAG_THRESHOLD, type CircuitRecord,
+  compareKpis,
+  computeKpis,
+  detailCircuits,
+  mergedCsv,
+  nightFlags,
+  simulateShift,
+  NIGHT_FLAG_THRESHOLD,
+  type CircuitRecord,
 } from "@/lib/neutral-home/analytics";
 import {
-  allMetricDefs, applyCategoryOverrides, buildComparison, categoryLabelMap, findLastYearPeriod,
+  allMetricDefs,
+  applyCategoryOverrides,
+  buildComparison,
+  categoryLabelMap,
+  findLastYearPeriod,
 } from "@/lib/neutral-home/config";
 
-type SortKey =
-  | "name"
-  | "category"
-  | "usage_kwh"
-  | "co2_kg"
-  | "cost_gbp"
-  | "day_kwh"
-  | "night_kwh";
+type SortKey = "name" | "category" | "usage_kwh" | "co2_kg" | "cost_gbp" | "day_kwh" | "night_kwh";
 
 type SortDir = "asc" | "desc";
 
@@ -96,12 +122,18 @@ export function NeutralHomeDashboard({ bundle }: { bundle: NeutralHomeBundle }) 
   const labels = useMemo(() => categoryLabelMap(siteCategories), [siteCategories]);
   const overrides = useMemo(() => {
     const m = new Map<string, string>();
-    for (const o of bundle.meterCategories) if (o.site_id === siteId) m.set(o.circuit_name, o.category);
+    for (const o of bundle.meterCategories)
+      if (o.site_id === siteId) m.set(o.circuit_name, o.category);
     return m;
   }, [bundle.meterCategories, siteId]);
 
   const circuitsFor = (id: string | undefined) =>
-    id ? applyCategoryOverrides(bundle.circuits.filter((c) => c.period_id === id), overrides) : [];
+    id
+      ? applyCategoryOverrides(
+          bundle.circuits.filter((c) => c.period_id === id),
+          overrides,
+        )
+      : [];
 
   const circuits = useMemo(() => circuitsFor(period?.id), [bundle.circuits, period, overrides]);
   const compareCircuits = useMemo(
@@ -128,7 +160,10 @@ export function NeutralHomeDashboard({ bundle }: { bundle: NeutralHomeBundle }) 
     return s?.comparison_metrics?.length ? s.comparison_metrics : null;
   }, [bundle.settings, siteId]);
   const shownDefs = useMemo(
-    () => (selectedKeys ? metricDefs.filter((d) => selectedKeys.includes(d.key)) : metricDefs.filter((d) => d.system)),
+    () =>
+      selectedKeys
+        ? metricDefs.filter((d) => selectedKeys.includes(d.key))
+        : metricDefs.filter((d) => d.system),
     [metricDefs, selectedKeys],
   );
   const comparisonRows = useMemo(
@@ -157,7 +192,9 @@ export function NeutralHomeDashboard({ bundle }: { bundle: NeutralHomeBundle }) 
     () =>
       [...filtered]
         .filter((c) => (c.day_kwh ?? 0) + (c.night_kwh ?? 0) > 0)
-        .sort((a, b) => ((b.day_kwh ?? 0) + (b.night_kwh ?? 0)) - ((a.day_kwh ?? 0) + (a.night_kwh ?? 0)))
+        .sort(
+          (a, b) => (b.day_kwh ?? 0) + (b.night_kwh ?? 0) - ((a.day_kwh ?? 0) + (a.night_kwh ?? 0)),
+        )
         .slice(0, 18)
         .map((c) => ({
           name: c.circuit_name.length > 28 ? `${c.circuit_name.slice(0, 27)}…` : c.circuit_name,
@@ -194,7 +231,13 @@ export function NeutralHomeDashboard({ bundle }: { bundle: NeutralHomeBundle }) 
           existing.night_kwh += r.night_kwh;
           existing.meters = (existing.meters ?? 0) + 1;
         } else {
-          map.set(r.category, { ...r, key: r.category, name: r.categoryLabel, isAggregate: false, meters: 1 });
+          map.set(r.category, {
+            ...r,
+            key: r.category,
+            name: r.categoryLabel,
+            isAggregate: false,
+            meters: 1,
+          });
         }
       }
       rows = Array.from(map.values());
@@ -203,7 +246,9 @@ export function NeutralHomeDashboard({ bundle }: { bundle: NeutralHomeBundle }) 
     const dir = sortDir === "asc" ? 1 : -1;
     return rows.sort((a, b) =>
       sortKey === "name" || sortKey === "category"
-        ? (sortKey === "name" ? a.name.localeCompare(b.name) : a.categoryLabel.localeCompare(b.categoryLabel)) * dir
+        ? (sortKey === "name"
+            ? a.name.localeCompare(b.name)
+            : a.categoryLabel.localeCompare(b.categoryLabel)) * dir
         : (a[sortKey] - b[sortKey]) * dir,
     );
   }, [circuits, showAggregates, groupByCategory, sortKey, sortDir, labels]);
@@ -248,21 +293,43 @@ export function NeutralHomeDashboard({ bundle }: { bundle: NeutralHomeBundle }) 
         <CardContent className="flex flex-wrap items-end gap-3 p-4">
           <div className="grid gap-1.5">
             <Label className="text-xs">Site</Label>
-            <Select value={siteId} onValueChange={(v) => {
-              setSiteId(v); setPeriodId(""); setComparePeriodId(""); setBaselinePeriodId("");
-            }}>
-              <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
+            <Select
+              value={siteId}
+              onValueChange={(v) => {
+                setSiteId(v);
+                setPeriodId("");
+                setComparePeriodId("");
+                setBaselinePeriodId("");
+              }}
+            >
+              <SelectTrigger className="w-56">
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
-                {bundle.sites.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                {bundle.sites.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
           <div className="grid gap-1.5">
             <Label className="text-xs">Period</Label>
-            <Select value={period?.id ?? ""} onValueChange={setPeriodId} disabled={!sitePeriods.length}>
-              <SelectTrigger className="w-48"><SelectValue placeholder="No periods" /></SelectTrigger>
+            <Select
+              value={period?.id ?? ""}
+              onValueChange={setPeriodId}
+              disabled={!sitePeriods.length}
+            >
+              <SelectTrigger className="w-48">
+                <SelectValue placeholder="No periods" />
+              </SelectTrigger>
               <SelectContent>
-                {sitePeriods.map((p) => <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>)}
+                {sitePeriods.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -273,44 +340,70 @@ export function NeutralHomeDashboard({ bundle }: { bundle: NeutralHomeBundle }) 
                 <span className="ml-1 text-[10px] text-muted-foreground">(auto)</span>
               ) : null}
             </Label>
-            <Select value={comparePeriod?.id ?? ""} onValueChange={setComparePeriodId}
-              disabled={sitePeriods.length < 2}>
-              <SelectTrigger className="w-48"><SelectValue placeholder="No comparison" /></SelectTrigger>
+            <Select
+              value={comparePeriod?.id ?? ""}
+              onValueChange={setComparePeriodId}
+              disabled={sitePeriods.length < 2}
+            >
+              <SelectTrigger className="w-48">
+                <SelectValue placeholder="No comparison" />
+              </SelectTrigger>
               <SelectContent>
-                {sitePeriods.filter((p) => p.id !== period?.id).map((p) => (
-                  <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>
-                ))}
+                {sitePeriods
+                  .filter((p) => p.id !== period?.id)
+                  .map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.label}
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           </div>
           <div className="grid gap-1.5">
             <Label className="text-xs">Baseline</Label>
-            <Select value={baselinePeriodId || "none"}
+            <Select
+              value={baselinePeriodId || "none"}
               onValueChange={(v) => setBaselinePeriodId(v === "none" ? "" : v)}
-              disabled={sitePeriods.length < 2}>
-              <SelectTrigger className="w-48"><SelectValue placeholder="No baseline" /></SelectTrigger>
+              disabled={sitePeriods.length < 2}
+            >
+              <SelectTrigger className="w-48">
+                <SelectValue placeholder="No baseline" />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">No baseline</SelectItem>
-                {sitePeriods.filter((p) => p.id !== period?.id).map((p) => (
-                  <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>
-                ))}
+                {sitePeriods
+                  .filter((p) => p.id !== period?.id)
+                  .map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.label}
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           </div>
           <div className="grid gap-1.5">
             <Label className="text-xs">Circuit category</Label>
             <Select value={category} onValueChange={setCategory}>
-              <SelectTrigger className="w-52"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-52">
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All categories</SelectItem>
                 {categories.map((c) => (
-                  <SelectItem key={c} value={c}>{labels[c] ?? c}</SelectItem>
+                  <SelectItem key={c} value={c}>
+                    {labels[c] ?? c}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
-          <Button variant="outline" size="sm" className="ml-auto gap-1.5" onClick={exportCsv}
-            disabled={!circuits.length}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="ml-auto gap-1.5"
+            onClick={exportCsv}
+            disabled={!circuits.length}
+          >
             <Download className="h-3.5 w-3.5" /> Export merged CSV
           </Button>
         </CardContent>
@@ -325,15 +418,26 @@ export function NeutralHomeDashboard({ bundle }: { bundle: NeutralHomeBundle }) 
       ) : (
         <>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            <Kpi label="Meters imported" value={num(circuits.length)} icon={Gauge}
-              sub={`${circuits.filter((c) => !c.is_aggregate).length} sub-circuits · ${circuits.filter((c) => c.is_aggregate).length} totals/incomers`} />
-            <Kpi label="Total consumption" value={`${num(kpis.totalKwh)} kWh`} icon={Zap}
-              badge={variancePct(variance, "Total consumption")} />
+            <Kpi
+              label="Meters imported"
+              value={num(circuits.length)}
+              icon={Gauge}
+              sub={`${circuits.filter((c) => !c.is_aggregate).length} sub-circuits · ${circuits.filter((c) => c.is_aggregate).length} totals/incomers`}
+            />
+            <Kpi
+              label="Total consumption"
+              value={`${num(kpis.totalKwh)} kWh`}
+              icon={Zap}
+              badge={variancePct(variance, "Total consumption")}
+            />
             <Card className="border-border/60">
               <CardContent className="p-5">
                 <div className="flex items-center justify-between text-xs font-medium text-muted-foreground">
                   <span>Day / Night split</span>
-                  <div className="flex gap-1"><Sun className="h-4 w-4 text-amber-500" /><Moon className="h-4 w-4 text-indigo-500" /></div>
+                  <div className="flex gap-1">
+                    <Sun className="h-4 w-4 text-amber-500" />
+                    <Moon className="h-4 w-4 text-indigo-500" />
+                  </div>
                 </div>
                 <div className="mt-3 text-2xl font-semibold tracking-tight">
                   {num(kpis.dayPct, 1)}% / {num(kpis.nightPct, 1)}%
@@ -348,12 +452,26 @@ export function NeutralHomeDashboard({ bundle }: { bundle: NeutralHomeBundle }) 
                 </div>
               </CardContent>
             </Card>
-            <Kpi label="Total cost" value={`£${num(kpis.totalCostGbp, 2)}`} icon={PoundSterling}
-              badge={variancePct(variance, "Total cost")} />
-            <Kpi label="Carbon" value={`${num(kpis.co2Kg / 1000, 2)} tCO₂e`} icon={Leaf}
-              sub={`${num(kpis.co2Kg)} kg`} badge={variancePct(variance, "Carbon")} />
-            <Kpi label="Blended cost" value={`${num(kpis.blendedPPerKwh, 2)} p/kWh`} icon={Zap}
-              badge={variancePct(variance, "Blended cost")} sub={`${kpis.circuitCount} circuits`} />
+            <Kpi
+              label="Total cost"
+              value={`£${num(kpis.totalCostGbp, 2)}`}
+              icon={PoundSterling}
+              badge={variancePct(variance, "Total cost")}
+            />
+            <Kpi
+              label="Carbon"
+              value={`${num(kpis.co2Kg / 1000, 2)} tCO₂e`}
+              icon={Leaf}
+              sub={`${num(kpis.co2Kg)} kg`}
+              badge={variancePct(variance, "Carbon")}
+            />
+            <Kpi
+              label="Blended cost"
+              value={`${num(kpis.blendedPPerKwh, 2)} p/kWh`}
+              icon={Zap}
+              badge={variancePct(variance, "Blended cost")}
+              sub={`${kpis.circuitCount} circuits`}
+            />
           </div>
 
           {comparisonRows.length && (compareCircuits.length || baselineCircuits.length) ? (
@@ -389,17 +507,29 @@ export function NeutralHomeDashboard({ bundle }: { bundle: NeutralHomeBundle }) 
                       {comparisonRows.map((r) => (
                         <tr key={r.key} className="border-t">
                           <td className="py-2">{r.label}</td>
-                          <td className="py-2 text-right">{num(r.current, 2)} {r.unit}</td>
+                          <td className="py-2 text-right">
+                            {num(r.current, 2)} {r.unit}
+                          </td>
                           {compareCircuits.length ? (
                             <>
                               <td className="py-2 text-right text-muted-foreground">
                                 {r.lastYear ? `${num(r.lastYear.value, 2)} ${r.unit}` : "—"}
                               </td>
-                              <td className={cn("py-2 text-right font-medium",
-                                r.lastYear ? (r.lastYear.good ? "text-emerald-600" : "text-red-600") : "")}>
+                              <td
+                                className={cn(
+                                  "py-2 text-right font-medium",
+                                  r.lastYear
+                                    ? r.lastYear.good
+                                      ? "text-emerald-600"
+                                      : "text-red-600"
+                                    : "",
+                                )}
+                              >
                                 {r.lastYear
                                   ? `${r.lastYear.delta >= 0 ? "+" : ""}${num(r.lastYear.delta, 2)} ${r.unit}${
-                                      r.lastYear.pct == null ? "" : ` (${r.lastYear.pct >= 0 ? "+" : ""}${num(r.lastYear.pct, 1)}%)`
+                                      r.lastYear.pct == null
+                                        ? ""
+                                        : ` (${r.lastYear.pct >= 0 ? "+" : ""}${num(r.lastYear.pct, 1)}%)`
                                     }`
                                   : "—"}
                               </td>
@@ -410,11 +540,21 @@ export function NeutralHomeDashboard({ bundle }: { bundle: NeutralHomeBundle }) 
                               <td className="py-2 text-right text-muted-foreground">
                                 {r.baseline ? `${num(r.baseline.value, 2)} ${r.unit}` : "—"}
                               </td>
-                              <td className={cn("py-2 text-right font-medium",
-                                r.baseline ? (r.baseline.good ? "text-emerald-600" : "text-red-600") : "")}>
+                              <td
+                                className={cn(
+                                  "py-2 text-right font-medium",
+                                  r.baseline
+                                    ? r.baseline.good
+                                      ? "text-emerald-600"
+                                      : "text-red-600"
+                                    : "",
+                                )}
+                              >
                                 {r.baseline
                                   ? `${r.baseline.delta >= 0 ? "+" : ""}${num(r.baseline.delta, 2)} ${r.unit}${
-                                      r.baseline.pct == null ? "" : ` (${r.baseline.pct >= 0 ? "+" : ""}${num(r.baseline.pct, 1)}%)`
+                                      r.baseline.pct == null
+                                        ? ""
+                                        : ` (${r.baseline.pct >= 0 ? "+" : ""}${num(r.baseline.pct, 1)}%)`
                                     }`
                                   : "—"}
                               </td>
@@ -431,9 +571,12 @@ export function NeutralHomeDashboard({ bundle }: { bundle: NeutralHomeBundle }) 
 
           <Card>
             <CardContent className="p-5">
-              <h2 className="pb-1 text-base font-semibold tracking-tight">Day / Night Load & Waste</h2>
+              <h2 className="pb-1 text-base font-semibold tracking-tight">
+                Day / Night Load & Waste
+              </h2>
               <p className="pb-4 text-sm text-muted-foreground">
-                Top circuits by total usage. Night share above {NIGHT_FLAG_THRESHOLD}% is flagged below.
+                Top circuits by total usage. Night share above {NIGHT_FLAG_THRESHOLD}% is flagged
+                below.
               </p>
               <div className="h-[420px]">
                 <ResponsiveContainer width="100%" height="100%">
@@ -452,13 +595,20 @@ export function NeutralHomeDashboard({ bundle }: { bundle: NeutralHomeBundle }) 
               {flags.length ? (
                 <div className="mt-4 space-y-2">
                   {flags.slice(0, 8).map((f) => (
-                    <div key={f.circuit.id}
+                    <div
+                      key={f.circuit.id}
                       className={cn(
                         "flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3 text-sm",
                         f.nonEssential ? "border-amber-500/40 bg-amber-500/5" : "",
-                      )}>
+                      )}
+                    >
                       <div className="flex items-center gap-2">
-                        <AlertTriangle className={cn("h-4 w-4", f.nonEssential ? "text-amber-600" : "text-muted-foreground")} />
+                        <AlertTriangle
+                          className={cn(
+                            "h-4 w-4",
+                            f.nonEssential ? "text-amber-600" : "text-muted-foreground",
+                          )}
+                        />
                         <span className="font-medium">{f.circuit.circuit_name}</span>
                         <Badge variant="outline" className="text-[10px]">
                           {labels[f.circuit.category] ?? f.circuit.category}
@@ -471,7 +621,9 @@ export function NeutralHomeDashboard({ bundle }: { bundle: NeutralHomeBundle }) 
                   ))}
                 </div>
               ) : (
-                <p className="mt-4 text-sm text-muted-foreground">No circuits exceed the night-share threshold.</p>
+                <p className="mt-4 text-sm text-muted-foreground">
+                  No circuits exceed the night-share threshold.
+                </p>
               )}
 
               <div className="mt-6 rounded-lg border p-4">
@@ -492,10 +644,17 @@ export function NeutralHomeDashboard({ bundle }: { bundle: NeutralHomeBundle }) 
                   </div>
                 </div>
                 <div className="mt-4 max-w-md">
-                  <Slider value={[shiftPct]} min={0} max={20} step={1}
-                    onValueChange={(v) => setShiftPct(v[0] ?? 0)} />
+                  <Slider
+                    value={[shiftPct]}
+                    min={0}
+                    max={20}
+                    step={1}
+                    onValueChange={(v) => setShiftPct(v[0] ?? 0)}
+                  />
                   <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
-                    <span>0%</span><span>10%</span><span>20%</span>
+                    <span>0%</span>
+                    <span>10%</span>
+                    <span>20%</span>
                   </div>
                 </div>
                 <div className="mt-3 text-xs text-muted-foreground">
@@ -511,11 +670,19 @@ export function NeutralHomeDashboard({ bundle }: { bundle: NeutralHomeBundle }) 
                     </p>
                     <div className="grid gap-1.5">
                       <Label className="text-xs">Day rate (p/kWh)</Label>
-                      <Input type="number" value={manualDay} onChange={(e) => setManualDay(e.target.value)} />
+                      <Input
+                        type="number"
+                        value={manualDay}
+                        onChange={(e) => setManualDay(e.target.value)}
+                      />
                     </div>
                     <div className="grid gap-1.5">
                       <Label className="text-xs">Night rate (p/kWh)</Label>
-                      <Input type="number" value={manualNight} onChange={(e) => setManualNight(e.target.value)} />
+                      <Input
+                        type="number"
+                        value={manualNight}
+                        onChange={(e) => setManualNight(e.target.value)}
+                      />
                     </div>
                   </div>
                 ) : null}
@@ -527,23 +694,38 @@ export function NeutralHomeDashboard({ bundle }: { bundle: NeutralHomeBundle }) 
             <CardContent className="p-5">
               <div className="flex flex-wrap items-center justify-between gap-3 pb-4">
                 <div>
-                  <h2 className="text-base font-semibold tracking-tight">Efficiency League Table</h2>
+                  <h2 className="text-base font-semibold tracking-tight">
+                    Efficiency League Table
+                  </h2>
                   <p className="text-sm text-muted-foreground">
                     {groupByCategory
                       ? "Totals aggregated by category."
                       : showAggregates
                         ? "Showing every imported meter, including totals, incomers and inverters."
-                        : "Totals, incomers and inverters are hidden."} Click any column header to sort.
+                        : "Totals, incomers and inverters are hidden."}{" "}
+                    Click any column header to sort.
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-4">
                   <div className="flex items-center gap-2">
-                    <Switch id="nh-aggs" checked={showAggregates} onCheckedChange={setShowAggregates} />
-                    <Label htmlFor="nh-aggs" className="text-xs">Include totals & incomers</Label>
+                    <Switch
+                      id="nh-aggs"
+                      checked={showAggregates}
+                      onCheckedChange={setShowAggregates}
+                    />
+                    <Label htmlFor="nh-aggs" className="text-xs">
+                      Include totals & incomers
+                    </Label>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Switch id="nh-group" checked={groupByCategory} onCheckedChange={setGroupByCategory} />
-                    <Label htmlFor="nh-group" className="text-xs">Group by Category</Label>
+                    <Switch
+                      id="nh-group"
+                      checked={groupByCategory}
+                      onCheckedChange={setGroupByCategory}
+                    />
+                    <Label htmlFor="nh-group" className="text-xs">
+                      Group by Category
+                    </Label>
                   </div>
                 </div>
               </div>
@@ -551,15 +733,59 @@ export function NeutralHomeDashboard({ bundle }: { bundle: NeutralHomeBundle }) 
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="text-left text-xs text-muted-foreground">
-                      <SortTh label={groupByCategory ? "Category" : "Circuit"} col="name" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} align="left" />
+                      <SortTh
+                        label={groupByCategory ? "Category" : "Circuit"}
+                        col="name"
+                        sortKey={sortKey}
+                        sortDir={sortDir}
+                        onSort={toggleSort}
+                        align="left"
+                      />
                       {groupByCategory ? null : (
-                        <SortTh label="Category" col="category" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} align="left" />
+                        <SortTh
+                          label="Category"
+                          col="category"
+                          sortKey={sortKey}
+                          sortDir={sortDir}
+                          onSort={toggleSort}
+                          align="left"
+                        />
                       )}
-                      <SortTh label="Usage (kWh)" col="usage_kwh" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                      <SortTh label="CO₂ (kg)" col="co2_kg" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                      <SortTh label="Cost (£)" col="cost_gbp" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                      <SortTh label="Day (kWh)" col="day_kwh" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                      <SortTh label="Night (kWh)" col="night_kwh" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                      <SortTh
+                        label="Usage (kWh)"
+                        col="usage_kwh"
+                        sortKey={sortKey}
+                        sortDir={sortDir}
+                        onSort={toggleSort}
+                      />
+                      <SortTh
+                        label="CO₂ (kg)"
+                        col="co2_kg"
+                        sortKey={sortKey}
+                        sortDir={sortDir}
+                        onSort={toggleSort}
+                      />
+                      <SortTh
+                        label="Cost (£)"
+                        col="cost_gbp"
+                        sortKey={sortKey}
+                        sortDir={sortDir}
+                        onSort={toggleSort}
+                      />
+                      <SortTh
+                        label="Day (kWh)"
+                        col="day_kwh"
+                        sortKey={sortKey}
+                        sortDir={sortDir}
+                        onSort={toggleSort}
+                      />
+                      <SortTh
+                        label="Night (kWh)"
+                        col="night_kwh"
+                        sortKey={sortKey}
+                        sortDir={sortDir}
+                        onSort={toggleSort}
+                      />
                     </tr>
                   </thead>
                   <tbody>
@@ -568,10 +794,14 @@ export function NeutralHomeDashboard({ bundle }: { bundle: NeutralHomeBundle }) 
                         <td className="py-2 pr-3">
                           {r.name}
                           {r.isAggregate ? (
-                            <Badge variant="outline" className="ml-2 text-[10px]">total</Badge>
+                            <Badge variant="outline" className="ml-2 text-[10px]">
+                              total
+                            </Badge>
                           ) : null}
                           {groupByCategory ? (
-                            <Badge variant="outline" className="ml-2 text-[10px]">{r.meters} meters</Badge>
+                            <Badge variant="outline" className="ml-2 text-[10px]">
+                              {r.meters} meters
+                            </Badge>
                           ) : null}
                         </td>
                         {groupByCategory ? null : (
@@ -581,9 +811,15 @@ export function NeutralHomeDashboard({ bundle }: { bundle: NeutralHomeBundle }) 
                         <td className="py-2 text-right">{num(r.co2_kg, 1)}</td>
                         <td className="py-2 text-right">{num(r.cost_gbp, 2)}</td>
                         <td className="py-2 text-right">{r.day_kwh ? num(r.day_kwh, 1) : "—"}</td>
-                        <td className={cn("py-2 text-right",
-                          r.day_kwh + r.night_kwh > 0 && (r.night_kwh / (r.day_kwh + r.night_kwh)) * 100 > NIGHT_FLAG_THRESHOLD
-                            ? "font-medium text-amber-600" : "")}>
+                        <td
+                          className={cn(
+                            "py-2 text-right",
+                            r.day_kwh + r.night_kwh > 0 &&
+                              (r.night_kwh / (r.day_kwh + r.night_kwh)) * 100 > NIGHT_FLAG_THRESHOLD
+                              ? "font-medium text-amber-600"
+                              : "",
+                          )}
+                        >
                           {r.night_kwh ? num(r.night_kwh, 1) : "—"}
                         </td>
                       </tr>
@@ -612,7 +848,12 @@ function variancePct(
 }
 
 function SortTh({
-  label, col, sortKey, sortDir, onSort, align = "right",
+  label,
+  col,
+  sortKey,
+  sortDir,
+  onSort,
+  align = "right",
 }: {
   label: string;
   col: SortKey;
@@ -635,7 +876,11 @@ function SortTh({
       >
         {label}
         {active ? (
-          sortDir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+          sortDir === "asc" ? (
+            <ArrowUp className="h-3 w-3" />
+          ) : (
+            <ArrowDown className="h-3 w-3" />
+          )
         ) : (
           <ArrowUpDown className="h-3 w-3 opacity-40" />
         )}
@@ -645,7 +890,11 @@ function SortTh({
 }
 
 function Kpi({
-  label, value, sub, icon: Icon, badge,
+  label,
+  value,
+  sub,
+  icon: Icon,
+  badge,
 }: {
   label: string;
   value: string;
@@ -664,7 +913,12 @@ function Kpi({
         <div className="mt-2 flex items-center justify-between text-xs">
           <span className="text-muted-foreground">{sub ?? ""}</span>
           {badge ? (
-            <span className={cn("flex items-center gap-1 font-medium", badge.good ? "text-emerald-600" : "text-red-600")}>
+            <span
+              className={cn(
+                "flex items-center gap-1 font-medium",
+                badge.good ? "text-emerald-600" : "text-red-600",
+              )}
+            >
               {badge.good ? <ArrowDown className="h-3 w-3" /> : <ArrowUp className="h-3 w-3" />}
               {badge.text}
             </span>
