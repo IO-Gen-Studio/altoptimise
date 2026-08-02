@@ -419,13 +419,13 @@ export function NeutralHomeDashboard({ bundle }: { bundle: NeutralHomeBundle }) 
         <>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <Kpi
-              label="Meters imported"
+              label="No. of Datapoints"
               value={num(circuits.length)}
               icon={Gauge}
               sub={`${circuits.filter((c) => !c.is_aggregate).length} sub-circuits · ${circuits.filter((c) => c.is_aggregate).length} totals/incomers`}
             />
             <Kpi
-              label="Total consumption"
+              label="Total Consumption"
               value={`${num(kpis.totalKwh)} kWh`}
               icon={Zap}
               badge={variancePct(variance, "Total consumption")}
@@ -433,7 +433,7 @@ export function NeutralHomeDashboard({ bundle }: { bundle: NeutralHomeBundle }) 
             <Card className="border-border/60">
               <CardContent className="p-5">
                 <div className="flex items-center justify-between text-xs font-medium text-muted-foreground">
-                  <span>Day / Night split</span>
+                  <span>Day / Night Split</span>
                   <div className="flex gap-1">
                     <Sun className="h-4 w-4 text-amber-500" />
                     <Moon className="h-4 w-4 text-indigo-500" />
@@ -453,20 +453,20 @@ export function NeutralHomeDashboard({ bundle }: { bundle: NeutralHomeBundle }) 
               </CardContent>
             </Card>
             <Kpi
-              label="Total cost"
+              label="Total Cost"
               value={`£${num(kpis.totalCostGbp, 2)}`}
               icon={PoundSterling}
               badge={variancePct(variance, "Total cost")}
             />
             <Kpi
-              label="Carbon"
+              label="Carbon Emissions"
               value={`${num(kpis.co2Kg / 1000, 2)} tCO₂e`}
               icon={Leaf}
               sub={`${num(kpis.co2Kg)} kg`}
               badge={variancePct(variance, "Carbon")}
             />
             <Kpi
-              label="Blended cost"
+              label="Blended Cost"
               value={`${num(kpis.blendedPPerKwh, 2)} p/kWh`}
               icon={Zap}
               badge={variancePct(variance, "Blended cost")}
