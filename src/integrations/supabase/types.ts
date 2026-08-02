@@ -381,6 +381,57 @@ export type Database = {
           },
         ]
       }
+      neutral_home_categories: {
+        Row: {
+          code: string
+          created_at: string
+          hidden: boolean
+          id: string
+          label: string
+          organization_id: string
+          site_id: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          hidden?: boolean
+          id?: string
+          label: string
+          organization_id: string
+          site_id: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          hidden?: boolean
+          id?: string
+          label?: string
+          organization_id?: string
+          site_id?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "neutral_home_categories_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "neutral_home_categories_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "neutral_home_sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       neutral_home_circuits: {
         Row: {
           blended_p_kwh: number | null
@@ -477,6 +528,102 @@ export type Database = {
           },
         ]
       }
+      neutral_home_meter_categories: {
+        Row: {
+          category: string
+          circuit_name: string
+          organization_id: string
+          site_id: string
+          updated_at: string
+        }
+        Insert: {
+          category: string
+          circuit_name: string
+          organization_id: string
+          site_id: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          circuit_name?: string
+          organization_id?: string
+          site_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "neutral_home_meter_categories_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "neutral_home_meter_categories_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "neutral_home_sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      neutral_home_metrics: {
+        Row: {
+          circuit_names: string[]
+          created_at: string
+          id: string
+          lower_is_better: boolean
+          name: string
+          organization_id: string
+          site_id: string
+          sort_order: number
+          source: string
+          unit: string
+          updated_at: string
+        }
+        Insert: {
+          circuit_names?: string[]
+          created_at?: string
+          id?: string
+          lower_is_better?: boolean
+          name: string
+          organization_id: string
+          site_id: string
+          sort_order?: number
+          source?: string
+          unit?: string
+          updated_at?: string
+        }
+        Update: {
+          circuit_names?: string[]
+          created_at?: string
+          id?: string
+          lower_is_better?: boolean
+          name?: string
+          organization_id?: string
+          site_id?: string
+          sort_order?: number
+          source?: string
+          unit?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "neutral_home_metrics_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "neutral_home_metrics_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "neutral_home_sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       neutral_home_periods: {
         Row: {
           created_at: string
@@ -526,6 +673,42 @@ export type Database = {
             foreignKeyName: "neutral_home_periods_site_id_fkey"
             columns: ["site_id"]
             isOneToOne: false
+            referencedRelation: "neutral_home_sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      neutral_home_site_settings: {
+        Row: {
+          comparison_metrics: string[]
+          organization_id: string
+          site_id: string
+          updated_at: string
+        }
+        Insert: {
+          comparison_metrics?: string[]
+          organization_id: string
+          site_id: string
+          updated_at?: string
+        }
+        Update: {
+          comparison_metrics?: string[]
+          organization_id?: string
+          site_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "neutral_home_site_settings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "neutral_home_site_settings_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: true
             referencedRelation: "neutral_home_sites"
             referencedColumns: ["id"]
           },

@@ -1,12 +1,25 @@
 import { useRef, useState } from "react";
-import { AlertTriangle, CheckCircle2, FileSpreadsheet, Home, Plus, Trash2, Upload } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  FileSpreadsheet,
+  Home,
+  Plus,
+  Trash2,
+  Upload,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
-  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,11 +27,18 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import {
-  deleteNhPeriod, deleteNhSite, saveNhPeriod, upsertNhSite,
-  type NeutralHomeBundle, type NhSite,
+  deleteNhPeriod,
+  deleteNhSite,
+  saveNhPeriod,
+  upsertNhSite,
+  type NeutralHomeBundle,
+  type NhSite,
 } from "@/lib/neutral-home.functions";
+import { NeutralHomeConfig } from "./NeutralHomeConfig";
 import {
-  mergeReports, parseDayNightReport, parseHeadlineReport,
+  mergeReports,
+  parseDayNightReport,
+  parseHeadlineReport,
   type MergeResult,
 } from "@/lib/neutral-home/parse";
 
@@ -40,7 +60,12 @@ type SiteDraft = {
 };
 
 const emptyDraft: SiteDraft = {
-  name: "", address: "", postcode: "", floor_area_m2: "", occupancy: "", notes: "",
+  name: "",
+  address: "",
+  postcode: "",
+  floor_area_m2: "",
+  occupancy: "",
+  notes: "",
 };
 
 export function NeutralHomeSettings({ orgId, bundle, canEdit, onChanged }: Props) {
@@ -49,7 +74,10 @@ export function NeutralHomeSettings({ orgId, bundle, canEdit, onChanged }: Props
   const [saving, setSaving] = useState(false);
   const [uploadSite, setUploadSite] = useState<NhSite | null>(null);
 
-  const openNew = () => { setDraft(emptyDraft); setSiteDialog(true); };
+  const openNew = () => {
+    setDraft(emptyDraft);
+    setSiteDialog(true);
+  };
   const openEdit = (s: NhSite) => {
     setDraft({
       id: s.id,
@@ -64,7 +92,10 @@ export function NeutralHomeSettings({ orgId, bundle, canEdit, onChanged }: Props
   };
 
   const saveSite = async () => {
-    if (!draft.name.trim()) { toast.error("Site name is required"); return; }
+    if (!draft.name.trim()) {
+      toast.error("Site name is required");
+      return;
+    }
     setSaving(true);
     try {
       await upsertNhSite({
@@ -150,17 +181,33 @@ export function NeutralHomeSettings({ orgId, bundle, canEdit, onChanged }: Props
                         </div>
                         <div className="mt-1 text-xs text-muted-foreground">
                           {[s.address, s.postcode].filter(Boolean).join(", ") || "No address"}
-                          {s.floor_area_m2 ? ` · ${Number(s.floor_area_m2).toLocaleString()} m²` : ""}
-                          {s.occupancy ? ` · ${Number(s.occupancy).toLocaleString()} occupants` : ""}
+                          {s.floor_area_m2
+                            ? ` · ${Number(s.floor_area_m2).toLocaleString()} m²`
+                            : ""}
+                          {s.occupancy
+                            ? ` · ${Number(s.occupancy).toLocaleString()} occupants`
+                            : ""}
                         </div>
                       </div>
                       {canEdit ? (
                         <div className="flex items-center gap-2">
-                          <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setUploadSite(s)}>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-1.5"
+                            onClick={() => setUploadSite(s)}
+                          >
                             <Upload className="h-3.5 w-3.5" /> Upload reports
                           </Button>
-                          <Button size="sm" variant="ghost" onClick={() => openEdit(s)}>Edit</Button>
-                          <Button size="sm" variant="ghost" className="text-destructive" onClick={() => removeSite(s)}>
+                          <Button size="sm" variant="ghost" onClick={() => openEdit(s)}>
+                            Edit
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-destructive"
+                            onClick={() => removeSite(s)}
+                          >
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         </div>
@@ -196,8 +243,12 @@ export function NeutralHomeSettings({ orgId, bundle, canEdit, onChanged }: Props
                                 </td>
                                 <td className="px-4 py-2 text-right">
                                   {canEdit ? (
-                                    <Button size="sm" variant="ghost" className="text-destructive"
-                                      onClick={() => removePeriod(p.id)}>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="text-destructive"
+                                      onClick={() => removePeriod(p.id)}
+                                    >
                                       <Trash2 className="h-3.5 w-3.5" />
                                     </Button>
                                   ) : null}
@@ -216,48 +267,79 @@ export function NeutralHomeSettings({ orgId, bundle, canEdit, onChanged }: Props
         </CardContent>
       </Card>
 
+      <NeutralHomeConfig orgId={orgId} bundle={bundle} canEdit={canEdit} onChanged={onChanged} />
+
       <Dialog open={siteDialog} onOpenChange={setSiteDialog}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{draft.id ? "Edit site" : "New site"}</DialogTitle>
             <DialogDescription>
-              Floor area and occupancy are stored for reference. Postcode will drive degree-day analysis later.
+              Floor area and occupancy are stored for reference. Postcode will drive degree-day
+              analysis later.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3">
             <div className="grid gap-1.5">
               <Label htmlFor="nh-name">Site name</Label>
-              <Input id="nh-name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
+              <Input
+                id="nh-name"
+                value={draft.name}
+                onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+              />
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="nh-address">Address</Label>
-              <Input id="nh-address" value={draft.address} onChange={(e) => setDraft({ ...draft, address: e.target.value })} />
+              <Input
+                id="nh-address"
+                value={draft.address}
+                onChange={(e) => setDraft({ ...draft, address: e.target.value })}
+              />
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="grid gap-1.5">
                 <Label htmlFor="nh-postcode">Postcode</Label>
-                <Input id="nh-postcode" value={draft.postcode} onChange={(e) => setDraft({ ...draft, postcode: e.target.value })} />
+                <Input
+                  id="nh-postcode"
+                  value={draft.postcode}
+                  onChange={(e) => setDraft({ ...draft, postcode: e.target.value })}
+                />
               </div>
               <div className="grid gap-1.5">
                 <Label htmlFor="nh-area">Floor area (m²)</Label>
-                <Input id="nh-area" type="number" value={draft.floor_area_m2}
-                  onChange={(e) => setDraft({ ...draft, floor_area_m2: e.target.value })} />
+                <Input
+                  id="nh-area"
+                  type="number"
+                  value={draft.floor_area_m2}
+                  onChange={(e) => setDraft({ ...draft, floor_area_m2: e.target.value })}
+                />
               </div>
               <div className="grid gap-1.5">
                 <Label htmlFor="nh-occ">Occupancy</Label>
-                <Input id="nh-occ" type="number" value={draft.occupancy}
-                  onChange={(e) => setDraft({ ...draft, occupancy: e.target.value })} />
+                <Input
+                  id="nh-occ"
+                  type="number"
+                  value={draft.occupancy}
+                  onChange={(e) => setDraft({ ...draft, occupancy: e.target.value })}
+                />
               </div>
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="nh-notes">Notes</Label>
-              <Textarea id="nh-notes" rows={3} value={draft.notes}
-                onChange={(e) => setDraft({ ...draft, notes: e.target.value })} />
+              <Textarea
+                id="nh-notes"
+                rows={3}
+                value={draft.notes}
+                onChange={(e) => setDraft({ ...draft, notes: e.target.value })}
+              />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setSiteDialog(false)}>Cancel</Button>
-            <Button onClick={saveSite} disabled={saving}>{saving ? "Saving…" : "Save site"}</Button>
+            <Button variant="outline" onClick={() => setSiteDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={saveSite} disabled={saving}>
+              {saving ? "Saving…" : "Save site"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -267,7 +349,10 @@ export function NeutralHomeSettings({ orgId, bundle, canEdit, onChanged }: Props
           site={uploadSite}
           orgId={orgId}
           onClose={() => setUploadSite(null)}
-          onSaved={() => { setUploadSite(null); onChanged(); }}
+          onSaved={() => {
+            setUploadSite(null);
+            onChanged();
+          }}
         />
       ) : null}
     </div>
@@ -275,13 +360,22 @@ export function NeutralHomeSettings({ orgId, bundle, canEdit, onChanged }: Props
 }
 
 function FileSlot({
-  label, file, onPick,
-}: { label: string; file: File | null; onPick: (f: File | null) => void }) {
+  label,
+  file,
+  onPick,
+}: {
+  label: string;
+  file: File | null;
+  onPick: (f: File | null) => void;
+}) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
   return (
     <div
-      onDragOver={(e) => { e.preventDefault(); setOver(true); }}
+      onDragOver={(e) => {
+        e.preventDefault();
+        setOver(true);
+      }}
       onDragLeave={() => setOver(false)}
       onDrop={(e) => {
         e.preventDefault();
@@ -312,8 +406,16 @@ function FileSlot({
 }
 
 function UploadDrawer({
-  site, orgId, onClose, onSaved,
-}: { site: NhSite; orgId: string; onClose: () => void; onSaved: () => void }) {
+  site,
+  orgId,
+  onClose,
+  onSaved,
+}: {
+  site: NhSite;
+  orgId: string;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
   const [headline, setHeadline] = useState<File | null>(null);
   const [daynight, setDaynight] = useState<File | null>(null);
   const [mode, setMode] = useState<"merge" | "replace">("replace");
@@ -322,7 +424,10 @@ function UploadDrawer({
   const [busy, setBusy] = useState(false);
 
   const analyse = async () => {
-    if (!headline) { toast.error("The Headline Usage Report is required"); return; }
+    if (!headline) {
+      toast.error("The Headline Usage Report is required");
+      return;
+    }
     setBusy(true);
     const t = toast.loading("Parsing reports…");
     try {
@@ -393,7 +498,12 @@ function UploadDrawer({
   const blocked = !result || !!v?.errors.length;
 
   return (
-    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+    <Dialog
+      open
+      onOpenChange={(o) => {
+        if (!o) onClose();
+      }}
+    >
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Upload Envisij reports — {site.name}</DialogTitle>
@@ -405,20 +515,31 @@ function UploadDrawer({
 
         <div className="grid gap-3 sm:grid-cols-2">
           <FileSlot label="1. Headline Usage Report" file={headline} onPick={setHeadline} />
-          <FileSlot label="2. Day/Night Group Overview (optional)" file={daynight} onPick={setDaynight} />
+          <FileSlot
+            label="2. Day/Night Group Overview (optional)"
+            file={daynight}
+            onPick={setDaynight}
+          />
         </div>
 
         <div className="grid gap-2">
           <Label>If this period already exists</Label>
-          <RadioGroup value={mode} onValueChange={(v2) => setMode(v2 as "merge" | "replace")}
-            className="flex flex-wrap gap-4">
+          <RadioGroup
+            value={mode}
+            onValueChange={(v2) => setMode(v2 as "merge" | "replace")}
+            className="flex flex-wrap gap-4"
+          >
             <div className="flex items-center gap-2">
               <RadioGroupItem value="replace" id="nh-replace" />
-              <Label htmlFor="nh-replace" className="font-normal">Replace existing circuits</Label>
+              <Label htmlFor="nh-replace" className="font-normal">
+                Replace existing circuits
+              </Label>
             </div>
             <div className="flex items-center gap-2">
               <RadioGroupItem value="merge" id="nh-merge" />
-              <Label htmlFor="nh-merge" className="font-normal">Merge (update matching, keep the rest)</Label>
+              <Label htmlFor="nh-merge" className="font-normal">
+                Merge (update matching, keep the rest)
+              </Label>
             </div>
           </RadioGroup>
         </div>
@@ -429,7 +550,11 @@ function UploadDrawer({
               <Badge variant="outline">{v?.headlineCount} headline rows</Badge>
               <Badge variant="outline">{v?.daynightCount} day/night rows</Badge>
               <Badge variant="outline">{result.circuits.length} joined circuits</Badge>
-              {result.range ? <Badge variant="outline">{result.range.startISO} → {result.range.endISO}</Badge> : null}
+              {result.range ? (
+                <Badge variant="outline">
+                  {result.range.startISO} → {result.range.endISO}
+                </Badge>
+              ) : null}
             </div>
 
             <div className="grid gap-1.5">
@@ -440,14 +565,20 @@ function UploadDrawer({
             {v?.errors.length ? (
               <ul className="space-y-1 text-sm text-destructive">
                 {v.errors.map((e) => (
-                  <li key={e} className="flex gap-2"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />{e}</li>
+                  <li key={e} className="flex gap-2">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                    {e}
+                  </li>
                 ))}
               </ul>
             ) : null}
             {v?.warnings.length ? (
               <ul className="space-y-1 text-sm text-amber-600">
                 {v.warnings.map((w) => (
-                  <li key={w} className="flex gap-2"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />{w}</li>
+                  <li key={w} className="flex gap-2">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                    {w}
+                  </li>
                 ))}
               </ul>
             ) : null}
@@ -460,11 +591,15 @@ function UploadDrawer({
         ) : null}
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
           <Button variant="secondary" onClick={analyse} disabled={busy || !headline}>
             {busy ? "Working…" : "Validate"}
           </Button>
-          <Button onClick={commit} disabled={busy || blocked}>Save period</Button>
+          <Button onClick={commit} disabled={busy || blocked}>
+            Save period
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
