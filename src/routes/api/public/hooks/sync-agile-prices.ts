@@ -6,8 +6,12 @@ import { createFileRoute } from "@tanstack/react-router";
 export const Route = createFileRoute("/api/public/hooks/sync-agile-prices")({
   server: {
     handlers: {
-      POST: async () => {
+      POST: async ({ request }) => {
         try {
+          const { isAuthorizedCronRequest } = await import("@/lib/cron-auth.server");
+          if (!isAuthorizedCronRequest(request)) {
+            return Response.json({ error: "Unauthorized" }, { status: 401 });
+          }
           const { syncAllPrices } = await import("@/lib/pricing.server");
           const results = await syncAllPrices();
           const rows = results.reduce((a, r) => a + r.rows, 0);
