@@ -253,6 +253,12 @@ export async function parseHeadlineReport(file: File): Promise<ParsedReport<Head
       const idx = colOf.get(key);
       return idx == null ? null : toNum(row[idx]);
     };
+    // Envisij reports cost totals in pounds; store them in pence to match the
+    // *_p column semantics used everywhere downstream.
+    const pickPence = (key: keyof HeadlineRow) => {
+      const v = pick(key);
+      return v == null ? null : v * 100;
+    };
     rows.push({
       name,
       usage_kwh: pick("usage_kwh"),
@@ -260,11 +266,11 @@ export async function parseHeadlineReport(file: File): Promise<ParsedReport<Head
       blended_p_kwh: pick("blended_p_kwh"),
       day_p_kwh: pick("day_p_kwh"),
       night_p_kwh: pick("night_p_kwh"),
-      total_cost_p: pick("total_cost_p"),
+      total_cost_p: pickPence("total_cost_p"),
       usage_kwh_per_person: pick("usage_kwh_per_person"),
       usage_kwh_per_m2: pick("usage_kwh_per_m2"),
-      cost_p_per_person: pick("cost_p_per_person"),
-      cost_p_per_m2: pick("cost_p_per_m2"),
+      cost_p_per_person: pickPence("cost_p_per_person"),
+      cost_p_per_m2: pickPence("cost_p_per_m2"),
       co2_kg_per_person: pick("co2_kg_per_person"),
       co2_kg_per_m2: pick("co2_kg_per_m2"),
     });
