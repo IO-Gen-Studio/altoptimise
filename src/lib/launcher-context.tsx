@@ -188,7 +188,7 @@ export const APPS: MiniApp[] = [
     name: "Neutral Home",
     tagline: "Reporting for Excel Utilities",
     description:
-      "Ingests Envisij headline usage and day/night group exports per site, then reports consumption, cost, carbon, day/night waste and intensity leaderboards with period-on-period comparison.",
+      "Monthly hospice reporting uses Envisij export data to capture key data such as consumption, generation, import/export, day-night split, carbon, cost and degree-day normalised performance.",
     category: "PARTNER REPORTING",
     icon: "neutral",
     allowedRoles: ["super_admin", "admin", "user"],
