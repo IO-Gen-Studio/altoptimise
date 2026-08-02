@@ -189,7 +189,7 @@ export const APPS: MiniApp[] = [
     tagline: "Reporting for Excel Utilities",
     description:
       "Ingests Envisij headline usage and day/night group exports per site, then reports consumption, cost, carbon, day/night waste and intensity leaderboards with period-on-period comparison.",
-    category: "Executive",
+    category: "PARTNER REPORTING",
     icon: "neutral",
     allowedRoles: ["super_admin", "admin", "user"],
     accent: "from-slate-500/15 to-emerald-500/10",
