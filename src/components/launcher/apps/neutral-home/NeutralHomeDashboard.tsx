@@ -477,7 +477,7 @@ export function NeutralHomeDashboard({ bundle }: { bundle: NeutralHomeBundle }) 
           {comparisonRows.length && (compareCircuits.length || baselineCircuits.length) ? (
             <Card>
               <CardContent className="p-5">
-                <h2 className="pb-1 text-base font-semibold tracking-tight">Period comparison</h2>
+                <h2 className="pb-1 text-base font-semibold tracking-tight">Performance Comparison</h2>
                 <p className="pb-4 text-sm text-muted-foreground">
                   {period.label}
                   {compareCircuits.length ? ` · vs. Last Year: ${comparePeriod?.label}` : ""}
