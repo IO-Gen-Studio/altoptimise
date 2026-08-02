@@ -49,11 +49,6 @@ interface LeagueRow {
   meters?: number;
 }
 
-const nightShareOf = (c: CircuitRecord) => {
-  const t = (c.day_kwh ?? 0) + (c.night_kwh ?? 0);
-  return t > 0 ? ((c.night_kwh ?? 0) / t) * 100 : 0;
-};
-
 const num = (v: number, dp = 0) =>
   v.toLocaleString(undefined, { minimumFractionDigits: dp, maximumFractionDigits: dp });
 

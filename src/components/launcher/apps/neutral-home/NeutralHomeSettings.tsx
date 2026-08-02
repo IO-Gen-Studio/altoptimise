@@ -17,6 +17,7 @@ import {
   deleteNhPeriod, deleteNhSite, saveNhPeriod, upsertNhSite,
   type NeutralHomeBundle, type NhSite,
 } from "@/lib/neutral-home.functions";
+import { NeutralHomeConfig } from "./NeutralHomeConfig";
 import {
   mergeReports, parseDayNightReport, parseHeadlineReport,
   type MergeResult,
@@ -215,6 +216,8 @@ export function NeutralHomeSettings({ orgId, bundle, canEdit, onChanged }: Props
           )}
         </CardContent>
       </Card>
+
+      <NeutralHomeConfig orgId={orgId} bundle={bundle} canEdit={canEdit} onChanged={onChanged} />
 
       <Dialog open={siteDialog} onOpenChange={setSiteDialog}>
         <DialogContent className="sm:max-w-lg">
