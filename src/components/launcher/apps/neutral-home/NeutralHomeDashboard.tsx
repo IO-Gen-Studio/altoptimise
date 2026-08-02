@@ -698,12 +698,7 @@ export function NeutralHomeDashboard({ bundle }: { bundle: NeutralHomeBundle }) 
                     Efficiency League Table
                   </h2>
                   <p className="text-sm text-muted-foreground">
-                    {groupByCategory
-                      ? "Totals aggregated by category."
-                      : showAggregates
-                        ? "Showing every imported meter, including totals, incomers and inverters."
-                        : "Totals, incomers and inverters are hidden."}{" "}
-                    Click any column header to sort.
+                    Breakdown of all imported datapoints, including totals.
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-4">
