@@ -49,6 +49,10 @@ interface Props {
   bundle: NeutralHomeBundle;
   canEdit: boolean;
   onChanged: () => void;
+  /** When provided, the panel is locked to this site and the site picker is hidden. */
+  siteId?: string;
+  /** Renders without the outer card chrome (for use inside a dialog). */
+  embedded?: boolean;
 }
 
 const SOURCES = Object.keys(METRIC_SOURCE_LABEL) as MetricSource[];
@@ -61,8 +65,17 @@ const slug = (s: string) =>
     .replace(/^-|-$/g, "")
     .slice(0, 40);
 
-export function NeutralHomeConfig({ orgId, bundle, canEdit, onChanged }: Props) {
-  const [siteId, setSiteId] = useState(bundle.sites[0]?.id ?? "");
+export function NeutralHomeConfig({
+  orgId,
+  bundle,
+  canEdit,
+  onChanged,
+  siteId: fixedSiteId,
+  embedded = false,
+}: Props) {
+  const [ownSiteId, setOwnSiteId] = useState(bundle.sites[0]?.id ?? "");
+  const siteId = fixedSiteId ?? ownSiteId;
+  const setSiteId = setOwnSiteId;
   const [busy, setBusy] = useState(false);
   const [newCat, setNewCat] = useState("");
   const [metricDialog, setMetricDialog] = useState<MetricDraft | null>(null);
@@ -113,9 +126,9 @@ export function NeutralHomeConfig({ orgId, bundle, canEdit, onChanged }: Props) 
 
   const disabled = !canEdit || busy || !siteId;
 
-  return (
-    <Card>
-      <CardContent className="p-5">
+  const body = (
+    <>
+      {fixedSiteId ? null : (
         <div className="flex flex-wrap items-end justify-between gap-3 pb-4">
           <div>
             <h2 className="text-base font-semibold tracking-tight">Site configuration</h2>
@@ -139,6 +152,7 @@ export function NeutralHomeConfig({ orgId, bundle, canEdit, onChanged }: Props) 
             </Select>
           </div>
         </div>
+      )}
 
         <Tabs defaultValue="categories">
           <TabsList>
@@ -371,6 +385,8 @@ export function NeutralHomeConfig({ orgId, bundle, canEdit, onChanged }: Props) 
                           {m.circuit_names.length
                             ? `${m.circuit_names.length} meters`
                             : "all sub-circuits"}
+                          {" · "}
+                          {m.lower_is_better ? "decrease is good" : "increase is good"}
                         </div>
                       </div>
                       <div className="flex gap-1">
@@ -436,8 +452,16 @@ export function NeutralHomeConfig({ orgId, bundle, canEdit, onChanged }: Props) 
             </div>
           </TabsContent>
         </Tabs>
-      </CardContent>
+    </>
+  );
 
+  return (
+    <>
+      {embedded ? body : (
+        <Card>
+          <CardContent className="p-5">{body}</CardContent>
+        </Card>
+      )}
       {metricDialog ? (
         <MetricDialog
           draft={metricDialog}
@@ -464,7 +488,7 @@ export function NeutralHomeConfig({ orgId, bundle, canEdit, onChanged }: Props) 
           }
         />
       ) : null}
-    </Card>
+    </>
   );
 }
 
@@ -562,15 +586,27 @@ function MetricDialog({
               onChange={(e) => setD({ ...d, unit: e.target.value })}
             />
           </div>
-          <div className="flex items-center gap-2">
-            <Switch
-              id="nh-lower"
-              checked={d.lower_is_better}
-              onCheckedChange={(v) => setD({ ...d, lower_is_better: v })}
-            />
-            <Label htmlFor="nh-lower" className="font-normal">
-              A decrease is an improvement
-            </Label>
+          <div className="grid gap-1.5">
+            <Label>Direction of a good change</Label>
+            <Select
+              value={d.lower_is_better ? "lower" : "higher"}
+              onValueChange={(v) => setD({ ...d, lower_is_better: v === "lower" })}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="lower">
+                  A decrease is positive (green) — e.g. consumption, cost, carbon
+                </SelectItem>
+                <SelectItem value="higher">
+                  An increase is positive (green) — e.g. solar generation
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Controls whether a rise vs. last year or baseline is shown as an improvement.
+            </p>
           </div>
           <div className="grid gap-1.5">
             <Label>Mapped meters ({d.circuit_names.length})</Label>
