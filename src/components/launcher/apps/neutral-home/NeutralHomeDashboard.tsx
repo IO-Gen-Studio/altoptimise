@@ -210,16 +210,30 @@ export function NeutralHomeDashboard({
     [shownDefs, circuits, compareCircuits, baselineCircuits],
   );
 
-  const filtered = useMemo(() => {
-    const rows = detailCircuits(circuits);
-    return category === "all" ? rows : rows.filter((c) => c.category === category);
-  }, [circuits, category]);
+  const basisRows = useMemo(() => {
+    const units = BASIS_UNITS[basis];
+    const matched = comparisonRows.filter((r) => units.includes(r.unit));
+    return matched.length ? matched : comparisonRows;
+  }, [comparisonRows, basis]);
 
-  const categories = useMemo(() => {
-    const set = new Set<string>();
-    for (const c of circuits) set.add(c.category);
-    return Array.from(set).sort();
+  const filtered = useMemo(() => detailCircuits(circuits), [circuits]);
+
+  const pvKwh = useMemo(() => {
+    const pv = circuits.filter((c) => c.category === "pv");
+    const detail = pv.filter((c) => !c.is_aggregate);
+    const use = detail.length ? detail : pv;
+    return use.reduce((a, c) => a + Math.abs(c.usage_kwh ?? 0), 0);
   }, [circuits]);
+
+  const pvComparePct = useMemo(() => {
+    const pv = compareCircuits.filter((c) => c.category === "pv");
+    const detail = pv.filter((c) => !c.is_aggregate);
+    const use = detail.length ? detail : pv;
+    const prev = use.reduce((a, c) => a + Math.abs(c.usage_kwh ?? 0), 0);
+    if (prev <= 0) return null;
+    const pct = ((pvKwh - prev) / prev) * 100;
+    return { text: `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%`, good: pct >= 0 };
+  }, [compareCircuits, pvKwh]);
 
   const chartData = useMemo(
     () =>
@@ -256,6 +270,7 @@ export function NeutralHomeDashboard({
       const map = new Map<string, LeagueRow>();
       for (const r of rows) {
         const existing = map.get(r.category);
+        const member = { name: r.name, usage_kwh: r.usage_kwh, cost_gbp: r.cost_gbp, co2_kg: r.co2_kg };
         if (existing) {
           existing.usage_kwh += r.usage_kwh;
           existing.co2_kg += r.co2_kg;
@@ -263,6 +278,7 @@ export function NeutralHomeDashboard({
           existing.day_kwh += r.day_kwh;
           existing.night_kwh += r.night_kwh;
           existing.meters = (existing.meters ?? 0) + 1;
+          existing.members!.push(member);
         } else {
           map.set(r.category, {
             ...r,
@@ -270,6 +286,7 @@ export function NeutralHomeDashboard({
             name: r.categoryLabel,
             isAggregate: false,
             meters: 1,
+            members: [member],
           });
         }
       }
@@ -295,11 +312,7 @@ export function NeutralHomeDashboard({
     }
   };
 
-  const dayRate = kpis.dayRate ?? (manualDay ? Number(manualDay) : null);
-  const nightRate = kpis.nightRate ?? (manualNight ? Number(manualNight) : null);
-  const shift = simulateShift(kpis, shiftPct, dayRate, nightRate);
-
-  const exportCsv = () => {
+  const exportCsv = useCallback(() => {
     const csv = mergedCsv(circuits);
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -308,7 +321,12 @@ export function NeutralHomeDashboard({
     a.download = `neutral-home-${period?.label.replace(/\s+/g, "-") ?? "period"}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-  };
+  }, [circuits, period?.label]);
+
+  useEffect(() => {
+    onExporter?.(circuits.length ? exportCsv : null);
+    return () => onExporter?.(null);
+  }, [onExporter, exportCsv, circuits.length]);
 
   if (!bundle.sites.length) {
     return (
