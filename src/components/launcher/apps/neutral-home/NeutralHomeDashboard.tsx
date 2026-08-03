@@ -1,15 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
-  Download,
   Gauge,
   Leaf,
   Moon,
   PoundSterling,
   Sun,
+  SunMedium,
   Zap,
 } from "lucide-react";
 import {
@@ -24,9 +24,8 @@ import {
 } from "recharts";
 
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -35,8 +34,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import type { NeutralHomeBundle } from "@/lib/neutral-home.functions";
 import {
@@ -45,7 +44,6 @@ import {
   detailCircuits,
   mergedCsv,
   nightFlags,
-  simulateShift,
   NIGHT_FLAG_THRESHOLD,
   type CircuitRecord,
 } from "@/lib/neutral-home/analytics";
@@ -73,13 +71,51 @@ interface LeagueRow {
   night_kwh: number;
   isAggregate: boolean;
   meters?: number;
+  members?: { name: string; usage_kwh: number; cost_gbp: number; co2_kg: number }[];
 }
+
+type Basis = "kwh" | "cost" | "carbon";
+
+const BASIS_UNITS: Record<Basis, string[]> = {
+  kwh: ["kWh", "%"],
+  cost: ["£", "p/kWh", "p"],
+  carbon: ["kg", "tCO₂e", "kg/m²"],
+};
+
+const SITE_STORAGE_KEY = "neutral-home:last-site";
 
 const num = (v: number, dp = 0) =>
   v.toLocaleString(undefined, { minimumFractionDigits: dp, maximumFractionDigits: dp });
 
-export function NeutralHomeDashboard({ bundle }: { bundle: NeutralHomeBundle }) {
-  const [siteId, setSiteId] = useState<string>(bundle.sites[0]?.id ?? "");
+export function NeutralHomeDashboard({
+  bundle,
+  onExporter,
+}: {
+  bundle: NeutralHomeBundle;
+  onExporter?: (fn: (() => void) | null) => void;
+}) {
+  const [siteId, setSiteId] = useState<string>("");
+
+  // Remember the last viewed site across refreshes and navigation.
+  useEffect(() => {
+    if (!bundle.sites.length) return;
+    const stored =
+      typeof window === "undefined" ? null : window.localStorage.getItem(SITE_STORAGE_KEY);
+    setSiteId((curr) => {
+      if (curr && bundle.sites.some((s) => s.id === curr)) return curr;
+      if (stored && bundle.sites.some((s) => s.id === stored)) return stored;
+      return bundle.sites[0]!.id;
+    });
+  }, [bundle.sites]);
+
+  const pickSite = (v: string) => {
+    setSiteId(v);
+    if (typeof window !== "undefined") window.localStorage.setItem(SITE_STORAGE_KEY, v);
+    setPeriodId("");
+    setComparePeriodId("");
+    setBaselinePeriodId("");
+  };
+
   const sitePeriods = useMemo(
     () => bundle.periods.filter((p) => p.site_id === siteId),
     [bundle.periods, siteId],
@@ -87,14 +123,11 @@ export function NeutralHomeDashboard({ bundle }: { bundle: NeutralHomeBundle }) 
   const [periodId, setPeriodId] = useState<string>("");
   const [comparePeriodId, setComparePeriodId] = useState<string>("");
   const [baselinePeriodId, setBaselinePeriodId] = useState<string>("");
-  const [category, setCategory] = useState<string>("all");
   const [sortKey, setSortKey] = useState<SortKey>("usage_kwh");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
-  const [shiftPct, setShiftPct] = useState(10);
-  const [manualDay, setManualDay] = useState("");
-  const [manualNight, setManualNight] = useState("");
   const [showAggregates, setShowAggregates] = useState(true);
   const [groupByCategory, setGroupByCategory] = useState(false);
+  const [basis, setBasis] = useState<Basis>("kwh");
 
   const period = sitePeriods.find((p) => p.id === periodId) ?? sitePeriods[0];
 
@@ -177,16 +210,30 @@ export function NeutralHomeDashboard({ bundle }: { bundle: NeutralHomeBundle }) 
     [shownDefs, circuits, compareCircuits, baselineCircuits],
   );
 
-  const filtered = useMemo(() => {
-    const rows = detailCircuits(circuits);
-    return category === "all" ? rows : rows.filter((c) => c.category === category);
-  }, [circuits, category]);
+  const basisRows = useMemo(() => {
+    const units = BASIS_UNITS[basis];
+    const matched = comparisonRows.filter((r) => units.includes(r.unit));
+    return matched.length ? matched : comparisonRows;
+  }, [comparisonRows, basis]);
 
-  const categories = useMemo(() => {
-    const set = new Set<string>();
-    for (const c of circuits) set.add(c.category);
-    return Array.from(set).sort();
+  const filtered = useMemo(() => detailCircuits(circuits), [circuits]);
+
+  const pvKwh = useMemo(() => {
+    const pv = circuits.filter((c) => c.category === "pv");
+    const detail = pv.filter((c) => !c.is_aggregate);
+    const use = detail.length ? detail : pv;
+    return use.reduce((a, c) => a + Math.abs(c.usage_kwh ?? 0), 0);
   }, [circuits]);
+
+  const pvComparePct = useMemo(() => {
+    const pv = compareCircuits.filter((c) => c.category === "pv");
+    const detail = pv.filter((c) => !c.is_aggregate);
+    const use = detail.length ? detail : pv;
+    const prev = use.reduce((a, c) => a + Math.abs(c.usage_kwh ?? 0), 0);
+    if (prev <= 0) return null;
+    const pct = ((pvKwh - prev) / prev) * 100;
+    return { text: `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%`, good: pct >= 0 };
+  }, [compareCircuits, pvKwh]);
 
   const chartData = useMemo(
     () =>
@@ -223,6 +270,12 @@ export function NeutralHomeDashboard({ bundle }: { bundle: NeutralHomeBundle }) 
       const map = new Map<string, LeagueRow>();
       for (const r of rows) {
         const existing = map.get(r.category);
+        const member = {
+          name: r.name,
+          usage_kwh: r.usage_kwh,
+          cost_gbp: r.cost_gbp,
+          co2_kg: r.co2_kg,
+        };
         if (existing) {
           existing.usage_kwh += r.usage_kwh;
           existing.co2_kg += r.co2_kg;
@@ -230,6 +283,7 @@ export function NeutralHomeDashboard({ bundle }: { bundle: NeutralHomeBundle }) 
           existing.day_kwh += r.day_kwh;
           existing.night_kwh += r.night_kwh;
           existing.meters = (existing.meters ?? 0) + 1;
+          existing.members!.push(member);
         } else {
           map.set(r.category, {
             ...r,
@@ -237,6 +291,7 @@ export function NeutralHomeDashboard({ bundle }: { bundle: NeutralHomeBundle }) 
             name: r.categoryLabel,
             isAggregate: false,
             meters: 1,
+            members: [member],
           });
         }
       }
@@ -262,11 +317,7 @@ export function NeutralHomeDashboard({ bundle }: { bundle: NeutralHomeBundle }) 
     }
   };
 
-  const dayRate = kpis.dayRate ?? (manualDay ? Number(manualDay) : null);
-  const nightRate = kpis.nightRate ?? (manualNight ? Number(manualNight) : null);
-  const shift = simulateShift(kpis, shiftPct, dayRate, nightRate);
-
-  const exportCsv = () => {
+  const exportCsv = useCallback(() => {
     const csv = mergedCsv(circuits);
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -275,7 +326,12 @@ export function NeutralHomeDashboard({ bundle }: { bundle: NeutralHomeBundle }) 
     a.download = `neutral-home-${period?.label.replace(/\s+/g, "-") ?? "period"}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-  };
+  }, [circuits, period?.label]);
+
+  useEffect(() => {
+    onExporter?.(circuits.length ? exportCsv : null);
+    return () => onExporter?.(null);
+  }, [onExporter, exportCsv, circuits.length]);
 
   if (!bundle.sites.length) {
     return (
@@ -289,19 +345,70 @@ export function NeutralHomeDashboard({ bundle }: { bundle: NeutralHomeBundle }) 
 
   return (
     <div className="space-y-6">
+      {period ? (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <Kpi
+            label="No. of Datapoints"
+            value={num(circuits.length)}
+            icon={Gauge}
+            sub={`${circuits.filter((c) => !c.is_aggregate).length} sub-circuits · ${circuits.filter((c) => c.is_aggregate).length} totals/incomers`}
+          />
+          <Kpi
+            label="Total Consumption"
+            value={`${num(kpis.totalKwh)} kWh`}
+            icon={Zap}
+            badge={variancePct(variance, "Total consumption")}
+          />
+          <Kpi
+            label="PV Generation"
+            value={`${num(pvKwh)} kWh`}
+            icon={SunMedium}
+            badge={pvComparePct}
+            sub={pvKwh > 0 ? "PV / export circuits" : "No PV circuits in this period"}
+          />
+          <Card className="border-border/60">
+            <CardContent className="p-5">
+              <div className="flex items-center justify-between text-xs font-medium text-muted-foreground">
+                <span>Day / Night Split</span>
+                <div className="flex gap-1">
+                  <Sun className="h-4 w-4 text-amber-500" />
+                  <Moon className="h-4 w-4 text-indigo-500" />
+                </div>
+              </div>
+              <div className="mt-3 text-2xl font-semibold tracking-tight">
+                {num(kpis.dayPct, 1)}% / {num(kpis.nightPct, 1)}%
+              </div>
+              <div className="mt-2 flex h-2 overflow-hidden rounded-full bg-muted">
+                <div className="bg-amber-500" style={{ width: `${kpis.dayPct}%` }} />
+                <div className="bg-indigo-500" style={{ width: `${kpis.nightPct}%` }} />
+              </div>
+              <div className="mt-2 flex justify-between text-xs text-muted-foreground">
+                <span>{num(kpis.dayKwh)} kWh day</span>
+                <span>{num(kpis.nightKwh)} kWh night</span>
+              </div>
+            </CardContent>
+          </Card>
+          <Kpi
+            label="Total Cost"
+            value={`£${num(kpis.totalCostGbp, 2)}`}
+            icon={PoundSterling}
+            badge={variancePct(variance, "Total cost")}
+          />
+          <Kpi
+            label="Carbon Emissions"
+            value={`${num(kpis.co2Kg / 1000, 2)} tCO₂e`}
+            icon={Leaf}
+            sub={`${num(kpis.co2Kg)} kg`}
+            badge={variancePct(variance, "Carbon")}
+          />
+        </div>
+      ) : null}
+
       <Card>
         <CardContent className="flex flex-wrap items-end gap-3 p-4">
           <div className="grid gap-1.5">
             <Label className="text-xs">Site</Label>
-            <Select
-              value={siteId}
-              onValueChange={(v) => {
-                setSiteId(v);
-                setPeriodId("");
-                setComparePeriodId("");
-                setBaselinePeriodId("");
-              }}
-            >
+            <Select value={siteId} onValueChange={pickSite}>
               <SelectTrigger className="w-56">
                 <SelectValue />
               </SelectTrigger>
@@ -381,31 +488,6 @@ export function NeutralHomeDashboard({ bundle }: { bundle: NeutralHomeBundle }) 
               </SelectContent>
             </Select>
           </div>
-          <div className="grid gap-1.5">
-            <Label className="text-xs">Circuit category</Label>
-            <Select value={category} onValueChange={setCategory}>
-              <SelectTrigger className="w-52">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All categories</SelectItem>
-                {categories.map((c) => (
-                  <SelectItem key={c} value={c}>
-                    {labels[c] ?? c}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="ml-auto gap-1.5"
-            onClick={exportCsv}
-            disabled={!circuits.length}
-          >
-            <Download className="h-3.5 w-3.5" /> Export merged CSV
-          </Button>
         </CardContent>
       </Card>
 
@@ -417,72 +499,28 @@ export function NeutralHomeDashboard({ bundle }: { bundle: NeutralHomeBundle }) 
         </Card>
       ) : (
         <>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            <Kpi
-              label="No. of Datapoints"
-              value={num(circuits.length)}
-              icon={Gauge}
-              sub={`${circuits.filter((c) => !c.is_aggregate).length} sub-circuits · ${circuits.filter((c) => c.is_aggregate).length} totals/incomers`}
-            />
-            <Kpi
-              label="Total Consumption"
-              value={`${num(kpis.totalKwh)} kWh`}
-              icon={Zap}
-              badge={variancePct(variance, "Total consumption")}
-            />
-            <Card className="border-border/60">
-              <CardContent className="p-5">
-                <div className="flex items-center justify-between text-xs font-medium text-muted-foreground">
-                  <span>Day / Night Split</span>
-                  <div className="flex gap-1">
-                    <Sun className="h-4 w-4 text-amber-500" />
-                    <Moon className="h-4 w-4 text-indigo-500" />
-                  </div>
-                </div>
-                <div className="mt-3 text-2xl font-semibold tracking-tight">
-                  {num(kpis.dayPct, 1)}% / {num(kpis.nightPct, 1)}%
-                </div>
-                <div className="mt-2 flex h-2 overflow-hidden rounded-full bg-muted">
-                  <div className="bg-amber-500" style={{ width: `${kpis.dayPct}%` }} />
-                  <div className="bg-indigo-500" style={{ width: `${kpis.nightPct}%` }} />
-                </div>
-                <div className="mt-2 flex justify-between text-xs text-muted-foreground">
-                  <span>{num(kpis.dayKwh)} kWh day</span>
-                  <span>{num(kpis.nightKwh)} kWh night</span>
-                </div>
-              </CardContent>
-            </Card>
-            <Kpi
-              label="Total Cost"
-              value={`£${num(kpis.totalCostGbp, 2)}`}
-              icon={PoundSterling}
-              badge={variancePct(variance, "Total cost")}
-            />
-            <Kpi
-              label="Carbon Emissions"
-              value={`${num(kpis.co2Kg / 1000, 2)} tCO₂e`}
-              icon={Leaf}
-              sub={`${num(kpis.co2Kg)} kg`}
-              badge={variancePct(variance, "Carbon")}
-            />
-            <Kpi
-              label="Blended Cost"
-              value={`${num(kpis.blendedPPerKwh, 2)} p/kWh`}
-              icon={Zap}
-              badge={variancePct(variance, "Blended cost")}
-              sub={`${kpis.circuitCount} circuits`}
-            />
-          </div>
-
           {comparisonRows.length && (compareCircuits.length || baselineCircuits.length) ? (
             <Card>
               <CardContent className="p-5">
-                <h2 className="pb-1 text-base font-semibold tracking-tight">Performance Metrics Comparison</h2>
-                <p className="pb-4 text-sm text-muted-foreground">
-                  {period.label}
-                  {compareCircuits.length ? ` · vs. Last Year: ${comparePeriod?.label}` : ""}
-                  {baselineCircuits.length ? ` · Baseline: ${baselinePeriod?.label}` : ""}
-                </p>
+                <div className="flex flex-wrap items-start justify-between gap-3 pb-4">
+                  <div>
+                    <h2 className="pb-1 text-base font-semibold tracking-tight">
+                      Performance Metrics Comparison
+                    </h2>
+                    <p className="text-sm text-muted-foreground">
+                      {period.label}
+                      {compareCircuits.length ? ` · vs. Last Year: ${comparePeriod?.label}` : ""}
+                      {baselineCircuits.length ? ` · Baseline: ${baselinePeriod?.label}` : ""}
+                    </p>
+                  </div>
+                  <Tabs value={basis} onValueChange={(v) => setBasis(v as Basis)}>
+                    <TabsList>
+                      <TabsTrigger value="kwh">kWh</TabsTrigger>
+                      <TabsTrigger value="cost">Cost</TabsTrigger>
+                      <TabsTrigger value="carbon">Carbon</TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
@@ -504,7 +542,7 @@ export function NeutralHomeDashboard({ bundle }: { bundle: NeutralHomeBundle }) 
                       </tr>
                     </thead>
                     <tbody>
-                      {comparisonRows.map((r) => (
+                      {basisRows.map((r) => (
                         <tr key={r.key} className="border-t">
                           <td className="py-2">{r.label}</td>
                           <td className="py-2 text-right">
@@ -625,68 +663,6 @@ export function NeutralHomeDashboard({ bundle }: { bundle: NeutralHomeBundle }) 
                   No circuits exceed the night-share threshold.
                 </p>
               )}
-
-              <div className="mt-6 rounded-lg border p-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <h3 className="text-sm font-semibold">Tariff shift simulator</h3>
-                    <p className="text-xs text-muted-foreground">
-                      Move {shiftPct}% of day usage onto the night rate.
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-2xl font-semibold tracking-tight text-emerald-600">
-                      {dayRate != null && nightRate != null ? `£${num(shift.savingGbp, 2)}` : "—"}
-                    </div>
-                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                      Modelled saving
-                    </div>
-                  </div>
-                </div>
-                <div className="mt-4 max-w-md">
-                  <Slider
-                    value={[shiftPct]}
-                    min={0}
-                    max={20}
-                    step={1}
-                    onValueChange={(v) => setShiftPct(v[0] ?? 0)}
-                  />
-                  <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
-                    <span>0%</span>
-                    <span>10%</span>
-                    <span>20%</span>
-                  </div>
-                </div>
-                <div className="mt-3 text-xs text-muted-foreground">
-                  {num(shift.shiftedKwh)} kWh shifted
-                  {dayRate != null && nightRate != null
-                    ? ` · day ${num(dayRate, 2)} p/kWh vs night ${num(nightRate, 2)} p/kWh`
-                    : ""}
-                </div>
-                {kpis.dayRate == null || kpis.nightRate == null ? (
-                  <div className="mt-3 grid gap-3 sm:grid-cols-2 sm:max-w-md">
-                    <p className="text-xs text-amber-600 sm:col-span-2">
-                      This report has no day/night unit rates. Enter rates to run the simulation.
-                    </p>
-                    <div className="grid gap-1.5">
-                      <Label className="text-xs">Day rate (p/kWh)</Label>
-                      <Input
-                        type="number"
-                        value={manualDay}
-                        onChange={(e) => setManualDay(e.target.value)}
-                      />
-                    </div>
-                    <div className="grid gap-1.5">
-                      <Label className="text-xs">Night rate (p/kWh)</Label>
-                      <Input
-                        type="number"
-                        value={manualNight}
-                        onChange={(e) => setManualNight(e.target.value)}
-                      />
-                    </div>
-                  </div>
-                ) : null}
-              </div>
             </CardContent>
           </Card>
 
@@ -794,9 +770,40 @@ export function NeutralHomeDashboard({ bundle }: { bundle: NeutralHomeBundle }) 
                             </Badge>
                           ) : null}
                           {groupByCategory ? (
-                            <Badge variant="outline" className="ml-2 text-[10px]">
-                              {r.meters} meters
-                            </Badge>
+                            <HoverCard openDelay={80}>
+                              <HoverCardTrigger asChild>
+                                <Badge variant="outline" className="ml-2 cursor-help text-[10px]">
+                                  {r.meters} meters
+                                </Badge>
+                              </HoverCardTrigger>
+                              <HoverCardContent className="w-80 p-0" align="start">
+                                <div className="border-b px-3 py-2 text-xs font-medium">
+                                  {r.name} · {r.meters} meters
+                                </div>
+                                <div className="max-h-64 overflow-y-auto p-1">
+                                  <table className="w-full text-xs">
+                                    <tbody>
+                                      {[...(r.members ?? [])]
+                                        .sort((a, b) => b.usage_kwh - a.usage_kwh)
+                                        .map((m) => (
+                                          <tr key={m.name}>
+                                            <td className="px-2 py-1">{m.name}</td>
+                                            <td className="px-2 py-1 text-right tabular-nums">
+                                              {num(m.usage_kwh, 1)} kWh
+                                            </td>
+                                            <td className="px-2 py-1 text-right tabular-nums text-muted-foreground">
+                                              £{num(m.cost_gbp, 2)}
+                                            </td>
+                                            <td className="px-2 py-1 text-right tabular-nums text-muted-foreground">
+                                              {num(m.co2_kg, 1)} kg
+                                            </td>
+                                          </tr>
+                                        ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </HoverCardContent>
+                            </HoverCard>
                           ) : null}
                         </td>
                         {groupByCategory ? null : (

@@ -1,10 +1,14 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
   CheckCircle2,
   FileSpreadsheet,
   Home,
   Plus,
+  Settings2,
   Trash2,
   Upload,
 } from "lucide-react";
@@ -33,6 +37,7 @@ import {
   upsertNhSite,
   type NeutralHomeBundle,
   type NhSite,
+  type NhPeriod,
 } from "@/lib/neutral-home.functions";
 import { NeutralHomeConfig } from "./NeutralHomeConfig";
 import {
@@ -73,6 +78,7 @@ export function NeutralHomeSettings({ orgId, bundle, canEdit, onChanged }: Props
   const [draft, setDraft] = useState<SiteDraft>(emptyDraft);
   const [saving, setSaving] = useState(false);
   const [uploadSite, setUploadSite] = useState<NhSite | null>(null);
+  const [configSite, setConfigSite] = useState<NhSite | null>(null);
 
   const openNew = () => {
     setDraft(emptyDraft);
@@ -199,6 +205,14 @@ export function NeutralHomeSettings({ orgId, bundle, canEdit, onChanged }: Props
                           >
                             <Upload className="h-3.5 w-3.5" /> Upload reports
                           </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-1.5"
+                            onClick={() => setConfigSite(s)}
+                          >
+                            <Settings2 className="h-3.5 w-3.5" /> Configure
+                          </Button>
                           <Button size="sm" variant="ghost" onClick={() => openEdit(s)}>
                             Edit
                           </Button>
@@ -216,47 +230,14 @@ export function NeutralHomeSettings({ orgId, bundle, canEdit, onChanged }: Props
 
                     {periods.length ? (
                       <div className="border-t">
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="text-left text-xs text-muted-foreground">
-                              <th className="px-4 py-2 font-medium">Period</th>
-                              <th className="px-4 py-2 font-medium">Range</th>
-                              <th className="px-4 py-2 font-medium">Circuits</th>
-                              <th className="px-4 py-2 font-medium">Files</th>
-                              <th className="px-4 py-2" />
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {periods.map((p) => (
-                              <tr key={p.id} className="border-t">
-                                <td className="px-4 py-2 font-medium">{p.label}</td>
-                                <td className="px-4 py-2 text-muted-foreground">
-                                  {p.period_start} → {p.period_end}
-                                </td>
-                                <td className="px-4 py-2 text-muted-foreground">
-                                  {bundle.circuits.filter((c) => c.period_id === p.id).length}
-                                </td>
-                                <td className="px-4 py-2 text-xs text-muted-foreground">
-                                  {[p.source_headline_filename, p.source_daynight_filename]
-                                    .filter(Boolean)
-                                    .join(" · ") || "—"}
-                                </td>
-                                <td className="px-4 py-2 text-right">
-                                  {canEdit ? (
-                                    <Button
-                                      size="sm"
-                                      variant="ghost"
-                                      className="text-destructive"
-                                      onClick={() => removePeriod(p.id)}
-                                    >
-                                      <Trash2 className="h-3.5 w-3.5" />
-                                    </Button>
-                                  ) : null}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                        <PeriodsTable
+                          periods={periods}
+                          circuitCount={(id) =>
+                            bundle.circuits.filter((c) => c.period_id === id).length
+                          }
+                          canEdit={canEdit}
+                          onDelete={removePeriod}
+                        />
                       </div>
                     ) : null}
                   </div>
@@ -266,8 +247,6 @@ export function NeutralHomeSettings({ orgId, bundle, canEdit, onChanged }: Props
           )}
         </CardContent>
       </Card>
-
-      <NeutralHomeConfig orgId={orgId} bundle={bundle} canEdit={canEdit} onChanged={onChanged} />
 
       <Dialog open={siteDialog} onOpenChange={setSiteDialog}>
         <DialogContent className="sm:max-w-lg">
@@ -355,7 +334,131 @@ export function NeutralHomeSettings({ orgId, bundle, canEdit, onChanged }: Props
           }}
         />
       ) : null}
+
+      <Dialog open={!!configSite} onOpenChange={(o) => !o && setConfigSite(null)}>
+        <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Site configuration — {configSite?.name}</DialogTitle>
+            <DialogDescription>
+              Categories, meter mapping and custom metrics for this site.
+            </DialogDescription>
+          </DialogHeader>
+          {configSite ? (
+            <NeutralHomeConfig
+              orgId={orgId}
+              bundle={bundle}
+              canEdit={canEdit}
+              onChanged={onChanged}
+              siteId={configSite.id}
+              embedded
+            />
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </div>
+  );
+}
+
+type PeriodSortKey = "label" | "range" | "circuits" | "files";
+
+function PeriodsTable({
+  periods,
+  circuitCount,
+  canEdit,
+  onDelete,
+}: {
+  periods: NhPeriod[];
+  circuitCount: (id: string) => number;
+  canEdit: boolean;
+  onDelete: (id: string) => void;
+}) {
+  const [key, setKey] = useState<PeriodSortKey>("range");
+  const [dir, setDir] = useState<"asc" | "desc">("desc");
+
+  const sorted = useMemo(() => {
+    const mult = dir === "asc" ? 1 : -1;
+    const files = (p: NhPeriod) =>
+      [p.source_headline_filename, p.source_daynight_filename].filter(Boolean).join(" · ");
+    return [...periods].sort((a, b) => {
+      if (key === "circuits") return (circuitCount(a.id) - circuitCount(b.id)) * mult;
+      if (key === "range") return a.period_start.localeCompare(b.period_start) * mult;
+      if (key === "files") return files(a).localeCompare(files(b)) * mult;
+      return a.label.localeCompare(b.label) * mult;
+    });
+  }, [periods, key, dir, circuitCount]);
+
+  const toggle = (k: PeriodSortKey) => {
+    if (k === key) setDir((d) => (d === "asc" ? "desc" : "asc"));
+    else {
+      setKey(k);
+      setDir(k === "circuits" || k === "range" ? "desc" : "asc");
+    }
+  };
+
+  const Th = ({ label, col }: { label: string; col: PeriodSortKey }) => (
+    <th className="px-4 py-2 font-medium">
+      <button
+        type="button"
+        onClick={() => toggle(col)}
+        className={cn(
+          "inline-flex items-center gap-1 hover:text-foreground",
+          key === col ? "text-foreground" : "",
+        )}
+      >
+        {label}
+        {key === col ? (
+          dir === "asc" ? (
+            <ArrowUp className="h-3 w-3" />
+          ) : (
+            <ArrowDown className="h-3 w-3" />
+          )
+        ) : (
+          <ArrowUpDown className="h-3 w-3 opacity-40" />
+        )}
+      </button>
+    </th>
+  );
+
+  return (
+    <table className="w-full text-sm">
+      <thead>
+        <tr className="text-left text-xs text-muted-foreground">
+          <Th label="Period" col="label" />
+          <Th label="Range" col="range" />
+          <Th label="Circuits" col="circuits" />
+          <Th label="Files" col="files" />
+          <th className="px-4 py-2" />
+        </tr>
+      </thead>
+      <tbody>
+        {sorted.map((p) => (
+          <tr key={p.id} className="border-t">
+            <td className="px-4 py-2 font-medium">{p.label}</td>
+            <td className="px-4 py-2 text-muted-foreground">
+              {p.period_start} → {p.period_end}
+            </td>
+            <td className="px-4 py-2 text-muted-foreground">{circuitCount(p.id)}</td>
+            <td className="px-4 py-2 text-xs text-muted-foreground">
+              {[p.source_headline_filename, p.source_daynight_filename]
+                .filter(Boolean)
+                .join(" · ") || "—"}
+            </td>
+            <td className="px-4 py-2 text-right">
+              {canEdit ? (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-destructive"
+                  onClick={() => onDelete(p.id)}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              ) : null}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
 

@@ -49,6 +49,10 @@ interface Props {
   bundle: NeutralHomeBundle;
   canEdit: boolean;
   onChanged: () => void;
+  /** When provided, the panel is locked to this site and the site picker is hidden. */
+  siteId?: string;
+  /** Renders without the outer card chrome (for use inside a dialog). */
+  embedded?: boolean;
 }
 
 const SOURCES = Object.keys(METRIC_SOURCE_LABEL) as MetricSource[];
@@ -61,8 +65,17 @@ const slug = (s: string) =>
     .replace(/^-|-$/g, "")
     .slice(0, 40);
 
-export function NeutralHomeConfig({ orgId, bundle, canEdit, onChanged }: Props) {
-  const [siteId, setSiteId] = useState(bundle.sites[0]?.id ?? "");
+export function NeutralHomeConfig({
+  orgId,
+  bundle,
+  canEdit,
+  onChanged,
+  siteId: fixedSiteId,
+  embedded = false,
+}: Props) {
+  const [ownSiteId, setOwnSiteId] = useState(bundle.sites[0]?.id ?? "");
+  const siteId = fixedSiteId ?? ownSiteId;
+  const setSiteId = setOwnSiteId;
   const [busy, setBusy] = useState(false);
   const [newCat, setNewCat] = useState("");
   const [metricDialog, setMetricDialog] = useState<MetricDraft | null>(null);
@@ -113,9 +126,9 @@ export function NeutralHomeConfig({ orgId, bundle, canEdit, onChanged }: Props) 
 
   const disabled = !canEdit || busy || !siteId;
 
-  return (
-    <Card>
-      <CardContent className="p-5">
+  const body = (
+    <>
+      {fixedSiteId ? null : (
         <div className="flex flex-wrap items-end justify-between gap-3 pb-4">
           <div>
             <h2 className="text-base font-semibold tracking-tight">Site configuration</h2>
@@ -139,305 +152,315 @@ export function NeutralHomeConfig({ orgId, bundle, canEdit, onChanged }: Props) 
             </Select>
           </div>
         </div>
+      )}
 
-        <Tabs defaultValue="categories">
-          <TabsList>
-            <TabsTrigger value="categories">Categories</TabsTrigger>
-            <TabsTrigger value="meters">Meter categories</TabsTrigger>
-            <TabsTrigger value="metrics">Metrics</TabsTrigger>
-            <TabsTrigger value="comparison">Period comparison</TabsTrigger>
-          </TabsList>
+      <Tabs defaultValue="categories">
+        <TabsList>
+          <TabsTrigger value="categories">Categories</TabsTrigger>
+          <TabsTrigger value="meters">Meter categories</TabsTrigger>
+          <TabsTrigger value="metrics">Metrics</TabsTrigger>
+          <TabsTrigger value="comparison">Period comparison</TabsTrigger>
+        </TabsList>
 
-          <TabsContent value="categories" className="mt-4 space-y-3">
-            <div className="flex flex-wrap items-end gap-2">
-              <div className="grid gap-1.5">
-                <Label className="text-xs">New category name</Label>
-                <Input
-                  value={newCat}
-                  onChange={(e) => setNewCat(e.target.value)}
-                  className="w-64"
-                  placeholder="e.g. Server room"
-                />
-              </div>
-              <Button
-                size="sm"
-                className="gap-1.5"
-                disabled={disabled || !newCat.trim()}
-                onClick={() =>
-                  run("Adding category…", async () => {
-                    await upsertNhCategory({
-                      data: {
-                        organization_id: orgId,
-                        site_id: siteId,
-                        code: slug(newCat) || `cat-${Date.now()}`,
-                        label: newCat.trim(),
-                        hidden: false,
-                        sort_order: 200 + options.length,
-                      },
-                    });
-                    setNewCat("");
-                  })
-                }
-              >
-                <Plus className="h-3.5 w-3.5" /> Add
-              </Button>
+        <TabsContent value="categories" className="mt-4 space-y-3">
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="grid gap-1.5">
+              <Label className="text-xs">New category name</Label>
+              <Input
+                value={newCat}
+                onChange={(e) => setNewCat(e.target.value)}
+                className="w-64"
+                placeholder="e.g. Server room"
+              />
             </div>
+            <Button
+              size="sm"
+              className="gap-1.5"
+              disabled={disabled || !newCat.trim()}
+              onClick={() =>
+                run("Adding category…", async () => {
+                  await upsertNhCategory({
+                    data: {
+                      organization_id: orgId,
+                      site_id: siteId,
+                      code: slug(newCat) || `cat-${Date.now()}`,
+                      label: newCat.trim(),
+                      hidden: false,
+                      sort_order: 200 + options.length,
+                    },
+                  });
+                  setNewCat("");
+                })
+              }
+            >
+              <Plus className="h-3.5 w-3.5" /> Add
+            </Button>
+          </div>
 
-            <div className="overflow-x-auto rounded-lg border">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-xs text-muted-foreground">
-                    <th className="px-4 py-2 font-medium">Label</th>
-                    <th className="px-4 py-2 font-medium">Code</th>
-                    <th className="px-4 py-2 font-medium">Type</th>
-                    <th className="px-4 py-2" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {options.map((o) => (
-                    <CategoryRow
-                      key={o.code}
-                      option={o}
+          <div className="overflow-x-auto rounded-lg border">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-muted-foreground">
+                  <th className="px-4 py-2 font-medium">Label</th>
+                  <th className="px-4 py-2 font-medium">Code</th>
+                  <th className="px-4 py-2 font-medium">Type</th>
+                  <th className="px-4 py-2" />
+                </tr>
+              </thead>
+              <tbody>
+                {options.map((o) => (
+                  <CategoryRow
+                    key={o.code}
+                    option={o}
+                    disabled={disabled}
+                    onRename={(label) =>
+                      run("Renaming category…", () =>
+                        upsertNhCategory({
+                          data: {
+                            organization_id: orgId,
+                            site_id: siteId,
+                            code: o.code,
+                            label,
+                            hidden: false,
+                            sort_order: o.row?.sort_order ?? 100,
+                          },
+                        }),
+                      )
+                    }
+                    onRemove={() =>
+                      run(o.builtin ? "Hiding category…" : "Removing category…", () =>
+                        o.builtin
+                          ? upsertNhCategory({
+                              data: {
+                                organization_id: orgId,
+                                site_id: siteId,
+                                code: o.code,
+                                label: o.label,
+                                hidden: true,
+                                sort_order: o.row?.sort_order ?? 100,
+                              },
+                            })
+                          : deleteNhCategory({ data: { id: o.row!.id } }),
+                      )
+                    }
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {siteCats.some((c) => c.hidden) ? (
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Hidden categories</Label>
+              <div className="flex flex-wrap gap-2">
+                {siteCats
+                  .filter((c) => c.hidden)
+                  .map((c) => (
+                    <Button
+                      key={c.id}
+                      size="sm"
+                      variant="outline"
                       disabled={disabled}
-                      onRename={(label) =>
-                        run("Renaming category…", () =>
+                      onClick={() =>
+                        run("Restoring category…", () =>
                           upsertNhCategory({
                             data: {
                               organization_id: orgId,
                               site_id: siteId,
-                              code: o.code,
-                              label,
+                              code: c.code,
+                              label: c.label,
                               hidden: false,
-                              sort_order: o.row?.sort_order ?? 100,
+                              sort_order: c.sort_order,
                             },
                           }),
                         )
                       }
-                      onRemove={() =>
-                        run(o.builtin ? "Hiding category…" : "Removing category…", () =>
-                          o.builtin
-                            ? upsertNhCategory({
-                                data: {
-                                  organization_id: orgId,
-                                  site_id: siteId,
-                                  code: o.code,
-                                  label: o.label,
-                                  hidden: true,
-                                  sort_order: o.row?.sort_order ?? 100,
-                                },
-                              })
-                            : deleteNhCategory({ data: { id: o.row!.id } }),
-                        )
-                      }
-                    />
+                    >
+                      {c.label} · restore
+                    </Button>
                   ))}
+              </div>
+            </div>
+          ) : null}
+        </TabsContent>
+
+        <TabsContent value="meters" className="mt-4">
+          {!circuitNames.length ? (
+            <p className="text-sm text-muted-foreground">Upload a period for this site first.</p>
+          ) : (
+            <ScrollArea className="h-[420px] rounded-lg border">
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 bg-card">
+                  <tr className="text-left text-xs text-muted-foreground">
+                    <th className="px-4 py-2 font-medium">Meter / circuit</th>
+                    <th className="px-4 py-2 font-medium">Category</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {circuitNames.map(([name, autoCat]) => {
+                    const override = overrideOf(name);
+                    return (
+                      <tr key={name} className="border-t">
+                        <td className="px-4 py-2">{name}</td>
+                        <td className="px-4 py-2">
+                          <Select
+                            value={override || "auto"}
+                            disabled={disabled}
+                            onValueChange={(v) =>
+                              run("Updating category…", () =>
+                                setNhMeterCategory({
+                                  data: {
+                                    organization_id: orgId,
+                                    site_id: siteId,
+                                    circuit_name: name,
+                                    category: v === "auto" ? null : v,
+                                  },
+                                }),
+                              )
+                            }
+                          >
+                            <SelectTrigger className="w-56">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="auto">Auto ({autoCat})</SelectItem>
+                              {options.map((o) => (
+                                <SelectItem key={o.code} value={o.code}>
+                                  {o.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
+            </ScrollArea>
+          )}
+        </TabsContent>
+
+        <TabsContent value="metrics" className="mt-4 space-y-4">
+          <div>
+            <h3 className="text-sm font-semibold">System metrics</h3>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {metricDefs
+                .filter((d) => d.system)
+                .map((d) => (
+                  <Badge key={d.key} variant="outline">
+                    {d.label} ({d.unit})
+                  </Badge>
+                ))}
             </div>
-
-            {siteCats.some((c) => c.hidden) ? (
-              <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground">Hidden categories</Label>
-                <div className="flex flex-wrap gap-2">
-                  {siteCats
-                    .filter((c) => c.hidden)
-                    .map((c) => (
-                      <Button
-                        key={c.id}
-                        size="sm"
-                        variant="outline"
-                        disabled={disabled}
-                        onClick={() =>
-                          run("Restoring category…", () =>
-                            upsertNhCategory({
-                              data: {
-                                organization_id: orgId,
-                                site_id: siteId,
-                                code: c.code,
-                                label: c.label,
-                                hidden: false,
-                                sort_order: c.sort_order,
-                              },
-                            }),
-                          )
-                        }
-                      >
-                        {c.label} · restore
-                      </Button>
-                    ))}
-                </div>
-              </div>
-            ) : null}
-          </TabsContent>
-
-          <TabsContent value="meters" className="mt-4">
-            {!circuitNames.length ? (
-              <p className="text-sm text-muted-foreground">Upload a period for this site first.</p>
+          </div>
+          <div>
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold">User metrics</h3>
+              <Button
+                size="sm"
+                className="gap-1.5"
+                disabled={disabled}
+                onClick={() => setMetricDialog(emptyMetric())}
+              >
+                <Plus className="h-3.5 w-3.5" /> New metric
+              </Button>
+            </div>
+            {!siteMetrics.length ? (
+              <p className="mt-2 text-sm text-muted-foreground">
+                No user metrics yet. A user metric sums a chosen value across the meters you map to
+                it.
+              </p>
             ) : (
-              <ScrollArea className="h-[420px] rounded-lg border">
-                <table className="w-full text-sm">
-                  <thead className="sticky top-0 bg-card">
-                    <tr className="text-left text-xs text-muted-foreground">
-                      <th className="px-4 py-2 font-medium">Meter / circuit</th>
-                      <th className="px-4 py-2 font-medium">Category</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {circuitNames.map(([name, autoCat]) => {
-                      const override = overrideOf(name);
-                      return (
-                        <tr key={name} className="border-t">
-                          <td className="px-4 py-2">{name}</td>
-                          <td className="px-4 py-2">
-                            <Select
-                              value={override || "auto"}
-                              disabled={disabled}
-                              onValueChange={(v) =>
-                                run("Updating category…", () =>
-                                  setNhMeterCategory({
-                                    data: {
-                                      organization_id: orgId,
-                                      site_id: siteId,
-                                      circuit_name: name,
-                                      category: v === "auto" ? null : v,
-                                    },
-                                  }),
-                                )
-                              }
-                            >
-                              <SelectTrigger className="w-56">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="auto">Auto ({autoCat})</SelectItem>
-                                {options.map((o) => (
-                                  <SelectItem key={o.code} value={o.code}>
-                                    {o.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </ScrollArea>
-            )}
-          </TabsContent>
-
-          <TabsContent value="metrics" className="mt-4 space-y-4">
-            <div>
-              <h3 className="text-sm font-semibold">System metrics</h3>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {metricDefs
-                  .filter((d) => d.system)
-                  .map((d) => (
-                    <Badge key={d.key} variant="outline">
-                      {d.label} ({d.unit})
-                    </Badge>
-                  ))}
-              </div>
-            </div>
-            <div>
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold">User metrics</h3>
-                <Button
-                  size="sm"
-                  className="gap-1.5"
-                  disabled={disabled}
-                  onClick={() => setMetricDialog(emptyMetric())}
-                >
-                  <Plus className="h-3.5 w-3.5" /> New metric
-                </Button>
-              </div>
-              {!siteMetrics.length ? (
-                <p className="mt-2 text-sm text-muted-foreground">
-                  No user metrics yet. A user metric sums a chosen value across the meters you map
-                  to it.
-                </p>
-              ) : (
-                <div className="mt-2 space-y-2">
-                  {siteMetrics.map((m) => (
-                    <div
-                      key={m.id}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3"
-                    >
-                      <div>
-                        <div className="text-sm font-medium">{m.name}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {METRIC_SOURCE_LABEL[m.source as MetricSource] ?? m.source} · {m.unit} ·{" "}
-                          {m.circuit_names.length
-                            ? `${m.circuit_names.length} meters`
-                            : "all sub-circuits"}
-                        </div>
-                      </div>
-                      <div className="flex gap-1">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          disabled={disabled}
-                          onClick={() => setMetricDialog(draftFrom(m))}
-                        >
-                          Edit
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="text-destructive"
-                          disabled={disabled}
-                          onClick={() =>
-                            run("Removing metric…", () => deleteNhMetric({ data: { id: m.id } }))
-                          }
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+              <div className="mt-2 space-y-2">
+                {siteMetrics.map((m) => (
+                  <div
+                    key={m.id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3"
+                  >
+                    <div>
+                      <div className="text-sm font-medium">{m.name}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {METRIC_SOURCE_LABEL[m.source as MetricSource] ?? m.source} · {m.unit} ·{" "}
+                        {m.circuit_names.length
+                          ? `${m.circuit_names.length} meters`
+                          : "all sub-circuits"}
+                        {" · "}
+                        {m.lower_is_better ? "decrease is good" : "increase is good"}
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </TabsContent>
+                    <div className="flex gap-1">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={disabled}
+                        onClick={() => setMetricDialog(draftFrom(m))}
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-destructive"
+                        disabled={disabled}
+                        onClick={() =>
+                          run("Removing metric…", () => deleteNhMetric({ data: { id: m.id } }))
+                        }
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </TabsContent>
 
-          <TabsContent value="comparison" className="mt-4 space-y-3">
-            <p className="text-sm text-muted-foreground">
-              Choose which metrics appear in the Period comparison table for this site.
-            </p>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {metricDefs.map((d) => (
-                <label
-                  key={d.key}
-                  className="flex items-center gap-2 rounded-lg border p-3 text-sm"
-                >
-                  <Checkbox
-                    checked={selected.includes(d.key)}
-                    disabled={disabled}
-                    onCheckedChange={(v) => {
-                      const next = v ? [...selected, d.key] : selected.filter((k) => k !== d.key);
-                      void run("Saving comparison metrics…", () =>
-                        saveNhSiteSettings({
-                          data: {
-                            organization_id: orgId,
-                            site_id: siteId,
-                            comparison_metrics: next,
-                          },
-                        }),
-                      );
-                    }}
-                  />
-                  <span>{d.label}</span>
-                  <span className="ml-auto text-xs text-muted-foreground">
-                    {d.system ? "system" : "user"} · {d.unit}
-                  </span>
-                </label>
-              ))}
-            </div>
-          </TabsContent>
-        </Tabs>
-      </CardContent>
+        <TabsContent value="comparison" className="mt-4 space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Choose which metrics appear in the Period comparison table for this site.
+          </p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {metricDefs.map((d) => (
+              <label key={d.key} className="flex items-center gap-2 rounded-lg border p-3 text-sm">
+                <Checkbox
+                  checked={selected.includes(d.key)}
+                  disabled={disabled}
+                  onCheckedChange={(v) => {
+                    const next = v ? [...selected, d.key] : selected.filter((k) => k !== d.key);
+                    void run("Saving comparison metrics…", () =>
+                      saveNhSiteSettings({
+                        data: {
+                          organization_id: orgId,
+                          site_id: siteId,
+                          comparison_metrics: next,
+                        },
+                      }),
+                    );
+                  }}
+                />
+                <span>{d.label}</span>
+                <span className="ml-auto text-xs text-muted-foreground">
+                  {d.system ? "system" : "user"} · {d.unit}
+                </span>
+              </label>
+            ))}
+          </div>
+        </TabsContent>
+      </Tabs>
+    </>
+  );
 
+  return (
+    <>
+      {embedded ? (
+        body
+      ) : (
+        <Card>
+          <CardContent className="p-5">{body}</CardContent>
+        </Card>
+      )}
       {metricDialog ? (
         <MetricDialog
           draft={metricDialog}
@@ -464,7 +487,7 @@ export function NeutralHomeConfig({ orgId, bundle, canEdit, onChanged }: Props) 
           }
         />
       ) : null}
-    </Card>
+    </>
   );
 }
 
@@ -562,15 +585,27 @@ function MetricDialog({
               onChange={(e) => setD({ ...d, unit: e.target.value })}
             />
           </div>
-          <div className="flex items-center gap-2">
-            <Switch
-              id="nh-lower"
-              checked={d.lower_is_better}
-              onCheckedChange={(v) => setD({ ...d, lower_is_better: v })}
-            />
-            <Label htmlFor="nh-lower" className="font-normal">
-              A decrease is an improvement
-            </Label>
+          <div className="grid gap-1.5">
+            <Label>Direction of a good change</Label>
+            <Select
+              value={d.lower_is_better ? "lower" : "higher"}
+              onValueChange={(v) => setD({ ...d, lower_is_better: v === "lower" })}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="lower">
+                  A decrease is positive (green) — e.g. consumption, cost, carbon
+                </SelectItem>
+                <SelectItem value="higher">
+                  An increase is positive (green) — e.g. solar generation
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Controls whether a rise vs. last year or baseline is shown as an improvement.
+            </p>
           </div>
           <div className="grid gap-1.5">
             <Label>Mapped meters ({d.circuit_names.length})</Label>
