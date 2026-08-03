@@ -537,7 +537,7 @@ export function NeutralHomeDashboard({
                       </tr>
                     </thead>
                     <tbody>
-                      {comparisonRows.map((r) => (
+                      {basisRows.map((r) => (
                         <tr key={r.key} className="border-t">
                           <td className="py-2">{r.label}</td>
                           <td className="py-2 text-right">
@@ -765,9 +765,43 @@ export function NeutralHomeDashboard({
                             </Badge>
                           ) : null}
                           {groupByCategory ? (
-                            <Badge variant="outline" className="ml-2 text-[10px]">
-                              {r.meters} meters
-                            </Badge>
+                            <HoverCard openDelay={80}>
+                              <HoverCardTrigger asChild>
+                                <Badge
+                                  variant="outline"
+                                  className="ml-2 cursor-help text-[10px]"
+                                >
+                                  {r.meters} meters
+                                </Badge>
+                              </HoverCardTrigger>
+                              <HoverCardContent className="w-80 p-0" align="start">
+                                <div className="border-b px-3 py-2 text-xs font-medium">
+                                  {r.name} · {r.meters} meters
+                                </div>
+                                <div className="max-h-64 overflow-y-auto p-1">
+                                  <table className="w-full text-xs">
+                                    <tbody>
+                                      {[...(r.members ?? [])]
+                                        .sort((a, b) => b.usage_kwh - a.usage_kwh)
+                                        .map((m) => (
+                                          <tr key={m.name}>
+                                            <td className="px-2 py-1">{m.name}</td>
+                                            <td className="px-2 py-1 text-right tabular-nums">
+                                              {num(m.usage_kwh, 1)} kWh
+                                            </td>
+                                            <td className="px-2 py-1 text-right tabular-nums text-muted-foreground">
+                                              £{num(m.cost_gbp, 2)}
+                                            </td>
+                                            <td className="px-2 py-1 text-right tabular-nums text-muted-foreground">
+                                              {num(m.co2_kg, 1)} kg
+                                            </td>
+                                          </tr>
+                                        ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </HoverCardContent>
+                            </HoverCard>
                           ) : null}
                         </td>
                         {groupByCategory ? null : (
