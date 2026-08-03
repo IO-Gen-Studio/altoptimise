@@ -505,7 +505,7 @@ export function NeutralHomeDashboard({
                 <div className="flex flex-wrap items-start justify-between gap-3 pb-4">
                   <div>
                     <h2 className="pb-1 text-base font-semibold tracking-tight">
-                      Performance Metrics Comparison
+                      Performance Metrics
                     </h2>
                     <p className="text-sm text-muted-foreground">
                       {period.label}
