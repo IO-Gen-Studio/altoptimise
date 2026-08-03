@@ -658,68 +658,6 @@ export function NeutralHomeDashboard({
                   No circuits exceed the night-share threshold.
                 </p>
               )}
-
-              <div className="mt-6 rounded-lg border p-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <h3 className="text-sm font-semibold">Tariff shift simulator</h3>
-                    <p className="text-xs text-muted-foreground">
-                      Move {shiftPct}% of day usage onto the night rate.
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-2xl font-semibold tracking-tight text-emerald-600">
-                      {dayRate != null && nightRate != null ? `£${num(shift.savingGbp, 2)}` : "—"}
-                    </div>
-                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                      Modelled saving
-                    </div>
-                  </div>
-                </div>
-                <div className="mt-4 max-w-md">
-                  <Slider
-                    value={[shiftPct]}
-                    min={0}
-                    max={20}
-                    step={1}
-                    onValueChange={(v) => setShiftPct(v[0] ?? 0)}
-                  />
-                  <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
-                    <span>0%</span>
-                    <span>10%</span>
-                    <span>20%</span>
-                  </div>
-                </div>
-                <div className="mt-3 text-xs text-muted-foreground">
-                  {num(shift.shiftedKwh)} kWh shifted
-                  {dayRate != null && nightRate != null
-                    ? ` · day ${num(dayRate, 2)} p/kWh vs night ${num(nightRate, 2)} p/kWh`
-                    : ""}
-                </div>
-                {kpis.dayRate == null || kpis.nightRate == null ? (
-                  <div className="mt-3 grid gap-3 sm:grid-cols-2 sm:max-w-md">
-                    <p className="text-xs text-amber-600 sm:col-span-2">
-                      This report has no day/night unit rates. Enter rates to run the simulation.
-                    </p>
-                    <div className="grid gap-1.5">
-                      <Label className="text-xs">Day rate (p/kWh)</Label>
-                      <Input
-                        type="number"
-                        value={manualDay}
-                        onChange={(e) => setManualDay(e.target.value)}
-                      />
-                    </div>
-                    <div className="grid gap-1.5">
-                      <Label className="text-xs">Night rate (p/kWh)</Label>
-                      <Input
-                        type="number"
-                        value={manualNight}
-                        onChange={(e) => setManualNight(e.target.value)}
-                      />
-                    </div>
-                  </div>
-                ) : null}
-              </div>
             </CardContent>
           </Card>
 
