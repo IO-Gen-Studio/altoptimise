@@ -340,19 +340,70 @@ export function NeutralHomeDashboard({
 
   return (
     <div className="space-y-6">
+      {period ? (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <Kpi
+            label="No. of Datapoints"
+            value={num(circuits.length)}
+            icon={Gauge}
+            sub={`${circuits.filter((c) => !c.is_aggregate).length} sub-circuits · ${circuits.filter((c) => c.is_aggregate).length} totals/incomers`}
+          />
+          <Kpi
+            label="Total Consumption"
+            value={`${num(kpis.totalKwh)} kWh`}
+            icon={Zap}
+            badge={variancePct(variance, "Total consumption")}
+          />
+          <Kpi
+            label="PV Generation"
+            value={`${num(pvKwh)} kWh`}
+            icon={SunMedium}
+            badge={pvComparePct}
+            sub={pvKwh > 0 ? "PV / export circuits" : "No PV circuits in this period"}
+          />
+          <Card className="border-border/60">
+            <CardContent className="p-5">
+              <div className="flex items-center justify-between text-xs font-medium text-muted-foreground">
+                <span>Day / Night Split</span>
+                <div className="flex gap-1">
+                  <Sun className="h-4 w-4 text-amber-500" />
+                  <Moon className="h-4 w-4 text-indigo-500" />
+                </div>
+              </div>
+              <div className="mt-3 text-2xl font-semibold tracking-tight">
+                {num(kpis.dayPct, 1)}% / {num(kpis.nightPct, 1)}%
+              </div>
+              <div className="mt-2 flex h-2 overflow-hidden rounded-full bg-muted">
+                <div className="bg-amber-500" style={{ width: `${kpis.dayPct}%` }} />
+                <div className="bg-indigo-500" style={{ width: `${kpis.nightPct}%` }} />
+              </div>
+              <div className="mt-2 flex justify-between text-xs text-muted-foreground">
+                <span>{num(kpis.dayKwh)} kWh day</span>
+                <span>{num(kpis.nightKwh)} kWh night</span>
+              </div>
+            </CardContent>
+          </Card>
+          <Kpi
+            label="Total Cost"
+            value={`£${num(kpis.totalCostGbp, 2)}`}
+            icon={PoundSterling}
+            badge={variancePct(variance, "Total cost")}
+          />
+          <Kpi
+            label="Carbon Emissions"
+            value={`${num(kpis.co2Kg / 1000, 2)} tCO₂e`}
+            icon={Leaf}
+            sub={`${num(kpis.co2Kg)} kg`}
+            badge={variancePct(variance, "Carbon")}
+          />
+        </div>
+      ) : null}
+
       <Card>
         <CardContent className="flex flex-wrap items-end gap-3 p-4">
           <div className="grid gap-1.5">
             <Label className="text-xs">Site</Label>
-            <Select
-              value={siteId}
-              onValueChange={(v) => {
-                setSiteId(v);
-                setPeriodId("");
-                setComparePeriodId("");
-                setBaselinePeriodId("");
-              }}
-            >
+            <Select value={siteId} onValueChange={pickSite}>
               <SelectTrigger className="w-56">
                 <SelectValue />
               </SelectTrigger>
@@ -432,31 +483,6 @@ export function NeutralHomeDashboard({
               </SelectContent>
             </Select>
           </div>
-          <div className="grid gap-1.5">
-            <Label className="text-xs">Circuit category</Label>
-            <Select value={category} onValueChange={setCategory}>
-              <SelectTrigger className="w-52">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All categories</SelectItem>
-                {categories.map((c) => (
-                  <SelectItem key={c} value={c}>
-                    {labels[c] ?? c}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="ml-auto gap-1.5"
-            onClick={exportCsv}
-            disabled={!circuits.length}
-          >
-            <Download className="h-3.5 w-3.5" /> Export merged CSV
-          </Button>
         </CardContent>
       </Card>
 
@@ -468,72 +494,28 @@ export function NeutralHomeDashboard({
         </Card>
       ) : (
         <>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            <Kpi
-              label="No. of Datapoints"
-              value={num(circuits.length)}
-              icon={Gauge}
-              sub={`${circuits.filter((c) => !c.is_aggregate).length} sub-circuits · ${circuits.filter((c) => c.is_aggregate).length} totals/incomers`}
-            />
-            <Kpi
-              label="Total Consumption"
-              value={`${num(kpis.totalKwh)} kWh`}
-              icon={Zap}
-              badge={variancePct(variance, "Total consumption")}
-            />
-            <Card className="border-border/60">
-              <CardContent className="p-5">
-                <div className="flex items-center justify-between text-xs font-medium text-muted-foreground">
-                  <span>Day / Night Split</span>
-                  <div className="flex gap-1">
-                    <Sun className="h-4 w-4 text-amber-500" />
-                    <Moon className="h-4 w-4 text-indigo-500" />
-                  </div>
-                </div>
-                <div className="mt-3 text-2xl font-semibold tracking-tight">
-                  {num(kpis.dayPct, 1)}% / {num(kpis.nightPct, 1)}%
-                </div>
-                <div className="mt-2 flex h-2 overflow-hidden rounded-full bg-muted">
-                  <div className="bg-amber-500" style={{ width: `${kpis.dayPct}%` }} />
-                  <div className="bg-indigo-500" style={{ width: `${kpis.nightPct}%` }} />
-                </div>
-                <div className="mt-2 flex justify-between text-xs text-muted-foreground">
-                  <span>{num(kpis.dayKwh)} kWh day</span>
-                  <span>{num(kpis.nightKwh)} kWh night</span>
-                </div>
-              </CardContent>
-            </Card>
-            <Kpi
-              label="Total Cost"
-              value={`£${num(kpis.totalCostGbp, 2)}`}
-              icon={PoundSterling}
-              badge={variancePct(variance, "Total cost")}
-            />
-            <Kpi
-              label="Carbon Emissions"
-              value={`${num(kpis.co2Kg / 1000, 2)} tCO₂e`}
-              icon={Leaf}
-              sub={`${num(kpis.co2Kg)} kg`}
-              badge={variancePct(variance, "Carbon")}
-            />
-            <Kpi
-              label="Blended Cost"
-              value={`${num(kpis.blendedPPerKwh, 2)} p/kWh`}
-              icon={Zap}
-              badge={variancePct(variance, "Blended cost")}
-              sub={`${kpis.circuitCount} circuits`}
-            />
-          </div>
-
           {comparisonRows.length && (compareCircuits.length || baselineCircuits.length) ? (
             <Card>
               <CardContent className="p-5">
-                <h2 className="pb-1 text-base font-semibold tracking-tight">Performance Metrics Comparison</h2>
-                <p className="pb-4 text-sm text-muted-foreground">
-                  {period.label}
-                  {compareCircuits.length ? ` · vs. Last Year: ${comparePeriod?.label}` : ""}
-                  {baselineCircuits.length ? ` · Baseline: ${baselinePeriod?.label}` : ""}
-                </p>
+                <div className="flex flex-wrap items-start justify-between gap-3 pb-4">
+                  <div>
+                    <h2 className="pb-1 text-base font-semibold tracking-tight">
+                      Performance Metrics Comparison
+                    </h2>
+                    <p className="text-sm text-muted-foreground">
+                      {period.label}
+                      {compareCircuits.length ? ` · vs. Last Year: ${comparePeriod?.label}` : ""}
+                      {baselineCircuits.length ? ` · Baseline: ${baselinePeriod?.label}` : ""}
+                    </p>
+                  </div>
+                  <Tabs value={basis} onValueChange={(v) => setBasis(v as Basis)}>
+                    <TabsList>
+                      <TabsTrigger value="kwh">kWh</TabsTrigger>
+                      <TabsTrigger value="cost">Cost</TabsTrigger>
+                      <TabsTrigger value="carbon">Carbon</TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
