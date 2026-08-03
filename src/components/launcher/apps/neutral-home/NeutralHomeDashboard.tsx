@@ -1,15 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
-  Download,
   Gauge,
   Leaf,
   Moon,
   PoundSterling,
   Sun,
+  SunMedium,
   Zap,
 } from "lucide-react";
 import {
@@ -24,9 +24,8 @@ import {
 } from "recharts";
 
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -35,8 +34,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import type { NeutralHomeBundle } from "@/lib/neutral-home.functions";
 import {
@@ -45,7 +44,6 @@ import {
   detailCircuits,
   mergedCsv,
   nightFlags,
-  simulateShift,
   NIGHT_FLAG_THRESHOLD,
   type CircuitRecord,
 } from "@/lib/neutral-home/analytics";
@@ -73,13 +71,51 @@ interface LeagueRow {
   night_kwh: number;
   isAggregate: boolean;
   meters?: number;
+  members?: { name: string; usage_kwh: number; cost_gbp: number; co2_kg: number }[];
 }
+
+type Basis = "kwh" | "cost" | "carbon";
+
+const BASIS_UNITS: Record<Basis, string[]> = {
+  kwh: ["kWh", "%"],
+  cost: ["£", "p/kWh", "p"],
+  carbon: ["kg", "tCO₂e", "kg/m²"],
+};
+
+const SITE_STORAGE_KEY = "neutral-home:last-site";
 
 const num = (v: number, dp = 0) =>
   v.toLocaleString(undefined, { minimumFractionDigits: dp, maximumFractionDigits: dp });
 
-export function NeutralHomeDashboard({ bundle }: { bundle: NeutralHomeBundle }) {
-  const [siteId, setSiteId] = useState<string>(bundle.sites[0]?.id ?? "");
+export function NeutralHomeDashboard({
+  bundle,
+  onExporter,
+}: {
+  bundle: NeutralHomeBundle;
+  onExporter?: (fn: (() => void) | null) => void;
+}) {
+  const [siteId, setSiteId] = useState<string>("");
+
+  // Remember the last viewed site across refreshes and navigation.
+  useEffect(() => {
+    if (!bundle.sites.length) return;
+    const stored =
+      typeof window === "undefined" ? null : window.localStorage.getItem(SITE_STORAGE_KEY);
+    setSiteId((curr) => {
+      if (curr && bundle.sites.some((s) => s.id === curr)) return curr;
+      if (stored && bundle.sites.some((s) => s.id === stored)) return stored;
+      return bundle.sites[0]!.id;
+    });
+  }, [bundle.sites]);
+
+  const pickSite = (v: string) => {
+    setSiteId(v);
+    if (typeof window !== "undefined") window.localStorage.setItem(SITE_STORAGE_KEY, v);
+    setPeriodId("");
+    setComparePeriodId("");
+    setBaselinePeriodId("");
+  };
+
   const sitePeriods = useMemo(
     () => bundle.periods.filter((p) => p.site_id === siteId),
     [bundle.periods, siteId],
@@ -87,14 +123,11 @@ export function NeutralHomeDashboard({ bundle }: { bundle: NeutralHomeBundle }) 
   const [periodId, setPeriodId] = useState<string>("");
   const [comparePeriodId, setComparePeriodId] = useState<string>("");
   const [baselinePeriodId, setBaselinePeriodId] = useState<string>("");
-  const [category, setCategory] = useState<string>("all");
   const [sortKey, setSortKey] = useState<SortKey>("usage_kwh");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
-  const [shiftPct, setShiftPct] = useState(10);
-  const [manualDay, setManualDay] = useState("");
-  const [manualNight, setManualNight] = useState("");
   const [showAggregates, setShowAggregates] = useState(true);
   const [groupByCategory, setGroupByCategory] = useState(false);
+  const [basis, setBasis] = useState<Basis>("kwh");
 
   const period = sitePeriods.find((p) => p.id === periodId) ?? sitePeriods[0];
 
