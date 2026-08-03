@@ -270,7 +270,12 @@ export function NeutralHomeDashboard({
       const map = new Map<string, LeagueRow>();
       for (const r of rows) {
         const existing = map.get(r.category);
-        const member = { name: r.name, usage_kwh: r.usage_kwh, cost_gbp: r.cost_gbp, co2_kg: r.co2_kg };
+        const member = {
+          name: r.name,
+          usage_kwh: r.usage_kwh,
+          cost_gbp: r.cost_gbp,
+          co2_kg: r.co2_kg,
+        };
         if (existing) {
           existing.usage_kwh += r.usage_kwh;
           existing.co2_kg += r.co2_kg;
@@ -767,10 +772,7 @@ export function NeutralHomeDashboard({
                           {groupByCategory ? (
                             <HoverCard openDelay={80}>
                               <HoverCardTrigger asChild>
-                                <Badge
-                                  variant="outline"
-                                  className="ml-2 cursor-help text-[10px]"
-                                >
+                                <Badge variant="outline" className="ml-2 cursor-help text-[10px]">
                                   {r.meters} meters
                                 </Badge>
                               </HoverCardTrigger>
