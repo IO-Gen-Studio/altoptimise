@@ -624,24 +624,7 @@ export function NeutralHomeDashboard({
                               <td className="py-2 text-right text-muted-foreground">
                                 {r.lastYear ? `${num(r.lastYear.value, 2)} ${r.unit}` : "—"}
                               </td>
-                              <td
-                                className={cn(
-                                  "py-2 text-right font-medium",
-                                  r.lastYear
-                                    ? r.lastYear.good
-                                      ? "text-emerald-600"
-                                      : "text-red-600"
-                                    : "",
-                                )}
-                              >
-                                {r.lastYear
-                                  ? `${r.lastYear.delta >= 0 ? "+" : ""}${num(r.lastYear.delta, 2)} ${r.unit}${
-                                      r.lastYear.pct == null
-                                        ? ""
-                                        : ` (${r.lastYear.pct >= 0 ? "+" : ""}${num(r.lastYear.pct, 1)}%)`
-                                    }`
-                                  : "—"}
-                              </td>
+                              <ChangeCell cell={r.lastYear} unit={r.unit} />
                             </>
                           ) : null}
                           {baselineCircuits.length ? (
@@ -649,24 +632,7 @@ export function NeutralHomeDashboard({
                               <td className="py-2 text-right text-muted-foreground">
                                 {r.baseline ? `${num(r.baseline.value, 2)} ${r.unit}` : "—"}
                               </td>
-                              <td
-                                className={cn(
-                                  "py-2 text-right font-medium",
-                                  r.baseline
-                                    ? r.baseline.good
-                                      ? "text-emerald-600"
-                                      : "text-red-600"
-                                    : "",
-                                )}
-                              >
-                                {r.baseline
-                                  ? `${r.baseline.delta >= 0 ? "+" : ""}${num(r.baseline.delta, 2)} ${r.unit}${
-                                      r.baseline.pct == null
-                                        ? ""
-                                        : ` (${r.baseline.pct >= 0 ? "+" : ""}${num(r.baseline.pct, 1)}%)`
-                                    }`
-                                  : "—"}
-                              </td>
+                              <ChangeCell cell={r.baseline} unit={r.unit} />
                             </>
                           ) : null}
                         </tr>
