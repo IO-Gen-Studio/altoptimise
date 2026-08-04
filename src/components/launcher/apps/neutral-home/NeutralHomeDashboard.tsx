@@ -153,6 +153,34 @@ const SITE_STORAGE_KEY = "neutral-home:last-site";
 const num = (v: number, dp = 0) =>
   v.toLocaleString(undefined, { minimumFractionDigits: dp, maximumFractionDigits: dp });
 
+/** Change cell: up/down triangle instead of +/-, coloured by good/bad outcome. */
+function ChangeCell({
+  cell,
+  unit,
+}: {
+  cell: { delta: number; pct: number | null; good: boolean } | null;
+  unit: string;
+}) {
+  if (!cell) return <td className="py-2 text-right text-muted-foreground">—</td>;
+  const up = cell.delta >= 0;
+  return (
+    <td
+      className={cn("py-2 text-right font-medium", cell.good ? "text-emerald-600" : "text-red-600")}
+    >
+      <span className="inline-flex items-center justify-end gap-1">
+        <Triangle
+          className={cn("h-3 w-3", up ? "" : "rotate-180")}
+          fill="currentColor"
+          strokeWidth={0}
+          aria-hidden
+        />
+        {num(Math.abs(cell.delta), 2)} {unit}
+        {cell.pct == null ? "" : ` (${num(Math.abs(cell.pct), 1)}%)`}
+      </span>
+    </td>
+  );
+}
+
 export function NeutralHomeDashboard({
   bundle,
   onExporter,
