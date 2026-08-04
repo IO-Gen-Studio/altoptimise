@@ -306,14 +306,24 @@ export function NeutralHomeDashboard({
 
   const basisRows = useMemo(() => {
     const units = BASIS_UNITS[basis];
-    const userDefs = shownDefs.filter((d) => !d.system && units.includes(d.unit));
+    // Respect the site's configured metric selection: keep the chosen metrics
+    // whose unit belongs to the selected basis, and only fall back to the
+    // built-in basis rows when the selection yields nothing for that basis.
+    const chosen = selectedKeys
+      ? shownDefs.filter((d) => units.includes(d.unit))
+      : shownDefs.filter((d) => !d.system && units.includes(d.unit));
+    const defs = selectedKeys
+      ? chosen.length
+        ? chosen
+        : basisMetricDefs(basis)
+      : [...basisMetricDefs(basis), ...chosen];
     return buildComparison(
-      [...basisMetricDefs(basis), ...userDefs],
+      defs,
       circuits,
       compareCircuits.length ? compareCircuits : null,
       baselineCircuits.length ? baselineCircuits : null,
     );
-  }, [basis, shownDefs, circuits, compareCircuits, baselineCircuits]);
+  }, [basis, shownDefs, selectedKeys, circuits, compareCircuits, baselineCircuits]);
 
   const filtered = useMemo(() => detailCircuits(circuits), [circuits]);
 
