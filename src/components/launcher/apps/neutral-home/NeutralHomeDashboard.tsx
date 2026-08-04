@@ -278,9 +278,14 @@ export function NeutralHomeDashboard({
 
   const basisRows = useMemo(() => {
     const units = BASIS_UNITS[basis];
-    const matched = comparisonRows.filter((r) => units.includes(r.unit));
-    return matched.length ? matched : comparisonRows;
-  }, [comparisonRows, basis]);
+    const userDefs = shownDefs.filter((d) => !d.system && units.includes(d.unit));
+    return buildComparison(
+      [...basisMetricDefs(basis), ...userDefs],
+      circuits,
+      compareCircuits.length ? compareCircuits : null,
+      baselineCircuits.length ? baselineCircuits : null,
+    );
+  }, [basis, shownDefs, circuits, compareCircuits, baselineCircuits]);
 
   const filtered = useMemo(() => detailCircuits(circuits), [circuits]);
 
