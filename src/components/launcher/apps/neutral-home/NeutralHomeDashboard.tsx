@@ -10,6 +10,7 @@ import {
   PoundSterling,
   Sun,
   SunMedium,
+  Triangle,
   Zap,
 } from "lucide-react";
 import {
@@ -53,6 +54,7 @@ import {
   buildComparison,
   categoryLabelMap,
   findLastYearPeriod,
+  type MetricDef,
 } from "@/lib/neutral-home/config";
 
 type SortKey = "name" | "category" | "usage_kwh" | "co2_kg" | "cost_gbp" | "day_kwh" | "night_kwh";
@@ -82,10 +84,102 @@ const BASIS_UNITS: Record<Basis, string[]> = {
   carbon: ["kg", "tCO₂e", "kg/m²"],
 };
 
+const sumBy = (rows: CircuitRecord[], pick: (r: CircuitRecord) => number) =>
+  rows.reduce((a, r) => a + pick(r), 0);
+
+/** Cost split across day/night using per-circuit rates, falling back to kWh share. */
+function splitCost(rows: CircuitRecord[], part: "day" | "night"): number {
+  return sumBy(rows, (r) => {
+    const day = r.day_kwh ?? 0;
+    const night = r.night_kwh ?? 0;
+    const kwh = part === "day" ? day : night;
+    const rate = part === "day" ? r.day_p_kwh : r.night_p_kwh;
+    if (rate != null) return (kwh * rate) / 100;
+    const total = day + night;
+    if (total <= 0) return 0;
+    return ((r.total_cost_p ?? 0) / 100) * (kwh / total);
+  });
+}
+
+/** Carbon split across day/night pro-rata on measured kWh. */
+function splitCarbon(rows: CircuitRecord[], part: "day" | "night"): number {
+  return sumBy(rows, (r) => {
+    const day = r.day_kwh ?? 0;
+    const night = r.night_kwh ?? 0;
+    const total = day + night;
+    if (total <= 0) return 0;
+    return ((r.co2_kg ?? 0) * ((part === "day" ? day : night) / total)) / 1000;
+  });
+}
+
+/** Metric rows for the selected reporting basis (kWh, £ or tCO₂e). */
+function basisMetricDefs(basis: Basis): MetricDef[] {
+  const mk = (
+    key: string,
+    label: string,
+    unit: string,
+    evaluate: (rows: CircuitRecord[]) => number,
+  ): MetricDef => ({ key, label, unit, lowerIsBetter: true, system: true, evaluate });
+  const d = (rows: CircuitRecord[]) => detailCircuits(rows);
+  if (basis === "cost") {
+    return [
+      mk("basis:cost", "Total cost", "£", (r) => sumBy(d(r), (x) => (x.total_cost_p ?? 0) / 100)),
+      mk("basis:costDay", "Day cost", "£", (r) => splitCost(d(r), "day")),
+      mk("basis:costNight", "Night cost", "£", (r) => splitCost(d(r), "night")),
+      mk("basis:blended", "Blended cost", "p/kWh", (r) => computeKpis(r).blendedPPerKwh),
+    ];
+  }
+  if (basis === "carbon") {
+    return [
+      mk("basis:co2", "Total carbon", "tCO₂e", (r) => computeKpis(r).co2Kg / 1000),
+      mk("basis:co2Day", "Day carbon", "tCO₂e", (r) => splitCarbon(d(r), "day")),
+      mk("basis:co2Night", "Night carbon", "tCO₂e", (r) => splitCarbon(d(r), "night")),
+      mk("basis:co2Int", "Carbon intensity", "kg/kWh", (r) => {
+        const k = computeKpis(r);
+        return k.totalKwh > 0 ? k.co2Kg / k.totalKwh : 0;
+      }),
+    ];
+  }
+  return [
+    mk("basis:kwh", "Total consumption", "kWh", (r) => computeKpis(r).totalKwh),
+    mk("basis:dayKwh", "Day consumption", "kWh", (r) => computeKpis(r).dayKwh),
+    mk("basis:nightKwh", "Night consumption", "kWh", (r) => computeKpis(r).nightKwh),
+    mk("basis:nightPct", "Night share", "%", (r) => computeKpis(r).nightPct),
+  ];
+}
+
 const SITE_STORAGE_KEY = "neutral-home:last-site";
 
 const num = (v: number, dp = 0) =>
   v.toLocaleString(undefined, { minimumFractionDigits: dp, maximumFractionDigits: dp });
+
+/** Change cell: up/down triangle instead of +/-, coloured by good/bad outcome. */
+function ChangeCell({
+  cell,
+  unit,
+}: {
+  cell: { delta: number; pct: number | null; good: boolean } | null;
+  unit: string;
+}) {
+  if (!cell) return <td className="py-2 text-right text-muted-foreground">—</td>;
+  const up = cell.delta >= 0;
+  return (
+    <td
+      className={cn("py-2 text-right font-medium", cell.good ? "text-emerald-600" : "text-red-600")}
+    >
+      <span className="inline-flex items-center justify-end gap-1">
+        <Triangle
+          className={cn("h-3 w-3", up ? "" : "rotate-180")}
+          fill="currentColor"
+          strokeWidth={0}
+          aria-hidden
+        />
+        {num(Math.abs(cell.delta), 2)} {unit}
+        {cell.pct == null ? "" : ` (${num(Math.abs(cell.pct), 1)}%)`}
+      </span>
+    </td>
+  );
+}
 
 export function NeutralHomeDashboard({
   bundle,
@@ -212,9 +306,14 @@ export function NeutralHomeDashboard({
 
   const basisRows = useMemo(() => {
     const units = BASIS_UNITS[basis];
-    const matched = comparisonRows.filter((r) => units.includes(r.unit));
-    return matched.length ? matched : comparisonRows;
-  }, [comparisonRows, basis]);
+    const userDefs = shownDefs.filter((d) => !d.system && units.includes(d.unit));
+    return buildComparison(
+      [...basisMetricDefs(basis), ...userDefs],
+      circuits,
+      compareCircuits.length ? compareCircuits : null,
+      baselineCircuits.length ? baselineCircuits : null,
+    );
+  }, [basis, shownDefs, circuits, compareCircuits, baselineCircuits]);
 
   const filtered = useMemo(() => detailCircuits(circuits), [circuits]);
 
@@ -344,7 +443,7 @@ export function NeutralHomeDashboard({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6">
       {period ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           <Kpi
@@ -404,7 +503,7 @@ export function NeutralHomeDashboard({
         </div>
       ) : null}
 
-      <Card>
+      <Card className="order-first">
         <CardContent className="flex flex-wrap items-end gap-3 p-4">
           <div className="grid gap-1.5">
             <Label className="text-xs">Site</Label>
@@ -553,24 +652,7 @@ export function NeutralHomeDashboard({
                               <td className="py-2 text-right text-muted-foreground">
                                 {r.lastYear ? `${num(r.lastYear.value, 2)} ${r.unit}` : "—"}
                               </td>
-                              <td
-                                className={cn(
-                                  "py-2 text-right font-medium",
-                                  r.lastYear
-                                    ? r.lastYear.good
-                                      ? "text-emerald-600"
-                                      : "text-red-600"
-                                    : "",
-                                )}
-                              >
-                                {r.lastYear
-                                  ? `${r.lastYear.delta >= 0 ? "+" : ""}${num(r.lastYear.delta, 2)} ${r.unit}${
-                                      r.lastYear.pct == null
-                                        ? ""
-                                        : ` (${r.lastYear.pct >= 0 ? "+" : ""}${num(r.lastYear.pct, 1)}%)`
-                                    }`
-                                  : "—"}
-                              </td>
+                              <ChangeCell cell={r.lastYear} unit={r.unit} />
                             </>
                           ) : null}
                           {baselineCircuits.length ? (
@@ -578,24 +660,7 @@ export function NeutralHomeDashboard({
                               <td className="py-2 text-right text-muted-foreground">
                                 {r.baseline ? `${num(r.baseline.value, 2)} ${r.unit}` : "—"}
                               </td>
-                              <td
-                                className={cn(
-                                  "py-2 text-right font-medium",
-                                  r.baseline
-                                    ? r.baseline.good
-                                      ? "text-emerald-600"
-                                      : "text-red-600"
-                                    : "",
-                                )}
-                              >
-                                {r.baseline
-                                  ? `${r.baseline.delta >= 0 ? "+" : ""}${num(r.baseline.delta, 2)} ${r.unit}${
-                                      r.baseline.pct == null
-                                        ? ""
-                                        : ` (${r.baseline.pct >= 0 ? "+" : ""}${num(r.baseline.pct, 1)}%)`
-                                    }`
-                                  : "—"}
-                              </td>
+                              <ChangeCell cell={r.baseline} unit={r.unit} />
                             </>
                           ) : null}
                         </tr>
