@@ -415,7 +415,7 @@ export function NeutralHomeDashboard({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6">
       {period ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           <Kpi
@@ -475,7 +475,7 @@ export function NeutralHomeDashboard({
         </div>
       ) : null}
 
-      <Card>
+      <Card className="order-first">
         <CardContent className="flex flex-wrap items-end gap-3 p-4">
           <div className="grid gap-1.5">
             <Label className="text-xs">Site</Label>
