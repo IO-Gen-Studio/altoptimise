@@ -10,6 +10,7 @@ import {
   PoundSterling,
   Sun,
   SunMedium,
+  Triangle,
   Zap,
 } from "lucide-react";
 import {
@@ -53,6 +54,7 @@ import {
   buildComparison,
   categoryLabelMap,
   findLastYearPeriod,
+  type MetricDef,
 } from "@/lib/neutral-home/config";
 
 type SortKey = "name" | "category" | "usage_kwh" | "co2_kg" | "cost_gbp" | "day_kwh" | "night_kwh";
@@ -81,6 +83,70 @@ const BASIS_UNITS: Record<Basis, string[]> = {
   cost: ["£", "p/kWh", "p"],
   carbon: ["kg", "tCO₂e", "kg/m²"],
 };
+
+const sumBy = (rows: CircuitRecord[], pick: (r: CircuitRecord) => number) =>
+  rows.reduce((a, r) => a + pick(r), 0);
+
+/** Cost split across day/night using per-circuit rates, falling back to kWh share. */
+function splitCost(rows: CircuitRecord[], part: "day" | "night"): number {
+  return sumBy(rows, (r) => {
+    const day = r.day_kwh ?? 0;
+    const night = r.night_kwh ?? 0;
+    const kwh = part === "day" ? day : night;
+    const rate = part === "day" ? r.day_p_kwh : r.night_p_kwh;
+    if (rate != null) return (kwh * rate) / 100;
+    const total = day + night;
+    if (total <= 0) return 0;
+    return ((r.total_cost_p ?? 0) / 100) * (kwh / total);
+  });
+}
+
+/** Carbon split across day/night pro-rata on measured kWh. */
+function splitCarbon(rows: CircuitRecord[], part: "day" | "night"): number {
+  return sumBy(rows, (r) => {
+    const day = r.day_kwh ?? 0;
+    const night = r.night_kwh ?? 0;
+    const total = day + night;
+    if (total <= 0) return 0;
+    return ((r.co2_kg ?? 0) * ((part === "day" ? day : night) / total)) / 1000;
+  });
+}
+
+/** Metric rows for the selected reporting basis (kWh, £ or tCO₂e). */
+function basisMetricDefs(basis: Basis): MetricDef[] {
+  const mk = (
+    key: string,
+    label: string,
+    unit: string,
+    evaluate: (rows: CircuitRecord[]) => number,
+  ): MetricDef => ({ key, label, unit, lowerIsBetter: true, system: true, evaluate });
+  const d = (rows: CircuitRecord[]) => detailCircuits(rows);
+  if (basis === "cost") {
+    return [
+      mk("basis:cost", "Total cost", "£", (r) => sumBy(d(r), (x) => (x.total_cost_p ?? 0) / 100)),
+      mk("basis:costDay", "Day cost", "£", (r) => splitCost(d(r), "day")),
+      mk("basis:costNight", "Night cost", "£", (r) => splitCost(d(r), "night")),
+      mk("basis:blended", "Blended cost", "p/kWh", (r) => computeKpis(r).blendedPPerKwh),
+    ];
+  }
+  if (basis === "carbon") {
+    return [
+      mk("basis:co2", "Total carbon", "tCO₂e", (r) => computeKpis(r).co2Kg / 1000),
+      mk("basis:co2Day", "Day carbon", "tCO₂e", (r) => splitCarbon(d(r), "day")),
+      mk("basis:co2Night", "Night carbon", "tCO₂e", (r) => splitCarbon(d(r), "night")),
+      mk("basis:co2Int", "Carbon intensity", "kg/kWh", (r) => {
+        const k = computeKpis(r);
+        return k.totalKwh > 0 ? k.co2Kg / k.totalKwh : 0;
+      }),
+    ];
+  }
+  return [
+    mk("basis:kwh", "Total consumption", "kWh", (r) => computeKpis(r).totalKwh),
+    mk("basis:dayKwh", "Day consumption", "kWh", (r) => computeKpis(r).dayKwh),
+    mk("basis:nightKwh", "Night consumption", "kWh", (r) => computeKpis(r).nightKwh),
+    mk("basis:nightPct", "Night share", "%", (r) => computeKpis(r).nightPct),
+  ];
+}
 
 const SITE_STORAGE_KEY = "neutral-home:last-site";
 
