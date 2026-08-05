@@ -78,74 +78,24 @@ interface LeagueRow {
 
 type Basis = "kwh" | "cost" | "carbon";
 
-const BASIS_UNITS: Record<Basis, string[]> = {
-  kwh: ["kWh", "%"],
-  cost: ["£", "p/kWh", "p"],
-  carbon: ["kg", "tCO₂e", "kg/m²"],
-};
-
-const sumBy = (rows: CircuitRecord[], pick: (r: CircuitRecord) => number) =>
-  rows.reduce((a, r) => a + pick(r), 0);
-
-/** Cost split across day/night using per-circuit rates, falling back to kWh share. */
-function splitCost(rows: CircuitRecord[], part: "day" | "night"): number {
-  return sumBy(rows, (r) => {
-    const day = r.day_kwh ?? 0;
-    const night = r.night_kwh ?? 0;
-    const kwh = part === "day" ? day : night;
-    const rate = part === "day" ? r.day_p_kwh : r.night_p_kwh;
-    if (rate != null) return (kwh * rate) / 100;
-    const total = day + night;
-    if (total <= 0) return 0;
-    return ((r.total_cost_p ?? 0) / 100) * (kwh / total);
-  });
-}
-
-/** Carbon split across day/night pro-rata on measured kWh. */
-function splitCarbon(rows: CircuitRecord[], part: "day" | "night"): number {
-  return sumBy(rows, (r) => {
-    const day = r.day_kwh ?? 0;
-    const night = r.night_kwh ?? 0;
-    const total = day + night;
-    if (total <= 0) return 0;
-    return ((r.co2_kg ?? 0) * ((part === "day" ? day : night) / total)) / 1000;
-  });
-}
-
-/** Metric rows for the selected reporting basis (kWh, £ or tCO₂e). */
-function basisMetricDefs(basis: Basis): MetricDef[] {
-  const mk = (
-    key: string,
-    label: string,
-    unit: string,
-    evaluate: (rows: CircuitRecord[]) => number,
-  ): MetricDef => ({ key, label, unit, lowerIsBetter: true, system: true, evaluate });
-  const d = (rows: CircuitRecord[]) => detailCircuits(rows);
-  if (basis === "cost") {
-    return [
-      mk("basis:cost", "Total cost", "£", (r) => sumBy(d(r), (x) => (x.total_cost_p ?? 0) / 100)),
-      mk("basis:costDay", "Day cost", "£", (r) => splitCost(d(r), "day")),
-      mk("basis:costNight", "Night cost", "£", (r) => splitCost(d(r), "night")),
-      mk("basis:blended", "Blended cost", "p/kWh", (r) => computeKpis(r).blendedPPerKwh),
-    ];
-  }
-  if (basis === "carbon") {
-    return [
-      mk("basis:co2", "Total carbon", "tCO₂e", (r) => computeKpis(r).co2Kg / 1000),
-      mk("basis:co2Day", "Day carbon", "tCO₂e", (r) => splitCarbon(d(r), "day")),
-      mk("basis:co2Night", "Night carbon", "tCO₂e", (r) => splitCarbon(d(r), "night")),
-      mk("basis:co2Int", "Carbon intensity", "kg/kWh", (r) => {
-        const k = computeKpis(r);
-        return k.totalKwh > 0 ? k.co2Kg / k.totalKwh : 0;
-      }),
-    ];
-  }
-  return [
-    mk("basis:kwh", "Total consumption", "kWh", (r) => computeKpis(r).totalKwh),
-    mk("basis:dayKwh", "Day consumption", "kWh", (r) => computeKpis(r).dayKwh),
-    mk("basis:nightKwh", "Night consumption", "kWh", (r) => computeKpis(r).nightKwh),
-    mk("basis:nightPct", "Night share", "%", (r) => computeKpis(r).nightPct),
-  ];
+/**
+ * Keep the site's configured metrics exactly as-is and simply convert each
+ * kWh figure into cost (£) or carbon (kg CO₂e) using the period's own
+ * blended rate / carbon intensity. Non-kWh metrics pass through unchanged.
+ */
+function convertDefs(defs: MetricDef[], basis: Basis): MetricDef[] {
+  if (basis === "kwh") return defs;
+  const factor = (rows: CircuitRecord[]) => {
+    const k = computeKpis(rows);
+    if (k.totalKwh <= 0) return 0;
+    return basis === "cost" ? k.totalCostGbp / k.totalKwh : k.co2Kg / k.totalKwh;
+  };
+  const unit = basis === "cost" ? "£" : "kg CO₂e";
+  return defs.map((d) =>
+    d.unit === "kWh"
+      ? { ...d, unit, evaluate: (rows: CircuitRecord[]) => d.evaluate(rows) * factor(rows) }
+      : d,
+  );
 }
 
 const SITE_STORAGE_KEY = "neutral-home:last-site";
@@ -305,25 +255,13 @@ export function NeutralHomeDashboard({
   );
 
   const basisRows = useMemo(() => {
-    const units = BASIS_UNITS[basis];
-    // Respect the site's configured metric selection: keep the chosen metrics
-    // whose unit belongs to the selected basis, and only fall back to the
-    // built-in basis rows when the selection yields nothing for that basis.
-    const chosen = selectedKeys
-      ? shownDefs.filter((d) => units.includes(d.unit))
-      : shownDefs.filter((d) => !d.system && units.includes(d.unit));
-    const defs = selectedKeys
-      ? chosen.length
-        ? chosen
-        : basisMetricDefs(basis)
-      : [...basisMetricDefs(basis), ...chosen];
     return buildComparison(
-      defs,
+      convertDefs(shownDefs, basis),
       circuits,
       compareCircuits.length ? compareCircuits : null,
       baselineCircuits.length ? baselineCircuits : null,
     );
-  }, [basis, shownDefs, selectedKeys, circuits, compareCircuits, baselineCircuits]);
+  }, [basis, shownDefs, circuits, compareCircuits, baselineCircuits]);
 
   const filtered = useMemo(() => detailCircuits(circuits), [circuits]);
 
