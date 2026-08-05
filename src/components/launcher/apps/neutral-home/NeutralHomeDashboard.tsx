@@ -54,6 +54,7 @@ import {
   buildComparison,
   categoryLabelMap,
   findLastYearPeriod,
+  sumOf,
   type MetricDef,
 } from "@/lib/neutral-home/config";
 
@@ -79,23 +80,23 @@ interface LeagueRow {
 type Basis = "kwh" | "cost" | "carbon";
 
 /**
- * Keep the site's configured metrics exactly as-is and simply convert each
- * kWh figure into cost (£) or carbon (kg CO₂e) using the period's own
- * blended rate / carbon intensity. Non-kWh metrics pass through unchanged.
+ * Keep the site's configured metrics exactly as-is and read the uploaded cost
+ * (£) or carbon (kg) column for the very same circuits — nothing is derived.
+ * Metrics that aren't kWh-based (or have no circuit selection) pass through.
  */
 function convertDefs(defs: MetricDef[], basis: Basis): MetricDef[] {
   if (basis === "kwh") return defs;
-  const factor = (rows: CircuitRecord[]) => {
-    const k = computeKpis(rows);
-    if (k.totalKwh <= 0) return 0;
-    return basis === "cost" ? k.totalCostGbp / k.totalKwh : k.co2Kg / k.totalKwh;
-  };
-  const unit = basis === "cost" ? "£" : "kg CO₂e";
-  return defs.map((d) =>
-    d.unit === "kWh"
-      ? { ...d, unit, evaluate: (rows: CircuitRecord[]) => d.evaluate(rows) * factor(rows) }
-      : d,
-  );
+  const column = basis === "cost" ? ("total_cost_p" as const) : ("co2_kg" as const);
+  const unit = basis === "cost" ? "£" : "kg";
+  return defs.map((d) => {
+    if (d.unit !== "kWh" || !d.select) return d;
+    const select = d.select;
+    return {
+      ...d,
+      unit,
+      evaluate: (rows: CircuitRecord[]) => sumOf(select(rows), column),
+    };
+  });
 }
 
 const SITE_STORAGE_KEY = "neutral-home:last-site";
