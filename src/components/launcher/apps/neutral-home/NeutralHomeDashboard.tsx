@@ -78,40 +78,6 @@ interface LeagueRow {
 
 type Basis = "kwh" | "cost" | "carbon";
 
-const BASIS_UNITS: Record<Basis, string[]> = {
-  kwh: ["kWh", "%"],
-  cost: ["£", "p/kWh", "p"],
-  carbon: ["kg", "tCO₂e", "kg/m²"],
-};
-
-const sumBy = (rows: CircuitRecord[], pick: (r: CircuitRecord) => number) =>
-  rows.reduce((a, r) => a + pick(r), 0);
-
-/** Cost split across day/night using per-circuit rates, falling back to kWh share. */
-function splitCost(rows: CircuitRecord[], part: "day" | "night"): number {
-  return sumBy(rows, (r) => {
-    const day = r.day_kwh ?? 0;
-    const night = r.night_kwh ?? 0;
-    const kwh = part === "day" ? day : night;
-    const rate = part === "day" ? r.day_p_kwh : r.night_p_kwh;
-    if (rate != null) return (kwh * rate) / 100;
-    const total = day + night;
-    if (total <= 0) return 0;
-    return ((r.total_cost_p ?? 0) / 100) * (kwh / total);
-  });
-}
-
-/** Carbon split across day/night pro-rata on measured kWh. */
-function splitCarbon(rows: CircuitRecord[], part: "day" | "night"): number {
-  return sumBy(rows, (r) => {
-    const day = r.day_kwh ?? 0;
-    const night = r.night_kwh ?? 0;
-    const total = day + night;
-    if (total <= 0) return 0;
-    return ((r.co2_kg ?? 0) * ((part === "day" ? day : night) / total)) / 1000;
-  });
-}
-
 /**
  * Keep the site's configured metrics exactly as-is and simply convert each
  * kWh figure into cost (£) or carbon (kg CO₂e) using the period's own
