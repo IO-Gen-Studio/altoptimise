@@ -81,6 +81,13 @@ export interface MetricDef {
   lowerIsBetter: boolean;
   system: boolean;
   evaluate: (circuits: CircuitRecord[]) => number;
+  /**
+   * Rows this metric is built from. Lets the dashboard read the uploaded
+   * cost / carbon columns for the exact same circuits instead of deriving them.
+   */
+  select?: (circuits: CircuitRecord[]) => CircuitRecord[];
+  /** Which uploaded column the metric reads. */
+  column?: MetricSource;
 }
 
 const kpiOf = (rows: CircuitRecord[]): PeriodKpis => computeKpis(rows);
@@ -93,6 +100,8 @@ export const SYSTEM_METRICS: MetricDef[] = [
     lowerIsBetter: true,
     system: true,
     evaluate: (r) => kpiOf(r).totalKwh,
+    select: detailCircuits,
+    column: "usage_kwh",
   },
   {
     key: "sys:dayKwh",
@@ -101,6 +110,8 @@ export const SYSTEM_METRICS: MetricDef[] = [
     lowerIsBetter: true,
     system: true,
     evaluate: (r) => kpiOf(r).dayKwh,
+    select: detailCircuits,
+    column: "day_kwh",
   },
   {
     key: "sys:nightKwh",
@@ -109,6 +120,8 @@ export const SYSTEM_METRICS: MetricDef[] = [
     lowerIsBetter: true,
     system: true,
     evaluate: (r) => kpiOf(r).nightKwh,
+    select: detailCircuits,
+    column: "night_kwh",
   },
   {
     key: "sys:nightPct",
@@ -144,7 +157,7 @@ export const SYSTEM_METRICS: MetricDef[] = [
   },
 ];
 
-const sumOf = (rows: CircuitRecord[], source: MetricSource): number => {
+export const sumOf = (rows: CircuitRecord[], source: MetricSource): number => {
   if (source === "night_share") {
     const d = rows.reduce((a, r) => a + (r.day_kwh ?? 0), 0);
     const n = rows.reduce((a, r) => a + (r.night_kwh ?? 0), 0);
@@ -156,17 +169,17 @@ const sumOf = (rows: CircuitRecord[], source: MetricSource): number => {
 
 export function userMetricDef(m: NhMetric): MetricDef {
   const names = new Set(m.circuit_names);
+  const select = (rows: CircuitRecord[]) =>
+    names.size ? rows.filter((r) => names.has(r.circuit_name)) : detailCircuits(rows);
   return {
     key: `user:${m.id}`,
     label: m.name,
     unit: m.unit || METRIC_SOURCE_UNIT[m.source as MetricSource] || "",
     lowerIsBetter: m.lower_is_better,
     system: false,
-    evaluate: (rows) =>
-      sumOf(
-        names.size ? rows.filter((r) => names.has(r.circuit_name)) : detailCircuits(rows),
-        m.source as MetricSource,
-      ),
+    select,
+    column: m.source as MetricSource,
+    evaluate: (rows) => sumOf(select(rows), m.source as MetricSource),
   };
 }
 
