@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
-  useBuildings, useConsumption, useDataStore, useMeterRegistry, useOrganisations,
+  useBuildings, useConsumptionIndex, useDataStore, useMeterRegistry, useOrganisations,
 } from "@/lib/data-store";
 import {
   checkCompleteness, utilityKind,
@@ -53,8 +53,8 @@ export function DataValidationApp() {
   const { org } = useLauncher();
   const { organisations } = useOrganisations();
   const { buildings } = useBuildings(org.id);
-  const { consumption } = useConsumption();
   const { state } = useDataStore();
+  const index = useConsumptionIndex(org.id);
   const registry = useMeterRegistry(org.id);
   const [days, setDays] = useState<Days>(30);
   const [buildingFilter, setBuildingFilter] = useState<string>("all");
@@ -66,29 +66,33 @@ export function DataValidationApp() {
   const orgRecord = organisations.find((o) => o.id === org.id);
 
   const { start, end } = useMemo(() => {
-    const orgRows = consumption.filter((c) => c.organization_id === org.id);
-    const dates = orgRows.map((r) => r.interval_date).sort();
-    const last = dates.length ? dates[dates.length - 1] : new Date().toISOString().slice(0, 10);
+    const last = index.maxDate ?? new Date().toISOString().slice(0, 10);
     const [y, m, d] = last.split("-").map(Number);
     const endD = new Date(Date.UTC(y, m - 1, d));
     const startD = new Date(endD);
     startD.setUTCDate(startD.getUTCDate() - (days - 1));
     return { start: startD, end: endD };
-  }, [consumption, org.id, days]);
+  }, [index, days]);
 
   const meterRows: MeterRow[] = useMemo(() => {
     const buildingsById = new Map(buildings.map((b) => [b.id, b] as const));
+    const schedulesByBuilding = new Map<string, typeof state.schedules>();
+    for (const s of state.schedules) {
+      const list = schedulesByBuilding.get(s.building_id);
+      if (list) list.push(s);
+      else schedulesByBuilding.set(s.building_id, [s]);
+    }
     return registry.map((m) => {
       const building = m.effective_building_id ? buildingsById.get(m.effective_building_id) : undefined;
       const profile = resolveProfile(
         orgRecord, building,
-        state.schedules.filter((s) => s.building_id === (building?.id ?? "")),
+        schedulesByBuilding.get(building?.id ?? "") ?? [],
       );
       const utility = utilityKind(m.utility_category);
-      const allRows = consumption.filter((c) => c.meter_name === m.raw_meter_name);
-      const sortedDates = allRows.map((r) => r.interval_date).sort();
-      const firstSeen = sortedDates[0] ?? null;
-      const lastSeen = sortedDates[sortedDates.length - 1] ?? null;
+      const entry = index.byMeter.get(m.raw_meter_name);
+      const allRows = entry?.rows ?? [];
+      const firstSeen = entry?.firstSeen ?? null;
+      const lastSeen = entry?.lastSeen ?? null;
       const res = checkCompleteness(allRows, utility, start, end, orgRecord, profile, firstSeen ?? undefined);
       return {
         raw: m.raw_meter_name,
@@ -111,7 +115,7 @@ export function DataValidationApp() {
         offlineEvents: res.offlineEventCount,
       };
     });
-  }, [registry, buildings, consumption, state.schedules, orgRecord, start, end]);
+  }, [registry, buildings, index, state.schedules, orgRecord, start, end]);
 
   const filtered = useMemo(() => {
     return meterRows.filter((r) => {
