@@ -394,8 +394,10 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
     // full fetch completes — otherwise partial pages would wipe out the cached
     // view and make dashboards look like they are constantly reloading.
     let hasExisting = false;
+    let cachedCount = 0;
     setState((s) => {
       hasExisting = s.consumption.length > 0;
+      cachedCount = s.consumption.length;
       return s;
     });
 
@@ -403,8 +405,6 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
     // hydrated from the IndexedDB cache, the heavy paginated fetch is pure
     // waste — skip it entirely so repeat loads are instant.
     if (hasExisting) {
-      let cachedCount = 0;
-      setState((s) => { cachedCount = s.consumption.length; return s; });
       const serverCount = await fetchConsumptionCount();
       if (consumptionLoadVersion.current !== version) return;
       if (serverCount != null && serverCount === cachedCount) return;
