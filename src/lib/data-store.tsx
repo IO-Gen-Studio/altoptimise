@@ -846,6 +846,52 @@ export function useConsumption() {
   return { consumption: state.consumption, bulkInsertConsumption };
 }
 
+export interface MeterIndexEntry {
+  rows: ConsumptionRow[];
+  /** Sorted ascending ISO dates present for this meter */
+  dates: string[];
+  firstSeen: string | null;
+  lastSeen: string | null;
+}
+
+export interface ConsumptionIndex {
+  byMeter: Map<string, MeterIndexEntry>;
+  /** Latest interval_date across all indexed rows */
+  maxDate: string | null;
+}
+
+/**
+ * Single pass index of consumption rows grouped by meter name. Screens like the
+ * Data Validation Engine used to call `consumption.filter(...)` once per meter,
+ * which is O(meters x rows) and locked the main thread on large datasets.
+ * This memoised index makes those lookups O(1).
+ */
+export function useConsumptionIndex(orgId?: string): ConsumptionIndex {
+  const { state } = useDataStore();
+  return useMemo(() => {
+    const byMeter = new Map<string, MeterIndexEntry>();
+    let maxDate: string | null = null;
+    for (const c of state.consumption) {
+      if (orgId && c.organization_id !== orgId) continue;
+      if (!c.meter_name) continue;
+      let entry = byMeter.get(c.meter_name);
+      if (!entry) {
+        entry = { rows: [], dates: [], firstSeen: null, lastSeen: null };
+        byMeter.set(c.meter_name, entry);
+      }
+      entry.rows.push(c);
+      entry.dates.push(c.interval_date);
+      if (!maxDate || c.interval_date > maxDate) maxDate = c.interval_date;
+    }
+    for (const entry of byMeter.values()) {
+      entry.dates.sort();
+      entry.firstSeen = entry.dates[0] ?? null;
+      entry.lastSeen = entry.dates[entry.dates.length - 1] ?? null;
+    }
+    return { byMeter, maxDate };
+  }, [state.consumption, orgId]);
+}
+
 export function useMeterOverrides(orgId?: string) {
   const { state, upsertMeterOverride, deleteMeterOverride } = useDataStore();
   const overrides = useMemo(
