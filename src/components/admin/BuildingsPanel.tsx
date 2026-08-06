@@ -18,7 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
-  useBuildings, useConsumption, useDataStore, useMeterRegistry, useOrganisations,
+  useBuildings, useConsumptionIndex, useDataStore, useMeterRegistry, useOrganisations,
   type Building,
 } from "@/lib/data-store";
 import { checkCompleteness, utilityKind } from "@/lib/energy/completeness";
@@ -28,8 +28,8 @@ export function BuildingsPanel() {
   const { organisations } = useOrganisations();
   const [orgId, setOrgId] = useState<string>(organisations[0]?.id ?? "");
   const { buildings, addBuilding, deleteBuilding } = useBuildings(orgId);
-  const { consumption } = useConsumption();
   const { state } = useDataStore();
+  const index = useConsumptionIndex(orgId);
   const registry = useMeterRegistry(orgId);
   const orgRecord = organisations.find((o) => o.id === orgId);
   const [open, setOpen] = useState(false);
@@ -65,8 +65,9 @@ export function BuildingsPanel() {
         state.schedules.filter((s) => s.building_id === (building?.id ?? "")),
       );
       const utility = utilityKind(m.utility_category);
-      const allRows = consumption.filter((c) => c.meter_name === m.raw_meter_name);
-      const firstSeen = allRows.map((r) => r.interval_date).sort()[0];
+      const entry = index.byMeter.get(m.raw_meter_name);
+      const allRows = entry?.rows ?? [];
+      const firstSeen = entry?.firstSeen ?? undefined;
       const res = checkCompleteness(allRows, utility, start, end, orgRecord, profile, firstSeen);
       const label = m.custom_display_name ?? m.raw_meter_name;
       const list = map.get(m.effective_building_id) ?? [];
@@ -76,7 +77,7 @@ export function BuildingsPanel() {
       if (list.length) map.set(m.effective_building_id, list);
     }
     return map;
-  }, [registry, buildings, consumption, state.schedules, orgRecord]);
+  }, [registry, buildings, index, state.schedules, orgRecord]);
 
   return (
     <TooltipProvider delayDuration={150}>

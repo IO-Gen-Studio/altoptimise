@@ -313,6 +313,14 @@ async function fetchConsumption(onPage?: (rows: ConsumptionRow[], pageIndex: num
   return all.map(rowFromDb);
 }
 
+async function fetchConsumptionCount(): Promise<number | null> {
+  const { count, error } = await supabase
+    .from("consumption_rows")
+    .select("id", { count: "exact", head: true });
+  if (error) { console.error("consumption count", error); return null; }
+  return count ?? null;
+}
+
 function rowFromDb(r: Record<string, unknown>): ConsumptionRow {
   return {
     ...(r as unknown as ConsumptionRow),
@@ -386,10 +394,22 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
     // full fetch completes — otherwise partial pages would wipe out the cached
     // view and make dashboards look like they are constantly reloading.
     let hasExisting = false;
+    let cachedCount = 0;
     setState((s) => {
       hasExisting = s.consumption.length > 0;
+      cachedCount = s.consumption.length;
       return s;
     });
+
+    // Cheap freshness probe: if the server row count matches what we already
+    // hydrated from the IndexedDB cache, the heavy paginated fetch is pure
+    // waste — skip it entirely so repeat loads are instant.
+    if (hasExisting) {
+      const serverCount = await fetchConsumptionCount();
+      if (consumptionLoadVersion.current !== version) return;
+      if (serverCount != null && serverCount === cachedCount) return;
+    }
+
     const accumulated: ConsumptionRow[] = [];
     void fetchConsumption((pageRows, pageIndex) => {
       if (consumptionLoadVersion.current !== version) return;
@@ -826,6 +846,63 @@ export function useConsumption() {
   return { consumption: state.consumption, bulkInsertConsumption };
 }
 
+export interface MeterIndexEntry {
+  rows: ConsumptionRow[];
+  /** Sorted ascending ISO dates present for this meter */
+  dates: string[];
+  firstSeen: string | null;
+  lastSeen: string | null;
+}
+
+export interface ConsumptionIndex {
+  byMeter: Map<string, MeterIndexEntry>;
+  byBuilding: Map<string, ConsumptionRow[]>;
+  /** Rows for the requested org (or all rows when no org is given) */
+  rows: ConsumptionRow[];
+  /** Latest interval_date across all indexed rows */
+  maxDate: string | null;
+}
+
+/**
+ * Single pass index of consumption rows grouped by meter name. Screens like the
+ * Data Validation Engine used to call `consumption.filter(...)` once per meter,
+ * which is O(meters x rows) and locked the main thread on large datasets.
+ * This memoised index makes those lookups O(1).
+ */
+export function useConsumptionIndex(orgId?: string): ConsumptionIndex {
+  const { state } = useDataStore();
+  return useMemo(() => {
+    const byMeter = new Map<string, MeterIndexEntry>();
+    const byBuilding = new Map<string, ConsumptionRow[]>();
+    const rows: ConsumptionRow[] = [];
+    let maxDate: string | null = null;
+    for (const c of state.consumption) {
+      if (orgId && c.organization_id !== orgId) continue;
+      rows.push(c);
+      if (c.building_id) {
+        const list = byBuilding.get(c.building_id);
+        if (list) list.push(c);
+        else byBuilding.set(c.building_id, [c]);
+      }
+      if (!c.meter_name) continue;
+      let entry = byMeter.get(c.meter_name);
+      if (!entry) {
+        entry = { rows: [], dates: [], firstSeen: null, lastSeen: null };
+        byMeter.set(c.meter_name, entry);
+      }
+      entry.rows.push(c);
+      entry.dates.push(c.interval_date);
+      if (!maxDate || c.interval_date > maxDate) maxDate = c.interval_date;
+    }
+    for (const entry of byMeter.values()) {
+      entry.dates.sort();
+      entry.firstSeen = entry.dates[0] ?? null;
+      entry.lastSeen = entry.dates[entry.dates.length - 1] ?? null;
+    }
+    return { byMeter, byBuilding, rows, maxDate };
+  }, [state.consumption, orgId]);
+}
+
 export function useMeterOverrides(orgId?: string) {
   const { state, upsertMeterOverride, deleteMeterOverride } = useDataStore();
   const overrides = useMemo(
@@ -929,7 +1006,7 @@ export function useMeterSeries(
   startISO: string,
   endISO: string,
 ): MeterSeries {
-  const { state } = useDataStore();
+  const index = useConsumptionIndex();
   return useMemo(() => {
     const empty: MeterSeries = {
       rows: [], firstSeen: null, lastSeen: null,
@@ -937,12 +1014,11 @@ export function useMeterSeries(
       totalWindowKwh: 0,
     };
     if (!rawMeterName) return empty;
-    const all = state.consumption.filter((c) => c.meter_name === rawMeterName);
-    if (!all.length) return empty;
-    const sortedDates = all.map((r) => r.interval_date).sort();
-    const firstSeen = sortedDates[0];
-    const lastSeen = sortedDates[sortedDates.length - 1];
-    const windowRows = all.filter((r) => r.interval_date >= startISO && r.interval_date <= endISO);
+    const entry = index.byMeter.get(rawMeterName);
+    if (!entry || !entry.rows.length) return empty;
+    const firstSeen = entry.firstSeen;
+    const lastSeen = entry.lastSeen;
+    const windowRows = entry.rows.filter((r) => r.interval_date >= startISO && r.interval_date <= endISO);
 
     // Daily totals
     const dailyMap = new Map<string, number | null>();
@@ -1011,7 +1087,7 @@ export function useMeterSeries(
     const totalWindowKwh = dailyTotals.reduce((acc, dt) => acc + (dt.total ?? 0), 0);
 
     return { rows: windowRows, firstSeen, lastSeen, dailyTotals, hhAverage, weekdayHeatmap, totalWindowKwh };
-  }, [state.consumption, rawMeterName, startISO, endISO]);
+  }, [index, rawMeterName, startISO, endISO]);
 }
 
 const DAY_ORDER: Record<Weekday, number> = {

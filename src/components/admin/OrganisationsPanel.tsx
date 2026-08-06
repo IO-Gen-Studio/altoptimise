@@ -1,5 +1,5 @@
 import { Building2, Pencil, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { EditOrganisationDialog } from "@/components/admin/EditOrganisationDialog";
 import { Button } from "@/components/ui/button";
@@ -47,8 +47,17 @@ export function OrganisationsPanel() {
   const [deleting, setDeleting] = useState<Organisation | null>(null);
   const [confirmText, setConfirmText] = useState("");
 
-  const buildingCount = (id: string) => buildings.filter((b) => b.organization_id === id).length;
-  const rowCount = (id: string) => consumption.filter((c) => c.organization_id === id).length;
+  // Single pass counts; per-row filters here scanned the whole dataset once per
+  // organisation and made the panel crawl on large uploads.
+  const counts = useMemo(() => {
+    const byOrgBuildings = new Map<string, number>();
+    for (const b of buildings) byOrgBuildings.set(b.organization_id, (byOrgBuildings.get(b.organization_id) ?? 0) + 1);
+    const byOrgRows = new Map<string, number>();
+    for (const c of consumption) byOrgRows.set(c.organization_id, (byOrgRows.get(c.organization_id) ?? 0) + 1);
+    return { byOrgBuildings, byOrgRows };
+  }, [buildings, consumption]);
+  const buildingCount = (id: string) => counts.byOrgBuildings.get(id) ?? 0;
+  const rowCount = (id: string) => counts.byOrgRows.get(id) ?? 0;
 
   return (
     <Card>
