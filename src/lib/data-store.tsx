@@ -313,6 +313,14 @@ async function fetchConsumption(onPage?: (rows: ConsumptionRow[], pageIndex: num
   return all.map(rowFromDb);
 }
 
+async function fetchConsumptionCount(): Promise<number | null> {
+  const { count, error } = await supabase
+    .from("consumption_rows")
+    .select("id", { count: "exact", head: true });
+  if (error) { console.error("consumption count", error); return null; }
+  return count ?? null;
+}
+
 function rowFromDb(r: Record<string, unknown>): ConsumptionRow {
   return {
     ...(r as unknown as ConsumptionRow),
@@ -390,6 +398,18 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
       hasExisting = s.consumption.length > 0;
       return s;
     });
+
+    // Cheap freshness probe: if the server row count matches what we already
+    // hydrated from the IndexedDB cache, the heavy paginated fetch is pure
+    // waste — skip it entirely so repeat loads are instant.
+    if (hasExisting) {
+      let cachedCount = 0;
+      setState((s) => { cachedCount = s.consumption.length; return s; });
+      const serverCount = await fetchConsumptionCount();
+      if (consumptionLoadVersion.current !== version) return;
+      if (serverCount != null && serverCount === cachedCount) return;
+    }
+
     const accumulated: ConsumptionRow[] = [];
     void fetchConsumption((pageRows, pageIndex) => {
       if (consumptionLoadVersion.current !== version) return;
