@@ -856,6 +856,9 @@ export interface MeterIndexEntry {
 
 export interface ConsumptionIndex {
   byMeter: Map<string, MeterIndexEntry>;
+  byBuilding: Map<string, ConsumptionRow[]>;
+  /** Rows for the requested org (or all rows when no org is given) */
+  rows: ConsumptionRow[];
   /** Latest interval_date across all indexed rows */
   maxDate: string | null;
 }
@@ -870,9 +873,17 @@ export function useConsumptionIndex(orgId?: string): ConsumptionIndex {
   const { state } = useDataStore();
   return useMemo(() => {
     const byMeter = new Map<string, MeterIndexEntry>();
+    const byBuilding = new Map<string, ConsumptionRow[]>();
+    const rows: ConsumptionRow[] = [];
     let maxDate: string | null = null;
     for (const c of state.consumption) {
       if (orgId && c.organization_id !== orgId) continue;
+      rows.push(c);
+      if (c.building_id) {
+        const list = byBuilding.get(c.building_id);
+        if (list) list.push(c);
+        else byBuilding.set(c.building_id, [c]);
+      }
       if (!c.meter_name) continue;
       let entry = byMeter.get(c.meter_name);
       if (!entry) {
@@ -888,7 +899,7 @@ export function useConsumptionIndex(orgId?: string): ConsumptionIndex {
       entry.firstSeen = entry.dates[0] ?? null;
       entry.lastSeen = entry.dates[entry.dates.length - 1] ?? null;
     }
-    return { byMeter, maxDate };
+    return { byMeter, byBuilding, rows, maxDate };
   }, [state.consumption, orgId]);
 }
 
