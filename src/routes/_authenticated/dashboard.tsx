@@ -21,7 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { APPS, canAccess, ROLE_LABEL, useLauncher, type MiniApp } from "@/lib/launcher-context";
-import { useAppOrder } from "@/lib/app-order";
+import { useAppOrder, useAppVisibility } from "@/lib/app-order";
 import { useEffect, useMemo, useState } from "react";
 import { loadNeutralHome } from "@/lib/neutral-home.functions";
 import { computeKpis } from "@/lib/neutral-home/analytics";
@@ -68,6 +68,8 @@ const ICONS = {
 function LauncherHome() {
   const { persona, org, appAccess } = useLauncher();
   const { orderedApps } = useAppOrder();
+  const { isHidden } = useAppVisibility();
+  const visibleApps = orderedApps.filter((a) => !isHidden(a.id));
   const { consumption } = useConsumption();
   const { organisations } = useOrganisations();
   const { buildings } = useBuildings(org.id);
@@ -151,7 +153,7 @@ function LauncherHome() {
         </div>
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {orderedApps.map((app) => (
+          {visibleApps.map((app) => (
             <AppCard
               key={app.id}
               app={app}
