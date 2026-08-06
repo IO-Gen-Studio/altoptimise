@@ -995,7 +995,7 @@ export function useMeterSeries(
   startISO: string,
   endISO: string,
 ): MeterSeries {
-  const { state } = useDataStore();
+  const index = useConsumptionIndex();
   return useMemo(() => {
     const empty: MeterSeries = {
       rows: [], firstSeen: null, lastSeen: null,
@@ -1003,12 +1003,11 @@ export function useMeterSeries(
       totalWindowKwh: 0,
     };
     if (!rawMeterName) return empty;
-    const all = state.consumption.filter((c) => c.meter_name === rawMeterName);
-    if (!all.length) return empty;
-    const sortedDates = all.map((r) => r.interval_date).sort();
-    const firstSeen = sortedDates[0];
-    const lastSeen = sortedDates[sortedDates.length - 1];
-    const windowRows = all.filter((r) => r.interval_date >= startISO && r.interval_date <= endISO);
+    const entry = index.byMeter.get(rawMeterName);
+    if (!entry || !entry.rows.length) return empty;
+    const firstSeen = entry.firstSeen;
+    const lastSeen = entry.lastSeen;
+    const windowRows = entry.rows.filter((r) => r.interval_date >= startISO && r.interval_date <= endISO);
 
     // Daily totals
     const dailyMap = new Map<string, number | null>();
@@ -1077,7 +1076,7 @@ export function useMeterSeries(
     const totalWindowKwh = dailyTotals.reduce((acc, dt) => acc + (dt.total ?? 0), 0);
 
     return { rows: windowRows, firstSeen, lastSeen, dailyTotals, hhAverage, weekdayHeatmap, totalWindowKwh };
-  }, [state.consumption, rawMeterName, startISO, endISO]);
+  }, [index, rawMeterName, startISO, endISO]);
 }
 
 const DAY_ORDER: Record<Weekday, number> = {
