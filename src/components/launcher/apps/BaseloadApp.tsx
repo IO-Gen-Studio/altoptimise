@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { useBuildings, useConsumption, useDataStore, useOrganisations } from "@/lib/data-store";
+import { useBuildings, useConsumptionIndex, useDataStore, useOrganisations } from "@/lib/data-store";
 import { checkCompleteness, utilityKind, type CompletenessResult } from "@/lib/energy/completeness";
 import { inheritanceLabel, resolveProfile, type ResolvedProfile } from "@/lib/energy/profile";
 import { computeBaseloadScore, type ScoreResult } from "@/lib/energy/scoring";
@@ -18,17 +18,15 @@ export function BaseloadApp() {
   const { org } = useLauncher();
   const { organisations } = useOrganisations();
   const { buildings } = useBuildings(org.id);
-  const { consumption } = useConsumption();
   const { state } = useDataStore();
+  const index = useConsumptionIndex(org.id);
   const [windowDays, setWindowDays] = useState<WindowDays>(7);
 
   const orgRecord = organisations.find((o) => o.id === org.id);
 
   // Determine window relative to most recent data date
   const { startISO, endISO, start, end } = useMemo(() => {
-    const orgRows = consumption.filter((c) => c.organization_id === org.id);
-    const dates = orgRows.map((r) => r.interval_date).sort();
-    const last = dates.length ? dates[dates.length - 1] : new Date().toISOString().slice(0, 10);
+    const last = index.maxDate ?? new Date().toISOString().slice(0, 10);
     const [y, m, d] = last.split("-").map(Number);
     const end = new Date(Date.UTC(y, m - 1, d));
     const start = new Date(end);
@@ -39,13 +37,19 @@ export function BaseloadApp() {
       startISO: start.toISOString().slice(0, 10),
       endISO: end.toISOString().slice(0, 10),
     };
-  }, [consumption, org.id, windowDays]);
+  }, [index, windowDays]);
 
   const analyses = useMemo(() => {
+    const schedulesByBuilding = new Map<string, typeof state.schedules>();
+    for (const s of state.schedules) {
+      const list = schedulesByBuilding.get(s.building_id);
+      if (list) list.push(s);
+      else schedulesByBuilding.set(s.building_id, [s]);
+    }
     return buildings.map((b) => {
-      const buildingSchedules = state.schedules.filter((s) => s.building_id === b.id);
+      const buildingSchedules = schedulesByBuilding.get(b.id) ?? [];
       const profile = resolveProfile(orgRecord, b, buildingSchedules);
-      const rows = consumption.filter((c) => c.building_id === b.id);
+      const rows = index.byBuilding.get(b.id) ?? [];
       const utilities = Array.from(new Set(rows.map((r) => utilityKind(r.variable_category))))
         .filter((u) => u !== "other");
       const perUtility = utilities.map((u) => {
@@ -58,7 +62,7 @@ export function BaseloadApp() {
       });
       return { building: b, profile, perUtility };
     });
-  }, [buildings, consumption, state.schedules, orgRecord, start, end, startISO, endISO]);
+  }, [buildings, index, state.schedules, orgRecord, start, end, startISO, endISO]);
 
   const scored = analyses.flatMap((a) =>
     a.perUtility
