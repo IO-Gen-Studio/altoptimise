@@ -39,6 +39,23 @@ import {
 } from "@/lib/users.functions";
 
 export const Route = createFileRoute("/_authenticated/users")({
+  head: () => ({
+    meta: [
+      { title: "User management — Optimise Energy Suite" },
+      {
+        name: "description",
+        content:
+          "Invite teammates, assign organisation scope and control which Optimise mini-apps each user can open.",
+      },
+      { property: "og:title", content: "User management — Optimise Energy Suite" },
+      {
+        property: "og:description",
+        content: "Manage Optimise users, roles and per-app access.",
+      },
+      { property: "og:url", content: "https://altoptimise.io-gen.app/users" },
+      { name: "robots", content: "noindex" },
+    ],
+  }),
   component: UsersPage,
 });
 
