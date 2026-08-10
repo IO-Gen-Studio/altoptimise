@@ -79,10 +79,10 @@ export function AppOrderPanel() {
                   onCheckedChange={() => toggleHidden(app.id)}
                   aria-label={hidden ? `Show ${app.name}` : `Hide ${app.name}`}
                 />
-                <Button size="icon" variant="ghost" className="h-8 w-8" disabled={idx === 0} onClick={() => move(idx, -1)}>
+                <Button size="icon" variant="ghost" className="h-8 w-8" aria-label={`Move ${app.name} up`} disabled={idx === 0} onClick={() => move(idx, -1)}>
                   <ArrowUp className="h-4 w-4" />
                 </Button>
-                <Button size="icon" variant="ghost" className="h-8 w-8" disabled={idx === orderedApps.length - 1} onClick={() => move(idx, 1)}>
+                <Button size="icon" variant="ghost" className="h-8 w-8" aria-label={`Move ${app.name} down`} disabled={idx === orderedApps.length - 1} onClick={() => move(idx, 1)}>
                   <ArrowDown className="h-4 w-4" />
                 </Button>
               </div>
