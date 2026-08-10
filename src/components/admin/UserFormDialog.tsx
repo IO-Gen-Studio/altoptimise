@@ -239,10 +239,10 @@ export function UserFormDialog({
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
-              <Button type="button" variant="outline" size="icon" onClick={() => setPassword(generatePassword())} title="Generate">
+              <Button type="button" variant="outline" size="icon" onClick={() => setPassword(generatePassword())} aria-label="Generate password">
                 <RefreshCw className="h-4 w-4" />
               </Button>
-              <Button type="button" variant="outline" size="icon" onClick={copyPassword} title="Copy" disabled={!password}>
+              <Button type="button" variant="outline" size="icon" onClick={copyPassword} aria-label="Copy password" disabled={!password}>
                 <Copy className="h-4 w-4" />
               </Button>
             </div>

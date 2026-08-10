@@ -50,6 +50,8 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
         content:
           "Live energy KPIs and the Optimise mini-app launcher for your organisation.",
       },
+      { property: "og:url", content: "https://altoptimise.io-gen.app/dashboard" },
+      { name: "robots", content: "noindex" },
     ],
   }),
   component: LauncherHome,

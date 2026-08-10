@@ -17,20 +17,43 @@ import { Card, CardContent } from "@/components/ui/card";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Optimise — Energy Management Suite for Multi-Site Portfolios" },
+      { title: "Optimise — Multi-Site Energy Management Suite" },
       {
         name: "description",
         content:
-          "Optimise unifies half-hourly energy data into baseload scoring, data validation, consumption leagues, carbon tracking, leak detection and Agile pricing. Sign in to your workspace.",
+          "Turn half-hourly meter data into baseload scores, site leagues, carbon reports, leak alerts and Agile price insight — one workspace for every site.",
       },
-      { property: "og:title", content: "Optimise — Energy Management Suite" },
+      { property: "og:title", content: "Optimise — Multi-Site Energy Management Suite" },
       {
         property: "og:description",
         content:
           "One shared half-hourly data stream powering baseload scoring, validation, carbon reporting, leak detection and Agile pricing.",
       },
       { property: "og:type", content: "website" },
+      { property: "og:url", content: "https://altoptimise.io-gen.app/" },
       { name: "twitter:card", content: "summary_large_image" },
+    ],
+    links: [{ rel: "canonical", href: "https://altoptimise.io-gen.app/" }],
+    scripts: [
+      {
+        type: "application/ld+json",
+        children: JSON.stringify({
+          "@context": "https://schema.org",
+          "@graph": [
+            {
+              "@type": "WebSite",
+              name: "Optimise",
+              url: "https://altoptimise.io-gen.app/",
+            },
+            {
+              "@type": "Organization",
+              name: "Optimise",
+              url: "https://altoptimise.io-gen.app/",
+              logo: "https://storage.googleapis.com/gpt-engineer-file-uploads/ItEeGKe45VPxqWjLPBtzEoJ6SMk2/social-images/social-1785309539450-io-gen_logo_with_text.webp",
+            },
+          ],
+        }),
+      },
     ],
   }),
   component: LandingPage,

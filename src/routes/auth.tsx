@@ -10,6 +10,24 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 
 export const Route = createFileRoute("/auth")({
+  head: () => ({
+    meta: [
+      { title: "Sign in — Optimise Energy Suite" },
+      {
+        name: "description",
+        content:
+          "Sign in to your Optimise workspace to review site energy performance, data quality, carbon reporting and Agile pricing.",
+      },
+      { property: "og:title", content: "Sign in — Optimise Energy Suite" },
+      {
+        property: "og:description",
+        content: "Access your Optimise energy management workspace.",
+      },
+      { property: "og:url", content: "https://altoptimise.io-gen.app/auth" },
+      { name: "robots", content: "noindex" },
+    ],
+    links: [{ rel: "canonical", href: "https://altoptimise.io-gen.app/auth" }],
+  }),
   component: AuthPage,
 });
 
