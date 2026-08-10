@@ -3,18 +3,23 @@ import { ArrowDown, ArrowUp, Eye, EyeOff, LayoutGrid, RotateCcw } from "lucide-r
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
-import { APPS } from "@/lib/launcher-context";
+import { APPS, canAccess, useLauncher } from "@/lib/launcher-context";
 import { useAppOrder, useAppVisibility } from "@/lib/app-order";
 
 export function AppOrderPanel() {
-  const { orderedApps, setOrder } = useAppOrder();
+  const { persona, appAccess } = useLauncher();
+  const { orderedApps: allOrderedApps, setOrder } = useAppOrder();
   const { isHidden, toggleHidden, showAll, hiddenIds } = useAppVisibility();
+  const orderedApps = allOrderedApps.filter((a) => canAccess(a, persona.role, appAccess));
 
   const move = (idx: number, dir: -1 | 1) => {
-    const next = orderedApps.map((a) => a.id);
-    const target = idx + dir;
-    if (target < 0 || target >= next.length) return;
-    [next[idx], next[target]] = [next[target], next[idx]];
+    const next = allOrderedApps.map((a) => a.id);
+    const from = next.indexOf(orderedApps[idx].id);
+    const neighbour = orderedApps[idx + dir];
+    if (from < 0 || !neighbour) return;
+    const target = next.indexOf(neighbour.id);
+    if (target < 0) return;
+    [next[from], next[target]] = [next[target], next[from]];
     setOrder(next);
   };
 
