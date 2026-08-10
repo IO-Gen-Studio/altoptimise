@@ -69,7 +69,9 @@ function LauncherHome() {
   const { persona, org, appAccess } = useLauncher();
   const { orderedApps } = useAppOrder();
   const { isHidden } = useAppVisibility();
-  const visibleApps = orderedApps.filter((a) => !isHidden(a.id));
+  const visibleApps = orderedApps.filter(
+    (a) => !isHidden(a.id) && canAccess(a, persona.role, appAccess),
+  );
   const { consumption } = useConsumption();
   const { organisations } = useOrganisations();
   const { buildings } = useBuildings(org.id);
