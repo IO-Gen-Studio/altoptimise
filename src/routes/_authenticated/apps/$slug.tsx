@@ -19,6 +19,25 @@ export const Route = createFileRoute("/_authenticated/apps/$slug")({
     if (!app) throw notFound();
     return { app };
   },
+  head: ({ params, loaderData }) => {
+    const name = loaderData?.app.name ?? "App";
+    const desc =
+      loaderData?.app.description ??
+      "An Optimise energy analysis mini-app running on your shared half-hourly data.";
+    return {
+      meta: [
+        { title: `${name} — Optimise Energy Suite` },
+        { name: "description", content: desc },
+        { property: "og:title", content: `${name} — Optimise Energy Suite` },
+        { property: "og:description", content: desc },
+        {
+          property: "og:url",
+          content: `https://altoptimise.io-gen.app/apps/${params.slug}`,
+        },
+        { name: "robots", content: "noindex" },
+      ],
+    };
+  },
   component: AppView,
 });
 
