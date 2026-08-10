@@ -178,7 +178,7 @@ export function BuildingsPanel() {
                 <TableCell className="text-right font-medium tabular-nums">{meterCount(b.id)}</TableCell>
                 <TableCell>{linkedCount(b.id)}</TableCell>
                 <TableCell onClick={(e) => e.stopPropagation()}>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                  <Button variant="ghost" size="icon" aria-label={`Delete building ${b.custom_display_name}`} className="h-8 w-8 text-muted-foreground hover:text-destructive"
                     onClick={() => { if (confirm(`Delete building ${b.custom_display_name}?`)) deleteBuilding(b.id); }}>
                     <Trash2 className="h-4 w-4" />
                   </Button>
