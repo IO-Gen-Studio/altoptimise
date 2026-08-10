@@ -9,9 +9,19 @@ export interface ScoreResult {
   floor: number;
   anomalies: { date: string; slot: number; value: number; excess: number }[];
   seasonMode: "peak" | "off_peak";
+  /** total number of waste events (anomalies list is truncated for display) */
+  anomalyCount: number;
+  /** number of half-hourly slots classified as baseload / active */
+  baseloadSlotCount: number;
+  activeSlotCount: number;
+  /** waste threshold = floor * 1.5 (kWh per half hour) */
+  threshold: number;
 }
 
 const ANOMALY_MULTIPLIER = 1.5;
+
+export const WASTE_MULTIPLIER = ANOMALY_MULTIPLIER;
+export const FLOOR_PERCENTILE = 10;
 
 function slotDate(dateISO: string): Date {
   // Interpret as UTC midnight so weekday/month checks match the ISO date
@@ -81,5 +91,53 @@ export function computeBaseloadScore(
     : 100;
 
   anomalies.sort((a, b) => b.excess - a.excess);
-  return { score, idleWaste, oohEnergy, activeEnergy, floor, anomalies: anomalies.slice(0, 10), seasonMode };
+  return {
+    score,
+    idleWaste,
+    oohEnergy,
+    activeEnergy,
+    floor,
+    anomalies: anomalies.slice(0, 10),
+    seasonMode,
+    anomalyCount: anomalies.length,
+    baseloadSlotCount: baseloadVals.length,
+    activeSlotCount: activeVals.length,
+    threshold,
+  };
+}
+
+export interface AvgDaySlot {
+  slot: number;
+  /** average kWh in this half-hour across the window */
+  avgKwh: number;
+  /** share of days where this slot fell in the baseload (out-of-hours) zone, 0..1 */
+  baseloadShare: number;
+}
+
+/** Average 48-slot day shape, plus how often each slot is out-of-hours. */
+export function computeAvgDayProfile(
+  rows: ConsumptionRow[],
+  profile: ResolvedProfile,
+  startISO: string,
+  endISO: string,
+): AvgDaySlot[] {
+  const sum = new Array(48).fill(0);
+  const count = new Array(48).fill(0);
+  const baseHits = new Array(48).fill(0);
+  for (const r of rows) {
+    if (r.interval_date < startISO || r.interval_date > endISO) continue;
+    const d = slotDate(r.interval_date);
+    for (let s = 0; s < 48; s++) {
+      const v = r.half_hourly_values[s];
+      if (v == null) continue;
+      sum[s] += v * (r.meter_factor ?? 1);
+      count[s]++;
+      if (isBaseloadSlot(profile, d, s)) baseHits[s]++;
+    }
+  }
+  return Array.from({ length: 48 }, (_, s) => ({
+    slot: s,
+    avgKwh: count[s] > 0 ? sum[s] / count[s] : 0,
+    baseloadShare: count[s] > 0 ? baseHits[s] / count[s] : 0,
+  }));
 }
