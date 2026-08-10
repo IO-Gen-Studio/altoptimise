@@ -14,9 +14,12 @@ export function AppOrderPanel() {
 
   const move = (idx: number, dir: -1 | 1) => {
     const next = allOrderedApps.map((a) => a.id);
-    const target = idx + dir;
-    if (target < 0 || target >= next.length) return;
-    [next[idx], next[target]] = [next[target], next[idx]];
+    const from = next.indexOf(orderedApps[idx].id);
+    const neighbour = orderedApps[idx + dir];
+    if (from < 0 || !neighbour) return;
+    const target = next.indexOf(neighbour.id);
+    if (target < 0) return;
+    [next[from], next[target]] = [next[target], next[from]];
     setOrder(next);
   };
 
