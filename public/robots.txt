@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://altoptimise.io-gen.app/sitemap.xml
