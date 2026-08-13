@@ -120,7 +120,7 @@ function summarize(
 
 export function RefrigerationApp() {
   const { org } = useLauncher();
-  const { buildings } = useBuildings();
+  const { buildings } = useBuildings(org.id);
   const overviewFn = useServerFn(loadRefrigerationOverview);
   const [cases, setCases] = useState<RefrigerationCaseRow[]>([]);
   const [loading, setLoading] = useState(true);
