@@ -8,6 +8,7 @@ import {
   Lock,
   ShieldCheck,
   Sparkles,
+  Snowflake,
   Building2,
   TrendingDown,
   TrendingUp,
