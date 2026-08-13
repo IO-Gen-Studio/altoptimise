@@ -25,6 +25,7 @@ import { useAppOrder, useAppVisibility } from "@/lib/app-order";
 import { useEffect, useMemo, useState } from "react";
 import { loadNeutralHome } from "@/lib/neutral-home.functions";
 import { computeKpis } from "@/lib/neutral-home/analytics";
+import { loadRefrigerationOverview } from "@/lib/refrigeration.functions";
 import { useBuildings, useConsumption, useOrganisations } from "@/lib/data-store";
 import {
   classifyUtility,
@@ -65,6 +66,7 @@ const ICONS = {
   water: Droplet,
   pricing: Zap,
   neutral: Building2,
+  refrigeration: Snowflake,
 };
 
 function LauncherHome() {
@@ -80,6 +82,16 @@ function LauncherHome() {
 
   const stats = useMemo(() => computeOrgStats(consumption, organisations, org.id), [consumption, organisations, org.id]);
   const [neutralKwh, setNeutralKwh] = useState<number | null>(null);
+  const [refrigerationCases, setRefrigerationCases] = useState<number | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!org.id || org.id === "none") { setRefrigerationCases(null); return; }
+    loadRefrigerationOverview({ data: { orgId: org.id } })
+      .then((r) => { if (!cancelled) setRefrigerationCases(r.cases.length); })
+      .catch(() => { if (!cancelled) setRefrigerationCases(null); });
+    return () => { cancelled = true; };
+  }, [org.id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -96,8 +108,8 @@ function LauncherHome() {
   }, [org.id]);
 
   const kpis = useMemo(
-    () => computeAppKpis(consumption, org.id, buildings.length, stats, neutralKwh),
-    [consumption, org.id, buildings.length, stats, neutralKwh],
+    () => computeAppKpis(consumption, org.id, buildings.length, stats, neutralKwh, refrigerationCases),
+    [consumption, org.id, buildings.length, stats, neutralKwh, refrigerationCases],
   );
 
   return (
@@ -321,6 +333,7 @@ function computeAppKpis(
   siteCount: number,
   stats: OrgStats,
   neutralKwh: number | null,
+  refrigerationCases: number | null,
 ): Record<string, AppKpi> {
   const rows = consumption.filter((r) => r.organization_id === orgId);
   const today = new Date();
@@ -384,6 +397,10 @@ function computeAppKpis(
     "agile-pricing": {
       value: elecPerDay ? formatEnergy(elecPerDay) : "—",
       label: "Elec / day",
+    },
+    refrigeration: {
+      value: refrigerationCases != null && refrigerationCases > 0 ? `${refrigerationCases}` : "—",
+      label: refrigerationCases === 1 ? "Case monitored" : "Cases monitored",
     },
     "neutral-home": {
       value: neutralKwh ? formatEnergy(neutralKwh) : "—",

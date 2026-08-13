@@ -104,7 +104,7 @@ export interface MiniApp {
   tagline: string;
   description: string;
   category: string;
-  icon: "baseload" | "sustainability" | "completeness" | "league" | "water" | "pricing" | "neutral";
+  icon: "baseload" | "sustainability" | "completeness" | "league" | "water" | "pricing" | "neutral" | "refrigeration";
   allowedRoles: Role[];
   accent: string;
 }
@@ -193,6 +193,18 @@ export const APPS: MiniApp[] = [
     icon: "neutral",
     allowedRoles: ["super_admin", "admin", "user"],
     accent: "from-slate-500/15 to-emerald-500/10",
+  },
+  {
+    id: "refrigeration",
+    slug: "refrigeration",
+    name: "Refrigeration Monitoring",
+    tagline: "Case temperatures, alarms & defrost health",
+    description:
+      "Monitors refrigeration case controllers per site: temperature performance against cut-in thresholds, alarm history, defrost and recovery analysis, plus hourly temperature grids.",
+    category: "Monitoring",
+    icon: "refrigeration",
+    allowedRoles: ["super_admin", "admin", "user"],
+    accent: "from-sky-500/15 to-cyan-500/10",
   },
 ];
 
