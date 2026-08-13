@@ -851,6 +851,158 @@ export type Database = {
         }
         Relationships: []
       }
+      refrigeration_alarm_logs: {
+        Row: {
+          alarm_csv: string
+          building_id: string
+          created_at: string
+          id: string
+          organization_id: string
+          source_filename: string | null
+          updated_at: string
+        }
+        Insert: {
+          alarm_csv: string
+          building_id: string
+          created_at?: string
+          id?: string
+          organization_id: string
+          source_filename?: string | null
+          updated_at?: string
+        }
+        Update: {
+          alarm_csv?: string
+          building_id?: string
+          created_at?: string
+          id?: string
+          organization_id?: string
+          source_filename?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "refrigeration_alarm_logs_building_id_fkey"
+            columns: ["building_id"]
+            isOneToOne: true
+            referencedRelation: "buildings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "refrigeration_alarm_logs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      refrigeration_cases: {
+        Row: {
+          building_id: string
+          case_id: string
+          controller: string
+          controller_description: string
+          created_at: string
+          csv_text: string | null
+          description: string
+          efficiency_amber: number
+          efficiency_red: number
+          id: string
+          label: string
+          max_safe_temp: number
+          organization_id: string
+          source_filename: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          building_id: string
+          case_id: string
+          controller?: string
+          controller_description?: string
+          created_at?: string
+          csv_text?: string | null
+          description?: string
+          efficiency_amber?: number
+          efficiency_red?: number
+          id?: string
+          label?: string
+          max_safe_temp?: number
+          organization_id: string
+          source_filename?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          building_id?: string
+          case_id?: string
+          controller?: string
+          controller_description?: string
+          created_at?: string
+          csv_text?: string | null
+          description?: string
+          efficiency_amber?: number
+          efficiency_red?: number
+          id?: string
+          label?: string
+          max_safe_temp?: number
+          organization_id?: string
+          source_filename?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "refrigeration_cases_building_id_fkey"
+            columns: ["building_id"]
+            isOneToOne: false
+            referencedRelation: "buildings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "refrigeration_cases_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      refrigeration_settings: {
+        Row: {
+          created_at: string
+          default_efficiency_amber: number
+          default_efficiency_red: number
+          default_max_safe_temp: number
+          organization_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          default_efficiency_amber?: number
+          default_efficiency_red?: number
+          default_max_safe_temp?: number
+          organization_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          default_efficiency_amber?: number
+          default_efficiency_red?: number
+          default_max_safe_temp?: number
+          organization_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "refrigeration_settings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       schedules: {
         Row: {
           building_id: string
