@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { CircuitRecord } from "@/lib/neutral-home/analytics";
+import type { RoomHourRow } from "@/lib/neutral-home/temp-analytics";
 
 export interface NhSite {
   id: string;
@@ -24,6 +25,7 @@ export interface NhPeriod {
   period_end: string;
   source_headline_filename: string | null;
   source_daynight_filename: string | null;
+  source_temperature_filename: string | null;
   created_at: string;
 }
 
@@ -35,6 +37,16 @@ export interface NeutralHomeBundle {
   meterCategories: NhMeterCategory[];
   metrics: NhMetric[];
   settings: NhSiteSettings[];
+  roomMap: NhRoomMap[];
+}
+
+export interface NhRoomMap {
+  site_id: string;
+  organization_id: string;
+  room_name: string;
+  circuit_name: string | null;
+  auto_matched: boolean;
+  confidence: number | null;
 }
 
 export interface NhCategoryRow {
@@ -70,6 +82,8 @@ export interface NhSiteSettings {
   site_id: string;
   organization_id: string;
   comparison_metrics: string[];
+  comfort_min_c: number | null;
+  comfort_max_c: number | null;
 }
 
 const OrgInput = z.object({ orgId: z.string().uuid() });
@@ -80,7 +94,7 @@ export const loadNeutralHome = createServerFn({ method: "POST" })
   .handler(async ({ data, context }): Promise<NeutralHomeBundle> => {
     const { supabase } = context;
     /* eslint-disable @typescript-eslint/no-explicit-any */
-    const [sites, periods, cats, meterCats, metrics, settings] = await Promise.all([
+    const [sites, periods, cats, meterCats, metrics, settings, roomMap] = await Promise.all([
       supabase
         .from("neutral_home_sites" as any)
         .select("*")
@@ -109,6 +123,10 @@ export const loadNeutralHome = createServerFn({ method: "POST" })
         .from("neutral_home_site_settings" as any)
         .select("*")
         .eq("organization_id", data.orgId),
+      supabase
+        .from("neutral_home_room_map" as any)
+        .select("*")
+        .eq("organization_id", data.orgId),
     ]);
     if (sites.error) throw new Error(sites.error.message);
     if (periods.error) throw new Error(periods.error.message);
@@ -116,6 +134,7 @@ export const loadNeutralHome = createServerFn({ method: "POST" })
     if (meterCats.error) throw new Error(meterCats.error.message);
     if (metrics.error) throw new Error(metrics.error.message);
     if (settings.error) throw new Error(settings.error.message);
+    if (roomMap.error) throw new Error(roomMap.error.message);
 
     const circuits: CircuitRecord[] = [];
     const pageSize = 1000;
@@ -141,6 +160,7 @@ export const loadNeutralHome = createServerFn({ method: "POST" })
       meterCategories: (meterCats.data ?? []) as unknown as NhMeterCategory[],
       metrics: (metrics.data ?? []) as unknown as NhMetric[],
       settings: (settings.data ?? []) as unknown as NhSiteSettings[],
+      roomMap: (roomMap.data ?? []) as unknown as NhRoomMap[],
     };
   });
 
