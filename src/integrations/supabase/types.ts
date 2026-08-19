@@ -635,6 +635,7 @@ export type Database = {
           site_id: string
           source_daynight_filename: string | null
           source_headline_filename: string | null
+          source_temperature_filename: string | null
           updated_at: string
         }
         Insert: {
@@ -647,6 +648,7 @@ export type Database = {
           site_id: string
           source_daynight_filename?: string | null
           source_headline_filename?: string | null
+          source_temperature_filename?: string | null
           updated_at?: string
         }
         Update: {
@@ -659,6 +661,7 @@ export type Database = {
           site_id?: string
           source_daynight_filename?: string | null
           source_headline_filename?: string | null
+          source_temperature_filename?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -678,20 +681,144 @@ export type Database = {
           },
         ]
       }
+      neutral_home_room_hours: {
+        Row: {
+          created_at: string
+          hour_ts: string
+          id: string
+          on_share: number | null
+          organization_id: string
+          period_id: string
+          reading_count: number
+          room_name: string
+          set_temp_avg: number | null
+          site_id: string
+          temp_avg: number | null
+          temp_max: number | null
+          temp_min: number | null
+        }
+        Insert: {
+          created_at?: string
+          hour_ts: string
+          id?: string
+          on_share?: number | null
+          organization_id: string
+          period_id: string
+          reading_count?: number
+          room_name: string
+          set_temp_avg?: number | null
+          site_id: string
+          temp_avg?: number | null
+          temp_max?: number | null
+          temp_min?: number | null
+        }
+        Update: {
+          created_at?: string
+          hour_ts?: string
+          id?: string
+          on_share?: number | null
+          organization_id?: string
+          period_id?: string
+          reading_count?: number
+          room_name?: string
+          set_temp_avg?: number | null
+          site_id?: string
+          temp_avg?: number | null
+          temp_max?: number | null
+          temp_min?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "neutral_home_room_hours_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "neutral_home_room_hours_period_id_fkey"
+            columns: ["period_id"]
+            isOneToOne: false
+            referencedRelation: "neutral_home_periods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "neutral_home_room_hours_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "neutral_home_sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      neutral_home_room_map: {
+        Row: {
+          auto_matched: boolean
+          circuit_name: string | null
+          confidence: number | null
+          created_at: string
+          organization_id: string
+          room_name: string
+          site_id: string
+          updated_at: string
+        }
+        Insert: {
+          auto_matched?: boolean
+          circuit_name?: string | null
+          confidence?: number | null
+          created_at?: string
+          organization_id: string
+          room_name: string
+          site_id: string
+          updated_at?: string
+        }
+        Update: {
+          auto_matched?: boolean
+          circuit_name?: string | null
+          confidence?: number | null
+          created_at?: string
+          organization_id?: string
+          room_name?: string
+          site_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "neutral_home_room_map_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "neutral_home_room_map_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "neutral_home_sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       neutral_home_site_settings: {
         Row: {
+          comfort_max_c: number
+          comfort_min_c: number
           comparison_metrics: string[]
           organization_id: string
           site_id: string
           updated_at: string
         }
         Insert: {
+          comfort_max_c?: number
+          comfort_min_c?: number
           comparison_metrics?: string[]
           organization_id: string
           site_id: string
           updated_at?: string
         }
         Update: {
+          comfort_max_c?: number
+          comfort_min_c?: number
           comparison_metrics?: string[]
           organization_id?: string
           site_id?: string
