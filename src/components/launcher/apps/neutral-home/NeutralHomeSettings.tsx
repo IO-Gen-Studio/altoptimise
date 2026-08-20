@@ -745,7 +745,30 @@ function UploadDrawer({
   };
 
   const v = result?.validation;
-  const blocked = !result || !!v?.errors.length;
+  const tempErrors = tempResult?.missingColumns.length
+    ? [`Temperature report is missing required columns: ${tempResult.missingColumns.join(", ")}`]
+    : [];
+  const tempWarnings: string[] = [];
+  if (tempResult) {
+    if (tempResult.roomsWithoutReadings.length)
+      tempWarnings.push(
+        `${tempResult.roomsWithoutReadings.length} room(s) had no readings and were skipped: ${tempResult.roomsWithoutReadings.join(", ")}`,
+      );
+    if (tempResult.rowsDropped)
+      tempWarnings.push(
+        `${tempResult.rowsDropped.toLocaleString()} temperature row(s) could not be read and were ignored.`,
+      );
+    if (
+      result?.range &&
+      tempResult.startISO &&
+      tempResult.endISO &&
+      (tempResult.endISO < result.range.startISO || tempResult.startISO > result.range.endISO)
+    )
+      tempWarnings.push(
+        "The temperature date range does not overlap the usage period — combined analysis will be empty.",
+      );
+  }
+  const blocked = !result || !!v?.errors.length || !!tempErrors.length;
 
   return (
     <Dialog
