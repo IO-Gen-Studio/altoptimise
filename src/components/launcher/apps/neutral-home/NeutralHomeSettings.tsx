@@ -526,16 +526,21 @@ function FileSlot({
 function UploadDrawer({
   site,
   orgId,
+  mappedRooms,
   onClose,
   onSaved,
 }: {
   site: NhSite;
   orgId: string;
+  mappedRooms: Set<string>;
   onClose: () => void;
   onSaved: () => void;
 }) {
   const [headline, setHeadline] = useState<File | null>(null);
   const [daynight, setDaynight] = useState<File | null>(null);
+  const [temps, setTemps] = useState<File[]>([]);
+  const [tempResult, setTempResult] = useState<TemperatureReport | null>(null);
+  const [progress, setProgress] = useState<string>("");
   const [mode, setMode] = useState<"merge" | "replace">("replace");
   const [result, setResult] = useState<MergeResult | null>(null);
   const [label, setLabel] = useState("");
@@ -556,6 +561,22 @@ function UploadDrawer({
       const merged = mergeReports(h, d);
       setResult(merged);
       setLabel(merged.range?.label ?? "");
+
+      if (temps.length) {
+        const parsed: TemperatureReport[] = [];
+        for (const f of temps) {
+          toast.loading(`Reading ${f.name}…`, { id: t });
+          parsed.push(
+            await parseTemperatureReport(f, (rows) =>
+              setProgress(`${f.name}: ${rows.toLocaleString()} readings`),
+            ),
+          );
+        }
+        setTempResult(mergeTemperatureReports(parsed));
+        setProgress("");
+      } else {
+        setTempResult(null);
+      }
       toast.success(`Parsed ${merged.circuits.length} circuits`, { id: t });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not parse the files", { id: t });
@@ -578,6 +599,8 @@ function UploadDrawer({
           period_end: result.range.endISO,
           source_headline_filename: headline?.name ?? null,
           source_daynight_filename: daynight?.name ?? null,
+          source_temperature_filename: tempResult?.fileName ?? null,
+          hasTemperature: !!tempResult?.hours.length,
           mode,
           circuits: result.circuits.map((c) => ({
             circuit_name: c.circuit_name,
@@ -603,7 +626,55 @@ function UploadDrawer({
           })),
         },
       });
-      toast.success(`Saved ${res.circuits} circuits`, { id: t });
+
+      const hours = tempResult?.hours ?? [];
+      for (let i = 0; i < hours.length; i += 2000) {
+        toast.loading(
+          `Saving temperature data… ${Math.min(i + 2000, hours.length).toLocaleString()} / ${hours.length.toLocaleString()}`,
+          { id: t },
+        );
+        await appendNhRoomHours({
+          data: {
+            organization_id: orgId,
+            site_id: site.id,
+            period_id: res.periodId,
+            rows: hours.slice(i, i + 2000),
+          },
+        });
+      }
+
+      let autoMapped = 0;
+      if (tempResult?.rooms.length) {
+        const unmapped = tempResult.rooms.filter((r) => !mappedRooms.has(r));
+        const entries = suggestMatches(
+          unmapped,
+          result.circuits.map((c) => c.circuit_name),
+        )
+          .filter((s) => s.circuit && s.confidence >= AUTO_MATCH_THRESHOLD)
+          .map((s) => ({
+            room_name: s.room,
+            circuit_name: s.circuit,
+            auto_matched: true,
+            confidence: s.confidence,
+          }));
+        if (entries.length) {
+          await setNhRoomMap({
+            data: { organization_id: orgId, site_id: site.id, entries },
+          });
+          autoMapped = entries.length;
+        }
+      }
+
+      toast.success(
+        [
+          `Saved ${res.circuits} circuits`,
+          hours.length ? `${hours.length.toLocaleString()} hourly temperature rows` : null,
+          autoMapped ? `${autoMapped} rooms auto-mapped` : null,
+        ]
+          .filter(Boolean)
+          .join(" · "),
+        { id: t },
+      );
       onSaved();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not save the period", { id: t });
@@ -631,14 +702,20 @@ function UploadDrawer({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-3">
           <FileSlot label="1. Headline Usage Report" file={headline} onPick={setHeadline} />
           <FileSlot
             label="2. Day/Night Group Overview (optional)"
             file={daynight}
             onPick={setDaynight}
           />
+          <MultiFileSlot
+            label="3. Temperature History (optional)"
+            files={temps}
+            onPick={setTemps}
+          />
         </div>
+        {progress ? <p className="text-xs text-muted-foreground">{progress}</p> : null}
 
         <div className="grid gap-2">
           <Label>If this period already exists</Label>
@@ -672,6 +749,19 @@ function UploadDrawer({
                 <Badge variant="outline">
                   {result.range.startISO} → {result.range.endISO}
                 </Badge>
+              ) : null}
+              {tempResult ? (
+                <>
+                  <Badge variant="outline">{tempResult.rooms.length} rooms</Badge>
+                  <Badge variant="outline">
+                    {tempResult.hours.length.toLocaleString()} hourly rows
+                  </Badge>
+                  {tempResult.startISO ? (
+                    <Badge variant="outline">
+                      temp {tempResult.startISO} → {tempResult.endISO}
+                    </Badge>
+                  ) : null}
+                </>
               ) : null}
             </div>
 
