@@ -581,6 +581,8 @@ const SiteSettingsInput = z.object({
   organization_id: z.string().uuid(),
   site_id: z.string().uuid(),
   comparison_metrics: z.array(z.string().min(1).max(80)).max(60),
+  comfort_min_c: z.number().min(-20).max(50).optional(),
+  comfort_max_c: z.number().min(-20).max(50).optional(),
 });
 
 export const saveNhSiteSettings = createServerFn({ method: "POST" })
@@ -595,6 +597,8 @@ export const saveNhSiteSettings = createServerFn({ method: "POST" })
           site_id: data.site_id,
           organization_id: data.organization_id,
           comparison_metrics: data.comparison_metrics,
+          ...(data.comfort_min_c == null ? {} : { comfort_min_c: data.comfort_min_c }),
+          ...(data.comfort_max_c == null ? {} : { comfort_max_c: data.comfort_max_c }),
           updated_at: new Date().toISOString(),
         },
         { onConflict: "site_id" },
