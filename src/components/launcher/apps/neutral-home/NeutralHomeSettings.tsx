@@ -523,6 +523,67 @@ function FileSlot({
   );
 }
 
+function MultiFileSlot({
+  label,
+  files,
+  onPick,
+}: {
+  label: string;
+  files: File[];
+  onPick: (f: File[]) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [over, setOver] = useState(false);
+  return (
+    <div
+      onDragOver={(e) => {
+        e.preventDefault();
+        setOver(true);
+      }}
+      onDragLeave={() => setOver(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setOver(false);
+        const dropped = Array.from(e.dataTransfer.files ?? []);
+        if (dropped.length) onPick([...files, ...dropped]);
+      }}
+      onClick={() => inputRef.current?.click()}
+      className={cn(
+        "cursor-pointer rounded-lg border border-dashed p-4 text-center transition-colors",
+        over ? "border-primary bg-primary/5" : "hover:border-primary/50",
+      )}
+    >
+      <input
+        ref={inputRef}
+        type="file"
+        multiple
+        accept=".csv,.xlsx,.xls"
+        className="hidden"
+        onChange={(e) => onPick([...files, ...Array.from(e.target.files ?? [])])}
+      />
+      <FileSpreadsheet className="mx-auto h-5 w-5 text-muted-foreground" />
+      <div className="mt-2 text-sm font-medium">{label}</div>
+      <div className="mt-1 truncate text-xs text-muted-foreground">
+        {files.length
+          ? files.map((f) => f.name).join(", ")
+          : "Drop one or more .csv / .xlsx here, or click to browse"}
+      </div>
+      {files.length ? (
+        <button
+          type="button"
+          className="mt-1 text-xs text-destructive underline"
+          onClick={(e) => {
+            e.stopPropagation();
+            onPick([]);
+          }}
+        >
+          Clear
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 function UploadDrawer({
   site,
   orgId,
