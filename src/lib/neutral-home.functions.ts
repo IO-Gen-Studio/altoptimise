@@ -256,7 +256,8 @@ const SavePeriodInput = z.object({
   source_temperature_filename: z.string().max(600).nullable().optional(),
   mode: z.enum(["merge", "replace"]),
   circuits: z.array(CircuitInput).min(1).max(3000),
-  roomHours: z.array(RoomHourInput).max(60000).optional(),
+  /** when true a replace also clears previously stored temperature rows */
+  hasTemperature: z.boolean().optional(),
 });
 
 export const saveNhPeriod = createServerFn({ method: "POST" })
@@ -295,7 +296,7 @@ export const saveNhPeriod = createServerFn({ method: "POST" })
           .delete()
           .eq("period_id", periodId);
         if (delErr) throw new Error(delErr.message);
-        if (data.roomHours?.length) {
+        if (data.hasTemperature) {
           const { error: delTemp } = await supabase
             .from("neutral_home_room_hours" as any)
             .delete()
@@ -334,22 +335,37 @@ export const saveNhPeriod = createServerFn({ method: "POST" })
       if (error) throw new Error(error.message);
     }
 
-    const tempRows = data.roomHours ?? [];
-    for (let i = 0; i < tempRows.length; i += 1000) {
-      const { error } = await supabase.from("neutral_home_room_hours" as any).upsert(
-        tempRows.slice(i, i + 1000).map((r) => ({
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+
+    return { periodId: periodId as string, circuits: payload.length };
+  });
+
+const AppendRoomHoursInput = z.object({
+  organization_id: z.string().uuid(),
+  site_id: z.string().uuid(),
+  period_id: z.string().uuid(),
+  rows: z.array(RoomHourInput).min(1).max(4000),
+});
+
+/** Writes one chunk of hourly temperature rows for a period. */
+export const appendNhRoomHours = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => AppendRoomHoursInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const { error } = await context.supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .from("neutral_home_room_hours" as any)
+      .upsert(
+        data.rows.map((r) => ({
           ...r,
-          period_id: periodId,
+          period_id: data.period_id,
           site_id: data.site_id,
           organization_id: data.organization_id,
         })),
         { onConflict: "period_id,room_name,hour_ts" },
       );
-      if (error) throw new Error(error.message);
-    }
-    /* eslint-enable @typescript-eslint/no-explicit-any */
-
-    return { periodId, circuits: payload.length, roomHours: tempRows.length };
+    if (error) throw new Error(error.message);
+    return { written: data.rows.length };
   });
 
 export const loadNhRoomHours = createServerFn({ method: "POST" })
