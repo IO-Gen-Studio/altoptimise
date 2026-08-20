@@ -19,6 +19,7 @@ const EMPTY: NeutralHomeBundle = {
   meterCategories: [],
   metrics: [],
   settings: [],
+  roomMap: [],
 };
 
 export function NeutralHomeApp() {
