@@ -31,6 +31,7 @@ import {
   deleteNhMetric,
   saveNhSiteSettings,
   setNhMeterCategory,
+  setNhRoomMap,
   upsertNhCategory,
   upsertNhMetric,
   type NeutralHomeBundle,
@@ -99,6 +100,15 @@ export function NeutralHomeConfig({
     return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   }, [bundle.circuits, bundle.periods, siteId]);
 
+  const siteRooms = useMemo(
+    () =>
+      bundle.roomMap
+        .filter((r) => r.site_id === siteId)
+        .slice()
+        .sort((a, b) => a.room_name.localeCompare(b.room_name)),
+    [bundle.roomMap, siteId],
+  );
+
   const overrideOf = (name: string) =>
     bundle.meterCategories.find((o) => o.site_id === siteId && o.circuit_name === name)?.category ??
     "";
@@ -159,6 +169,7 @@ export function NeutralHomeConfig({
           <TabsTrigger value="categories">Categories</TabsTrigger>
           <TabsTrigger value="meters">Meter categories</TabsTrigger>
           <TabsTrigger value="metrics">Metrics</TabsTrigger>
+          <TabsTrigger value="rooms">Rooms &amp; comfort</TabsTrigger>
           <TabsTrigger value="comparison">Period comparison</TabsTrigger>
         </TabsList>
 
@@ -415,6 +426,138 @@ export function NeutralHomeConfig({
               </div>
             )}
           </div>
+        </TabsContent>
+
+
+        <TabsContent value="rooms" className="mt-4 space-y-4">
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="grid gap-1.5">
+              <Label className="text-xs">Comfort band minimum (°C)</Label>
+              <Input
+                type="number"
+                step="0.5"
+                className="w-32"
+                defaultValue={settings?.comfort_min_c ?? 19}
+                disabled={disabled}
+                onBlur={(e) => {
+                  const v = Number(e.target.value);
+                  if (!Number.isFinite(v)) return;
+                  void run("Saving comfort band…", () =>
+                    saveNhSiteSettings({
+                      data: {
+                        organization_id: orgId,
+                        site_id: siteId,
+                        comparison_metrics: selected,
+                        comfort_min_c: v,
+                        comfort_max_c: settings?.comfort_max_c ?? 21,
+                      },
+                    }),
+                  );
+                }}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label className="text-xs">Comfort band maximum (°C)</Label>
+              <Input
+                type="number"
+                step="0.5"
+                className="w-32"
+                defaultValue={settings?.comfort_max_c ?? 21}
+                disabled={disabled}
+                onBlur={(e) => {
+                  const v = Number(e.target.value);
+                  if (!Number.isFinite(v)) return;
+                  void run("Saving comfort band…", () =>
+                    saveNhSiteSettings({
+                      data: {
+                        organization_id: orgId,
+                        site_id: siteId,
+                        comparison_metrics: selected,
+                        comfort_min_c: settings?.comfort_min_c ?? 19,
+                        comfort_max_c: v,
+                      },
+                    }),
+                  );
+                }}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Rooms outside this band are flagged on the Temperature tab.
+            </p>
+          </div>
+
+          {!siteRooms.length ? (
+            <p className="text-sm text-muted-foreground">
+              Upload a Temperature History report for this site to map rooms to meters.
+            </p>
+          ) : (
+            <ScrollArea className="h-[420px] rounded-lg border">
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 bg-card">
+                  <tr className="text-left text-xs text-muted-foreground">
+                    <th className="px-4 py-2 font-medium">Room (temperature file)</th>
+                    <th className="px-4 py-2 font-medium">Mapped meter / circuit</th>
+                    <th className="px-4 py-2 font-medium">Match</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {siteRooms.map((r) => (
+                    <tr key={r.room_name} className="border-t">
+                      <td className="px-4 py-2">{r.room_name}</td>
+                      <td className="px-4 py-2">
+                        <Select
+                          value={r.circuit_name ?? "none"}
+                          disabled={disabled}
+                          onValueChange={(v) =>
+                            run("Updating room mapping…", () =>
+                              setNhRoomMap({
+                                data: {
+                                  organization_id: orgId,
+                                  site_id: siteId,
+                                  entries: [
+                                    {
+                                      room_name: r.room_name,
+                                      circuit_name: v === "none" ? null : v,
+                                      auto_matched: false,
+                                      confidence: null,
+                                    },
+                                  ],
+                                },
+                              }),
+                            )
+                          }
+                        >
+                          <SelectTrigger className="w-72">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Not mapped</SelectItem>
+                            {circuitNames.map(([name]) => (
+                              <SelectItem key={name} value={name}>
+                                {name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </td>
+                      <td className="px-4 py-2">
+                        {r.circuit_name ? (
+                          <Badge variant="outline">
+                            {r.auto_matched ? "auto" : "manual"}
+                            {r.confidence != null
+                              ? ` · ${Math.round(r.confidence * 100)}%`
+                              : ""}
+                          </Badge>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </ScrollArea>
+          )}
         </TabsContent>
 
         <TabsContent value="comparison" className="mt-4 space-y-3">

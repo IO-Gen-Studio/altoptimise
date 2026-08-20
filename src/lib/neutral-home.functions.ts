@@ -234,6 +234,17 @@ const CircuitInput = z.object({
   co2_kg_per_m2: z.number().nullable(),
 });
 
+const RoomHourInput = z.object({
+  room_name: z.string().trim().min(1).max(300),
+  hour_ts: z.string().min(10).max(40),
+  temp_min: z.number().nullable(),
+  temp_avg: z.number().nullable(),
+  temp_max: z.number().nullable(),
+  set_temp_avg: z.number().nullable(),
+  on_share: z.number().nullable(),
+  reading_count: z.number().int().min(0),
+});
+
 const SavePeriodInput = z.object({
   organization_id: z.string().uuid(),
   site_id: z.string().uuid(),
@@ -242,8 +253,11 @@ const SavePeriodInput = z.object({
   period_end: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   source_headline_filename: z.string().max(300).nullable().optional(),
   source_daynight_filename: z.string().max(300).nullable().optional(),
+  source_temperature_filename: z.string().max(600).nullable().optional(),
   mode: z.enum(["merge", "replace"]),
   circuits: z.array(CircuitInput).min(1).max(3000),
+  /** when true a replace also clears previously stored temperature rows */
+  hasTemperature: z.boolean().optional(),
 });
 
 export const saveNhPeriod = createServerFn({ method: "POST" })
@@ -270,6 +284,9 @@ export const saveNhPeriod = createServerFn({ method: "POST" })
           label: data.label,
           source_headline_filename: data.source_headline_filename ?? null,
           source_daynight_filename: data.source_daynight_filename ?? null,
+          ...(data.source_temperature_filename
+            ? { source_temperature_filename: data.source_temperature_filename }
+            : {}),
         })
         .eq("id", periodId);
       if (error) throw new Error(error.message);
@@ -279,6 +296,13 @@ export const saveNhPeriod = createServerFn({ method: "POST" })
           .delete()
           .eq("period_id", periodId);
         if (delErr) throw new Error(delErr.message);
+        if (data.hasTemperature) {
+          const { error: delTemp } = await supabase
+            .from("neutral_home_room_hours" as any)
+            .delete()
+            .eq("period_id", periodId);
+          if (delTemp) throw new Error(delTemp.message);
+        }
       }
     } else {
       const { data: row, error } = await supabase
@@ -291,6 +315,7 @@ export const saveNhPeriod = createServerFn({ method: "POST" })
           period_end: data.period_end,
           source_headline_filename: data.source_headline_filename ?? null,
           source_daynight_filename: data.source_daynight_filename ?? null,
+          source_temperature_filename: data.source_temperature_filename ?? null,
         })
         .select("id")
         .single();
@@ -309,9 +334,103 @@ export const saveNhPeriod = createServerFn({ method: "POST" })
         .upsert(payload.slice(i, i + 500), { onConflict: "period_id,circuit_name" });
       if (error) throw new Error(error.message);
     }
+
     /* eslint-enable @typescript-eslint/no-explicit-any */
 
-    return { periodId, circuits: payload.length };
+    return { periodId: periodId as string, circuits: payload.length };
+  });
+
+const AppendRoomHoursInput = z.object({
+  organization_id: z.string().uuid(),
+  site_id: z.string().uuid(),
+  period_id: z.string().uuid(),
+  rows: z.array(RoomHourInput).min(1).max(4000),
+});
+
+/** Writes one chunk of hourly temperature rows for a period. */
+export const appendNhRoomHours = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => AppendRoomHoursInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const { error } = await context.supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .from("neutral_home_room_hours" as any)
+      .upsert(
+        data.rows.map((r) => ({
+          ...r,
+          period_id: data.period_id,
+          site_id: data.site_id,
+          organization_id: data.organization_id,
+        })),
+        { onConflict: "period_id,room_name,hour_ts" },
+      );
+    if (error) throw new Error(error.message);
+    return { written: data.rows.length };
+  });
+
+export const loadNhRoomHours = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ periodId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }): Promise<RoomHourRow[]> => {
+    const out: RoomHourRow[] = [];
+    const pageSize = 1000;
+    for (let page = 0; page < 80; page++) {
+      const { data: rows, error } = await context.supabase
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .from("neutral_home_room_hours" as any)
+        .select("period_id,room_name,hour_ts,temp_min,temp_avg,temp_max,set_temp_avg,on_share,reading_count")
+        .eq("period_id", data.periodId)
+        .order("hour_ts")
+        .range(page * pageSize, page * pageSize + pageSize - 1);
+      if (error) throw new Error(error.message);
+      const batch = (rows ?? []) as unknown as RoomHourRow[];
+      out.push(...batch);
+      if (batch.length < pageSize) break;
+    }
+    return out;
+  });
+
+const RoomMapInput = z.object({
+  organization_id: z.string().uuid(),
+  site_id: z.string().uuid(),
+  entries: z
+    .array(
+      z.object({
+        room_name: z.string().trim().min(1).max(300),
+        /** null clears the mapping */
+        circuit_name: z.string().trim().min(1).max(300).nullable(),
+        auto_matched: z.boolean().optional(),
+        confidence: z.number().nullable().optional(),
+      }),
+    )
+    .min(1)
+    .max(2000),
+});
+
+export const setNhRoomMap = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => RoomMapInput.parse(d))
+  .handler(async ({ data, context }) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const table = () => context.supabase.from("neutral_home_room_map" as any);
+    // Every known room keeps a row (circuit_name null = unmapped), so the map
+    // doubles as the room registry for the site.
+    for (let i = 0; i < data.entries.length; i += 500) {
+      const { error } = await table().upsert(
+        data.entries.slice(i, i + 500).map((e) => ({
+          site_id: data.site_id,
+          organization_id: data.organization_id,
+          room_name: e.room_name,
+          circuit_name: e.circuit_name,
+          auto_matched: e.auto_matched ?? false,
+          confidence: e.confidence ?? null,
+          updated_at: new Date().toISOString(),
+        })),
+        { onConflict: "site_id,room_name" },
+      );
+      if (error) throw new Error(error.message);
+    }
+    return { ok: true };
   });
 
 export const deleteNhPeriod = createServerFn({ method: "POST" })
@@ -474,6 +593,8 @@ const SiteSettingsInput = z.object({
   organization_id: z.string().uuid(),
   site_id: z.string().uuid(),
   comparison_metrics: z.array(z.string().min(1).max(80)).max(60),
+  comfort_min_c: z.number().min(-20).max(50).optional(),
+  comfort_max_c: z.number().min(-20).max(50).optional(),
 });
 
 export const saveNhSiteSettings = createServerFn({ method: "POST" })
@@ -488,6 +609,8 @@ export const saveNhSiteSettings = createServerFn({ method: "POST" })
           site_id: data.site_id,
           organization_id: data.organization_id,
           comparison_metrics: data.comparison_metrics,
+          ...(data.comfort_min_c == null ? {} : { comfort_min_c: data.comfort_min_c }),
+          ...(data.comfort_max_c == null ? {} : { comfort_max_c: data.comfort_max_c }),
           updated_at: new Date().toISOString(),
         },
         { onConflict: "site_id" },

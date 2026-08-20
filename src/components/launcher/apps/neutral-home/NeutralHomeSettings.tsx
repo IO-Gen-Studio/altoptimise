@@ -33,7 +33,9 @@ import { cn } from "@/lib/utils";
 import {
   deleteNhPeriod,
   deleteNhSite,
+  appendNhRoomHours,
   saveNhPeriod,
+  setNhRoomMap,
   upsertNhSite,
   type NeutralHomeBundle,
   type NhSite,
@@ -46,6 +48,12 @@ import {
   parseHeadlineReport,
   type MergeResult,
 } from "@/lib/neutral-home/parse";
+import {
+  mergeTemperatureReports,
+  parseTemperatureReport,
+  type TemperatureReport,
+} from "@/lib/neutral-home/temperature";
+import { AUTO_MATCH_THRESHOLD, suggestMatches } from "@/lib/neutral-home/room-match";
 
 interface Props {
   orgId: string;
@@ -327,6 +335,13 @@ export function NeutralHomeSettings({ orgId, bundle, canEdit, onChanged }: Props
         <UploadDrawer
           site={uploadSite}
           orgId={orgId}
+          mappedRooms={
+            new Set(
+              bundle.roomMap
+                .filter((r) => r.site_id === uploadSite.id && r.circuit_name)
+                .map((r) => r.room_name),
+            )
+          }
           onClose={() => setUploadSite(null)}
           onSaved={() => {
             setUploadSite(null);
@@ -378,7 +393,9 @@ function PeriodsTable({
   const sorted = useMemo(() => {
     const mult = dir === "asc" ? 1 : -1;
     const files = (p: NhPeriod) =>
-      [p.source_headline_filename, p.source_daynight_filename].filter(Boolean).join(" · ");
+      [p.source_headline_filename, p.source_daynight_filename, p.source_temperature_filename]
+        .filter(Boolean)
+        .join(" · ");
     return [...periods].sort((a, b) => {
       if (key === "circuits") return (circuitCount(a.id) - circuitCount(b.id)) * mult;
       if (key === "range") return a.period_start.localeCompare(b.period_start) * mult;
@@ -439,7 +456,11 @@ function PeriodsTable({
             </td>
             <td className="px-4 py-2 text-muted-foreground">{circuitCount(p.id)}</td>
             <td className="px-4 py-2 text-xs text-muted-foreground">
-              {[p.source_headline_filename, p.source_daynight_filename]
+              {[
+                p.source_headline_filename,
+                p.source_daynight_filename,
+                p.source_temperature_filename,
+              ]
                 .filter(Boolean)
                 .join(" · ") || "—"}
             </td>
@@ -508,19 +529,85 @@ function FileSlot({
   );
 }
 
+function MultiFileSlot({
+  label,
+  files,
+  onPick,
+}: {
+  label: string;
+  files: File[];
+  onPick: (f: File[]) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [over, setOver] = useState(false);
+  return (
+    <div
+      onDragOver={(e) => {
+        e.preventDefault();
+        setOver(true);
+      }}
+      onDragLeave={() => setOver(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setOver(false);
+        const dropped = Array.from(e.dataTransfer.files ?? []);
+        if (dropped.length) onPick([...files, ...dropped]);
+      }}
+      onClick={() => inputRef.current?.click()}
+      className={cn(
+        "cursor-pointer rounded-lg border border-dashed p-4 text-center transition-colors",
+        over ? "border-primary bg-primary/5" : "hover:border-primary/50",
+      )}
+    >
+      <input
+        ref={inputRef}
+        type="file"
+        multiple
+        accept=".csv,.xlsx,.xls"
+        className="hidden"
+        onChange={(e) => onPick([...files, ...Array.from(e.target.files ?? [])])}
+      />
+      <FileSpreadsheet className="mx-auto h-5 w-5 text-muted-foreground" />
+      <div className="mt-2 text-sm font-medium">{label}</div>
+      <div className="mt-1 truncate text-xs text-muted-foreground">
+        {files.length
+          ? files.map((f) => f.name).join(", ")
+          : "Drop one or more .csv / .xlsx here, or click to browse"}
+      </div>
+      {files.length ? (
+        <button
+          type="button"
+          className="mt-1 text-xs text-destructive underline"
+          onClick={(e) => {
+            e.stopPropagation();
+            onPick([]);
+          }}
+        >
+          Clear
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 function UploadDrawer({
   site,
   orgId,
+  mappedRooms,
   onClose,
   onSaved,
 }: {
   site: NhSite;
   orgId: string;
+  mappedRooms: Set<string>;
   onClose: () => void;
   onSaved: () => void;
 }) {
   const [headline, setHeadline] = useState<File | null>(null);
   const [daynight, setDaynight] = useState<File | null>(null);
+  const [temps, setTemps] = useState<File[]>([]);
+  const [tempResult, setTempResult] = useState<TemperatureReport | null>(null);
+  const [progress, setProgress] = useState<string>("");
   const [mode, setMode] = useState<"merge" | "replace">("replace");
   const [result, setResult] = useState<MergeResult | null>(null);
   const [label, setLabel] = useState("");
@@ -541,6 +628,22 @@ function UploadDrawer({
       const merged = mergeReports(h, d);
       setResult(merged);
       setLabel(merged.range?.label ?? "");
+
+      if (temps.length) {
+        const parsed: TemperatureReport[] = [];
+        for (const f of temps) {
+          toast.loading(`Reading ${f.name}…`, { id: t });
+          parsed.push(
+            await parseTemperatureReport(f, (rows) =>
+              setProgress(`${f.name}: ${rows.toLocaleString()} readings`),
+            ),
+          );
+        }
+        setTempResult(mergeTemperatureReports(parsed));
+        setProgress("");
+      } else {
+        setTempResult(null);
+      }
       toast.success(`Parsed ${merged.circuits.length} circuits`, { id: t });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not parse the files", { id: t });
@@ -563,6 +666,8 @@ function UploadDrawer({
           period_end: result.range.endISO,
           source_headline_filename: headline?.name ?? null,
           source_daynight_filename: daynight?.name ?? null,
+          source_temperature_filename: tempResult?.fileName ?? null,
+          hasTemperature: !!tempResult?.hours.length,
           mode,
           circuits: result.circuits.map((c) => ({
             circuit_name: c.circuit_name,
@@ -588,7 +693,56 @@ function UploadDrawer({
           })),
         },
       });
-      toast.success(`Saved ${res.circuits} circuits`, { id: t });
+
+      const hours = tempResult?.hours ?? [];
+      for (let i = 0; i < hours.length; i += 2000) {
+        toast.loading(
+          `Saving temperature data… ${Math.min(i + 2000, hours.length).toLocaleString()} / ${hours.length.toLocaleString()}`,
+          { id: t },
+        );
+        await appendNhRoomHours({
+          data: {
+            organization_id: orgId,
+            site_id: site.id,
+            period_id: res.periodId,
+            rows: hours.slice(i, i + 2000),
+          },
+        });
+      }
+
+      let autoMapped = 0;
+      if (tempResult?.rooms.length) {
+        const fresh = tempResult.rooms.filter((r) => !mappedRooms.has(r));
+        const entries = suggestMatches(
+          fresh,
+          result.circuits.map((c) => c.circuit_name),
+        ).map((s) => {
+          const auto = !!s.circuit && s.confidence >= AUTO_MATCH_THRESHOLD;
+          if (auto) autoMapped += 1;
+          return {
+            room_name: s.room,
+            circuit_name: auto ? s.circuit : null,
+            auto_matched: auto,
+            confidence: s.circuit ? s.confidence : null,
+          };
+        });
+        if (entries.length) {
+          await setNhRoomMap({
+            data: { organization_id: orgId, site_id: site.id, entries },
+          });
+        }
+      }
+
+      toast.success(
+        [
+          `Saved ${res.circuits} circuits`,
+          hours.length ? `${hours.length.toLocaleString()} hourly temperature rows` : null,
+          autoMapped ? `${autoMapped} rooms auto-mapped` : null,
+        ]
+          .filter(Boolean)
+          .join(" · "),
+        { id: t },
+      );
       onSaved();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not save the period", { id: t });
@@ -598,7 +752,30 @@ function UploadDrawer({
   };
 
   const v = result?.validation;
-  const blocked = !result || !!v?.errors.length;
+  const tempErrors = tempResult?.missingColumns.length
+    ? [`Temperature report is missing required columns: ${tempResult.missingColumns.join(", ")}`]
+    : [];
+  const tempWarnings: string[] = [];
+  if (tempResult) {
+    if (tempResult.roomsWithoutReadings.length)
+      tempWarnings.push(
+        `${tempResult.roomsWithoutReadings.length} room(s) had no readings and were skipped: ${tempResult.roomsWithoutReadings.join(", ")}`,
+      );
+    if (tempResult.rowsDropped)
+      tempWarnings.push(
+        `${tempResult.rowsDropped.toLocaleString()} temperature row(s) could not be read and were ignored.`,
+      );
+    if (
+      result?.range &&
+      tempResult.startISO &&
+      tempResult.endISO &&
+      (tempResult.endISO < result.range.startISO || tempResult.startISO > result.range.endISO)
+    )
+      tempWarnings.push(
+        "The temperature date range does not overlap the usage period — combined analysis will be empty.",
+      );
+  }
+  const blocked = !result || !!v?.errors.length || !!tempErrors.length;
 
   return (
     <Dialog
@@ -611,19 +788,26 @@ function UploadDrawer({
         <DialogHeader>
           <DialogTitle>Upload Envisij reports — {site.name}</DialogTitle>
           <DialogDescription>
-            The Headline Usage Report is the key upload; the Day/Night report is optional and only
-            adds the day/night split. Metadata rows and the date range are detected automatically.
+            The Headline Usage Report is the key upload. The Day/Night report adds the day/night
+            split and the Temperature History adds room-level comfort analysis — both are optional.
+            Temperature files are aggregated to hourly averages in your browser before saving.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-3">
           <FileSlot label="1. Headline Usage Report" file={headline} onPick={setHeadline} />
           <FileSlot
             label="2. Day/Night Group Overview (optional)"
             file={daynight}
             onPick={setDaynight}
           />
+          <MultiFileSlot
+            label="3. Temperature History (optional)"
+            files={temps}
+            onPick={setTemps}
+          />
         </div>
+        {progress ? <p className="text-xs text-muted-foreground">{progress}</p> : null}
 
         <div className="grid gap-2">
           <Label>If this period already exists</Label>
@@ -658,6 +842,19 @@ function UploadDrawer({
                   {result.range.startISO} → {result.range.endISO}
                 </Badge>
               ) : null}
+              {tempResult ? (
+                <>
+                  <Badge variant="outline">{tempResult.rooms.length} rooms</Badge>
+                  <Badge variant="outline">
+                    {tempResult.hours.length.toLocaleString()} hourly rows
+                  </Badge>
+                  {tempResult.startISO ? (
+                    <Badge variant="outline">
+                      temp {tempResult.startISO} → {tempResult.endISO}
+                    </Badge>
+                  ) : null}
+                </>
+              ) : null}
             </div>
 
             <div className="grid gap-1.5">
@@ -665,9 +862,9 @@ function UploadDrawer({
               <Input id="nh-label" value={label} onChange={(e) => setLabel(e.target.value)} />
             </div>
 
-            {v?.errors.length ? (
+            {[...(v?.errors ?? []), ...tempErrors].length ? (
               <ul className="space-y-1 text-sm text-destructive">
-                {v.errors.map((e) => (
+                {[...(v?.errors ?? []), ...tempErrors].map((e) => (
                   <li key={e} className="flex gap-2">
                     <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                     {e}
@@ -675,9 +872,9 @@ function UploadDrawer({
                 ))}
               </ul>
             ) : null}
-            {v?.warnings.length ? (
+            {[...(v?.warnings ?? []), ...tempWarnings].length ? (
               <ul className="space-y-1 text-sm text-amber-600">
-                {v.warnings.map((w) => (
+                {[...(v?.warnings ?? []), ...tempWarnings].map((w) => (
                   <li key={w} className="flex gap-2">
                     <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                     {w}
@@ -685,7 +882,7 @@ function UploadDrawer({
                 ))}
               </ul>
             ) : null}
-            {!v?.errors.length && !v?.warnings.length ? (
+            {!v?.errors.length && !v?.warnings.length && !tempErrors.length && !tempWarnings.length ? (
               <div className="flex items-center gap-2 text-sm text-emerald-600">
                 <CheckCircle2 className="h-4 w-4" /> All circuits matched cleanly.
               </div>
