@@ -33,7 +33,9 @@ import { cn } from "@/lib/utils";
 import {
   deleteNhPeriod,
   deleteNhSite,
+  appendNhRoomHours,
   saveNhPeriod,
+  setNhRoomMap,
   upsertNhSite,
   type NeutralHomeBundle,
   type NhSite,
@@ -46,6 +48,12 @@ import {
   parseHeadlineReport,
   type MergeResult,
 } from "@/lib/neutral-home/parse";
+import {
+  mergeTemperatureReports,
+  parseTemperatureReport,
+  type TemperatureReport,
+} from "@/lib/neutral-home/temperature";
+import { AUTO_MATCH_THRESHOLD, suggestMatches } from "@/lib/neutral-home/room-match";
 
 interface Props {
   orgId: string;
@@ -327,6 +335,13 @@ export function NeutralHomeSettings({ orgId, bundle, canEdit, onChanged }: Props
         <UploadDrawer
           site={uploadSite}
           orgId={orgId}
+          mappedRooms={
+            new Set(
+              bundle.roomMap
+                .filter((r) => r.site_id === uploadSite.id && r.circuit_name)
+                .map((r) => r.room_name),
+            )
+          }
           onClose={() => setUploadSite(null)}
           onSaved={() => {
             setUploadSite(null);
