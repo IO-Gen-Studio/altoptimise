@@ -413,15 +413,11 @@ export const setNhRoomMap = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const table = () => context.supabase.from("neutral_home_room_map" as any);
-    const clears = data.entries.filter((e) => !e.circuit_name).map((e) => e.room_name);
-    if (clears.length) {
-      const { error } = await table().delete().eq("site_id", data.site_id).in("room_name", clears);
-      if (error) throw new Error(error.message);
-    }
-    const sets = data.entries.filter((e) => e.circuit_name);
-    if (sets.length) {
+    // Every known room keeps a row (circuit_name null = unmapped), so the map
+    // doubles as the room registry for the site.
+    for (let i = 0; i < data.entries.length; i += 500) {
       const { error } = await table().upsert(
-        sets.map((e) => ({
+        data.entries.slice(i, i + 500).map((e) => ({
           site_id: data.site_id,
           organization_id: data.organization_id,
           room_name: e.room_name,
