@@ -712,23 +712,24 @@ function UploadDrawer({
 
       let autoMapped = 0;
       if (tempResult?.rooms.length) {
-        const unmapped = tempResult.rooms.filter((r) => !mappedRooms.has(r));
+        const fresh = tempResult.rooms.filter((r) => !mappedRooms.has(r));
         const entries = suggestMatches(
-          unmapped,
+          fresh,
           result.circuits.map((c) => c.circuit_name),
-        )
-          .filter((s) => s.circuit && s.confidence >= AUTO_MATCH_THRESHOLD)
-          .map((s) => ({
+        ).map((s) => {
+          const auto = !!s.circuit && s.confidence >= AUTO_MATCH_THRESHOLD;
+          if (auto) autoMapped += 1;
+          return {
             room_name: s.room,
-            circuit_name: s.circuit,
-            auto_matched: true,
-            confidence: s.confidence,
-          }));
+            circuit_name: auto ? s.circuit : null,
+            auto_matched: auto,
+            confidence: s.circuit ? s.confidence : null,
+          };
+        });
         if (entries.length) {
           await setNhRoomMap({
             data: { organization_id: orgId, site_id: site.id, entries },
           });
-          autoMapped = entries.length;
         }
       }
 
