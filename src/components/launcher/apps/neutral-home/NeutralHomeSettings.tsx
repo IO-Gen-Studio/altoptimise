@@ -393,7 +393,9 @@ function PeriodsTable({
   const sorted = useMemo(() => {
     const mult = dir === "asc" ? 1 : -1;
     const files = (p: NhPeriod) =>
-      [p.source_headline_filename, p.source_daynight_filename].filter(Boolean).join(" · ");
+      [p.source_headline_filename, p.source_daynight_filename, p.source_temperature_filename]
+        .filter(Boolean)
+        .join(" · ");
     return [...periods].sort((a, b) => {
       if (key === "circuits") return (circuitCount(a.id) - circuitCount(b.id)) * mult;
       if (key === "range") return a.period_start.localeCompare(b.period_start) * mult;
@@ -454,7 +456,11 @@ function PeriodsTable({
             </td>
             <td className="px-4 py-2 text-muted-foreground">{circuitCount(p.id)}</td>
             <td className="px-4 py-2 text-xs text-muted-foreground">
-              {[p.source_headline_filename, p.source_daynight_filename]
+              {[
+                p.source_headline_filename,
+                p.source_daynight_filename,
+                p.source_temperature_filename,
+              ]
                 .filter(Boolean)
                 .join(" · ") || "—"}
             </td>
@@ -781,8 +787,9 @@ function UploadDrawer({
         <DialogHeader>
           <DialogTitle>Upload Envisij reports — {site.name}</DialogTitle>
           <DialogDescription>
-            The Headline Usage Report is the key upload; the Day/Night report is optional and only
-            adds the day/night split. Metadata rows and the date range are detected automatically.
+            The Headline Usage Report is the key upload. The Day/Night report adds the day/night
+            split and the Temperature History adds room-level comfort analysis — both are optional.
+            Temperature files are aggregated to hourly averages in your browser before saving.
           </DialogDescription>
         </DialogHeader>
 
@@ -854,9 +861,9 @@ function UploadDrawer({
               <Input id="nh-label" value={label} onChange={(e) => setLabel(e.target.value)} />
             </div>
 
-            {v?.errors.length ? (
+            {[...(v?.errors ?? []), ...tempErrors].length ? (
               <ul className="space-y-1 text-sm text-destructive">
-                {v.errors.map((e) => (
+                {[...(v?.errors ?? []), ...tempErrors].map((e) => (
                   <li key={e} className="flex gap-2">
                     <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                     {e}
@@ -864,9 +871,9 @@ function UploadDrawer({
                 ))}
               </ul>
             ) : null}
-            {v?.warnings.length ? (
+            {[...(v?.warnings ?? []), ...tempWarnings].length ? (
               <ul className="space-y-1 text-sm text-amber-600">
-                {v.warnings.map((w) => (
+                {[...(v?.warnings ?? []), ...tempWarnings].map((w) => (
                   <li key={w} className="flex gap-2">
                     <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                     {w}
@@ -874,7 +881,7 @@ function UploadDrawer({
                 ))}
               </ul>
             ) : null}
-            {!v?.errors.length && !v?.warnings.length ? (
+            {!v?.errors.length && !v?.warnings.length && !tempErrors.length && !tempWarnings.length ? (
               <div className="flex items-center gap-2 text-sm text-emerald-600">
                 <CheckCircle2 className="h-4 w-4" /> All circuits matched cleanly.
               </div>
