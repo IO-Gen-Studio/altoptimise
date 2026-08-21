@@ -143,7 +143,7 @@ export function NeutralHomeZones({
           <div className="flex items-center gap-2">
             <LayoutGrid className="h-4 w-4 text-muted-foreground" />
             <div>
-              <h2 className="text-base font-semibold tracking-tight">Zone league table</h2>
+              <h2 className="text-base font-semibold tracking-tight">Zone Consumption and Temperature Overview</h2>
               <p className="text-sm text-muted-foreground">
                 Each zone including the equipment mapped into it. Click a zone for its temperature
                 profile.
