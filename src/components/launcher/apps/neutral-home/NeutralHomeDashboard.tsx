@@ -203,7 +203,7 @@ export function NeutralHomeDashboard({
   const overrides = useMemo(() => {
     const m = new Map<string, string>();
     for (const o of bundle.meterCategories)
-      if (o.site_id === siteId) m.set(o.circuit_name, o.category);
+      if (o.site_id === siteId && o.category) m.set(o.circuit_name, o.category);
     return m;
   }, [bundle.meterCategories, siteId]);
 
