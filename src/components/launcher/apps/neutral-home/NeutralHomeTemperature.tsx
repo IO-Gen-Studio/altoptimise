@@ -157,49 +157,6 @@ export function NeutralHomeTemperature({
 
       <Card>
         <CardContent className="p-5">
-          <h2 className="text-base font-semibold tracking-tight">Daily average temperature</h2>
-          <p className="pb-3 text-sm text-muted-foreground">
-            Five warmest rooms · shaded band is the {band.min}–{band.max} °C comfort target
-          </p>
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={daily} margin={{ top: 8, right: 12, bottom: 0, left: -18 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis dataKey="date" tick={{ fontSize: 11 }} stroke="var(--muted-foreground)" />
-                <YAxis
-                  tick={{ fontSize: 11 }}
-                  stroke="var(--muted-foreground)"
-                  unit="°"
-                  domain={["auto", "auto"]}
-                />
-                <ReferenceArea y1={band.min} y2={band.max} fill="var(--chart-2)" fillOpacity={0.1} />
-                <RTooltip
-                  contentStyle={{
-                    background: "var(--card)",
-                    border: "1px solid var(--border)",
-                    borderRadius: 8,
-                    fontSize: 12,
-                  }}
-                />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                {topRooms.map((room, i) => (
-                  <Line
-                    key={room}
-                    type="monotone"
-                    dataKey={room}
-                    stroke={LINE_COLORS[i % LINE_COLORS.length]}
-                    strokeWidth={2}
-                    dot={false}
-                  />
-                ))}
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="p-5">
           <h2 className="text-base font-semibold tracking-tight">Temperature range by room</h2>
           <p className="pb-3 text-sm text-muted-foreground">
             {outOfBand.length} of {stats.length} rooms spent meaningful time outside the comfort
@@ -289,62 +246,6 @@ export function NeutralHomeTemperature({
         </CardContent>
       </Card>
 
-      <Card>
-        <CardContent className="p-5">
-          <h2 className="text-base font-semibold tracking-tight">
-            Temperature vs. consumption
-          </h2>
-          <p className="pb-3 text-sm text-muted-foreground">
-            Rooms mapped to a meter. Overheating cost is the share of heating effort spent above{" "}
-            {band.max} °C applied to that meter's usage and cost.
-          </p>
-          {!combined.length ? (
-            <p className="text-sm text-muted-foreground">
-              No rooms are mapped to meters yet — map them in the site configuration.
-            </p>
-          ) : (
-            <div className="overflow-x-auto rounded-lg border">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-xs text-muted-foreground">
-                    <th className="px-3 py-2 font-medium">Room</th>
-                    <th className="px-3 py-2 font-medium">Meter</th>
-                    <th className="px-3 py-2 text-right font-medium">Avg °C</th>
-                    <th className="px-3 py-2 text-right font-medium">kWh</th>
-                    <th className="px-3 py-2 text-right font-medium">Cost £</th>
-                    <th className="px-3 py-2 text-right font-medium">Overheat share</th>
-                    <th className="px-3 py-2 text-right font-medium">Wasted kWh</th>
-                    <th className="px-3 py-2 text-right font-medium">Wasted £</th>
-                    <th className="px-3 py-2 text-right font-medium">kWh / degree-hour</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {combined.map((r) => (
-                    <tr key={r.room} className="border-t">
-                      <td className="px-3 py-2">{r.room}</td>
-                      <td className="px-3 py-2 text-muted-foreground">{r.circuit}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">{num(r.avg)}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">{num(r.usage_kwh, 0)}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">{num(r.cost_gbp, 2)}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">
-                        {num(r.wasteShare * 100, 1)}%
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums">{num(r.wastedKwh, 0)}</td>
-                      <td className="px-3 py-2 text-right tabular-nums font-medium">
-                        {num(r.wastedGbp, 2)}
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums">
-                        {r.kwhPerDegreeHour == null ? "—" : num(r.kwhPerDegreeHour, 2)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
   );
 }
 
