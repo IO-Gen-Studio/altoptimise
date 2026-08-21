@@ -278,40 +278,6 @@ export function NeutralHomeZones({
                         {t ? `${num(t.avg, 1)}` : "—"}
                       </td>
                     </tr>
-                  <Fragment key={z.zone}>
-                    <tr
-                      onClick={() => setOpen(isOpen ? null : z.zone)}
-                      className={cn(
-                        "cursor-pointer border-t transition-colors hover:bg-muted/50",
-                        isOpen && "bg-muted/40",
-                      )}
-                    >
-                      <td className="py-2 text-muted-foreground">
-                        {isOpen ? (
-                          <ChevronDown className="h-4 w-4" />
-                        ) : (
-                          <ChevronRight className="h-4 w-4" />
-                        )}
-                      </td>
-                      <td className="py-2 pr-3">
-                        <div className="flex items-baseline gap-2">
-                          <span className="text-xs tabular-nums text-muted-foreground">
-                            {i + 1}
-                          </span>
-                          <span className="font-medium">{z.zone}</span>
-                        </div>
-                        <div className="text-[11px] text-muted-foreground">
-                          {z.equipment.length} equipment mapped
-                        </div>
-                      </td>
-                      <td className="py-2 pl-3 text-right tabular-nums font-medium">
-                        {num(z.totalKwh, 1)}
-                      </td>
-                      <td className="py-2 pl-3 text-right tabular-nums">{num(z.co2Kg, 1)}</td>
-                      <td className="py-2 pl-3 text-right tabular-nums">{num(z.costGbp, 2)}</td>
-                      <td className="py-2 pl-3 text-right tabular-nums">{num(z.dayKwh, 1)}</td>
-                      <td className="py-2 pl-3 text-right tabular-nums">{num(z.nightKwh, 1)}</td>
-                    </tr>
                     {isOpen ? (
                       <tr className="border-t bg-muted/20">
                         <td colSpan={COLUMNS.length + 1} className="p-4">
