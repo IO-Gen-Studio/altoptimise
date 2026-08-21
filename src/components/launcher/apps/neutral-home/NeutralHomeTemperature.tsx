@@ -1,26 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { Thermometer, ThermometerSnowflake, ThermometerSun, Timer } from "lucide-react";
-import {
-  CartesianGrid,
-  Legend,
-  Line,
-  LineChart,
-  ReferenceArea,
-  ResponsiveContainer,
-  Tooltip as RTooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { loadNhRoomHours, type NhRoomMap } from "@/lib/neutral-home.functions";
 import type { CircuitRecord } from "@/lib/neutral-home/analytics";
+import { zoneNames, zoneRooms, type ClassMap } from "@/lib/neutral-home/zones";
 import {
-  combineRooms,
-  dailySeries,
   hourOfDayMatrix,
   roomStats,
   siteSummary,
@@ -55,6 +42,7 @@ export function NeutralHomeTemperature({
   band,
   roomMap,
   circuits,
+  classes,
 }: {
   periodId: string;
   periodLabel: string;
@@ -62,6 +50,7 @@ export function NeutralHomeTemperature({
   band: ComfortBand;
   roomMap: NhRoomMap[];
   circuits: CircuitRecord[];
+  classes: ClassMap;
 }) {
   const [rows, setRows] = useState<RoomHourRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -88,8 +77,6 @@ export function NeutralHomeTemperature({
 
   const stats = useMemo(() => roomStats(rows, band), [rows, band]);
   const summary = useMemo(() => siteSummary(stats), [stats]);
-  const topRooms = useMemo(() => stats.slice(0, 5).map((s) => s.room), [stats]);
-  const daily = useMemo(() => dailySeries(rows, topRooms), [rows, topRooms]);
   const matrix = useMemo(() => hourOfDayMatrix(rows), [rows]);
   const mapping = useMemo(() => {
     const m = new Map<string, string>();
@@ -97,7 +84,14 @@ export function NeutralHomeTemperature({
       if (r.site_id === siteId && r.circuit_name) m.set(r.room_name, r.circuit_name);
     return m;
   }, [roomMap, siteId]);
-  const combined = useMemo(() => combineRooms(stats, circuits, mapping), [stats, circuits, mapping]);
+  const zones = useMemo(() => zoneNames(circuits, classes), [circuits, classes]);
+  const zonesWithTemp = useMemo(() => {
+    const byZone = zoneRooms(mapping, classes);
+    const withData = new Set(stats.map((s) => s.room));
+    let n = 0;
+    for (const [, rooms] of byZone) if (rooms.some((r) => withData.has(r))) n += 1;
+    return n;
+  }, [mapping, classes, stats]);
   const outOfBand = useMemo(() => stats.filter((s) => s.flag !== "ok"), [stats]);
 
   if (loading)
@@ -132,8 +126,8 @@ export function NeutralHomeTemperature({
         <Stat
           icon={Thermometer}
           label="Zones Monitored"
-          value={String(summary.rooms)}
-          sub={`${summary.hours.toLocaleString()} room-hours`}
+          value={`${zonesWithTemp} of ${zones.length}`}
+          sub={`${summary.rooms} rooms · ${summary.hours.toLocaleString()} room-hours`}
         />
         <Stat
           icon={Timer}
@@ -245,7 +239,7 @@ export function NeutralHomeTemperature({
           </ScrollArea>
         </CardContent>
       </Card>
-
+    </div>
   );
 }
 
