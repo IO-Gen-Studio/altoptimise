@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, LayoutGrid, ArrowDown, ArrowUp } from "lucide-react";
 import {
   CartesianGrid,
@@ -17,7 +17,13 @@ import { cn } from "@/lib/utils";
 import { loadNhRoomHours, type NhRoomMap } from "@/lib/neutral-home.functions";
 import type { CircuitRecord } from "@/lib/neutral-home/analytics";
 import type { ComfortBand, RoomHourRow } from "@/lib/neutral-home/temp-analytics";
-import { zoneAggregates, zoneDailyTemps, type ClassMap, type ZoneAgg } from "@/lib/neutral-home/zones";
+import {
+  zoneAggregates,
+  zoneDailyTemps,
+  type ClassMap,
+  type ZoneAgg,
+  type ZoneTempSeries,
+} from "@/lib/neutral-home/zones";
 
 const num = (v: number, dp = 0) =>
   v.toLocaleString(undefined, { minimumFractionDigits: dp, maximumFractionDigits: dp });
@@ -88,7 +94,10 @@ export function NeutralHomeZones({
   }, [roomMap, siteId]);
 
   const temps = useMemo(
-    () => (rows.length ? zoneDailyTemps(rows, band, mapping, classes) : new Map()),
+    () =>
+      rows.length
+        ? zoneDailyTemps(rows, band, mapping, classes)
+        : new Map<string, ZoneTempSeries>(),
     [rows, band, mapping, classes],
   );
 
@@ -179,9 +188,8 @@ export function NeutralHomeZones({
               {sorted.map((z, i) => {
                 const isOpen = open === z.zone;
                 return (
-                  <>
+                  <Fragment key={z.zone}>
                     <tr
-                      key={z.zone}
                       onClick={() => setOpen(isOpen ? null : z.zone)}
                       className={cn(
                         "cursor-pointer border-t transition-colors hover:bg-muted/50",
@@ -216,13 +224,13 @@ export function NeutralHomeZones({
                       <td className="py-2 pl-3 text-right tabular-nums">{num(z.nightKwh, 1)}</td>
                     </tr>
                     {isOpen ? (
-                      <tr key={`${z.zone}-detail`} className="border-t bg-muted/20">
+                      <tr className="border-t bg-muted/20">
                         <td colSpan={COLUMNS.length + 1} className="p-4">
                           <ZoneDetail zone={z} band={band} temp={temps.get(z.zone)} />
                         </td>
                       </tr>
                     ) : null}
-                  </>
+                  </Fragment>
                 );
               })}
             </tbody>
@@ -240,7 +248,7 @@ function ZoneDetail({
 }: {
   zone: ZoneAgg;
   band: ComfortBand;
-  temp?: { daily: { date: string; avg: number }[]; avg: number; min: number; max: number; hours: number; hoursInBand: number; rooms: string[] };
+  temp?: ZoneTempSeries;
 }) {
   return (
     <div className="space-y-4">
