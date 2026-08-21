@@ -1,5 +1,13 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, LayoutGrid, ArrowDown, ArrowUp } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  LayoutGrid,
+  ArrowDown,
+  ArrowUp,
+  ThermometerSnowflake,
+  ThermometerSun,
+} from "lucide-react";
 import {
   CartesianGrid,
   Line,
@@ -28,7 +36,14 @@ import {
 const num = (v: number, dp = 0) =>
   v.toLocaleString(undefined, { minimumFractionDigits: dp, maximumFractionDigits: dp });
 
-type SortKey = "zone" | "totalKwh" | "co2Kg" | "costGbp" | "dayKwh" | "nightKwh";
+type SortKey =
+  | "zone"
+  | "totalKwh"
+  | "co2Kg"
+  | "costGbp"
+  | "dayKwh"
+  | "nightKwh"
+  | "avgTemp";
 
 const COLUMNS: { key: SortKey; label: string; align: "left" | "right" }[] = [
   { key: "zone", label: "Zone", align: "left" },
@@ -37,7 +52,17 @@ const COLUMNS: { key: SortKey; label: string; align: "left" | "right" }[] = [
   { key: "costGbp", label: "Cost (£)", align: "right" },
   { key: "dayKwh", label: "Day (kWh)", align: "right" },
   { key: "nightKwh", label: "Night (kWh)", align: "right" },
+  { key: "avgTemp", label: "Avg temp (°C)", align: "right" },
 ];
+
+function heatClass(v: number | null, band: ComfortBand) {
+  if (v == null) return "bg-muted";
+  if (v > band.max + 2) return "bg-red-500/70";
+  if (v > band.max) return "bg-amber-500/60";
+  if (v < band.min - 2) return "bg-blue-500/60";
+  if (v < band.min) return "bg-sky-400/50";
+  return "bg-emerald-500/50";
+}
 
 /**
  * Zone league table: each zone rolled up with the equipment mapped into it,
@@ -101,16 +126,36 @@ export function NeutralHomeZones({
     [rows, band, mapping, classes],
   );
 
+  /** warmest / coldest zone by average temperature, for the grid tags */
+  const extremes = useMemo(() => {
+    let warmest: string | null = null;
+    let coldest: string | null = null;
+    let hi = -Infinity;
+    let lo = Infinity;
+    for (const [zone, t] of temps) {
+      if (t.avg > hi) {
+        hi = t.avg;
+        warmest = zone;
+      }
+      if (t.avg < lo) {
+        lo = t.avg;
+        coldest = zone;
+      }
+    }
+    return { warmest, coldest };
+  }, [temps]);
+
   const sorted = useMemo(() => {
     const list = [...aggs];
     const { key, dir } = sort;
+    const val = (z: ZoneAgg) =>
+      key === "avgTemp" ? (temps.get(z.zone)?.avg ?? -Infinity) : (z[key as keyof ZoneAgg] as number);
     list.sort((a, b) => {
-      const cmp =
-        key === "zone" ? a.zone.localeCompare(b.zone) : (a[key] as number) - (b[key] as number);
+      const cmp = key === "zone" ? a.zone.localeCompare(b.zone) : val(a) - val(b);
       return dir === "asc" ? cmp : -cmp;
     });
     return list;
-  }, [aggs, sort]);
+  }, [aggs, sort, temps]);
 
   const toggleSort = (key: SortKey) =>
     setSort((s) =>
@@ -187,6 +232,9 @@ export function NeutralHomeZones({
             <tbody>
               {sorted.map((z, i) => {
                 const isOpen = open === z.zone;
+                const t = temps.get(z.zone);
+                const isWarmest = extremes.warmest === z.zone;
+                const isColdest = extremes.coldest === z.zone;
                 return (
                   <Fragment key={z.zone}>
                     <tr
@@ -204,11 +252,24 @@ export function NeutralHomeZones({
                         )}
                       </td>
                       <td className="py-2 pr-3">
-                        <div className="flex items-baseline gap-2">
+                        <div className="flex flex-wrap items-baseline gap-2">
                           <span className="text-xs tabular-nums text-muted-foreground">
                             {i + 1}
                           </span>
                           <span className="font-medium">{z.zone}</span>
+                          {isWarmest ? (
+                            <Badge
+                              variant="outline"
+                              className="gap-1 border-amber-500/50 text-amber-600"
+                            >
+                              <ThermometerSun className="h-3 w-3" /> Warmest
+                            </Badge>
+                          ) : null}
+                          {isColdest ? (
+                            <Badge variant="outline" className="gap-1 border-sky-500/50 text-sky-600">
+                              <ThermometerSnowflake className="h-3 w-3" /> Coldest
+                            </Badge>
+                          ) : null}
                         </div>
                         <div className="text-[11px] text-muted-foreground">
                           {z.equipment.length} equipment mapped
@@ -221,6 +282,9 @@ export function NeutralHomeZones({
                       <td className="py-2 pl-3 text-right tabular-nums">{num(z.costGbp, 2)}</td>
                       <td className="py-2 pl-3 text-right tabular-nums">{num(z.dayKwh, 1)}</td>
                       <td className="py-2 pl-3 text-right tabular-nums">{num(z.nightKwh, 1)}</td>
+                      <td className="py-2 pl-3 text-right tabular-nums">
+                        {t ? `${num(t.avg, 1)}` : "—"}
+                      </td>
                     </tr>
                     {isOpen ? (
                       <tr className="border-t bg-muted/20">
@@ -321,7 +385,6 @@ function ZoneDetail({
         <div className="space-y-2">
           {temp ? (
             <>
-              <Stat label="Average temperature" value={`${num(temp.avg, 1)}°C`} />
               <Stat label="Highest temperature" value={`${num(temp.max, 1)}°C`} />
               <Stat label="Lowest temperature" value={`${num(temp.min, 1)}°C`} />
               <p className="text-[11px] text-muted-foreground">
@@ -337,6 +400,40 @@ function ZoneDetail({
           )}
         </div>
       </div>
+
+      {temp?.grid.length ? (
+        <div className="rounded-lg border bg-card p-3">
+          <div className="pb-2 text-xs font-medium text-muted-foreground">
+            Hourly temperature heatmap · green in band ({band.min}–{band.max}°C), amber/red above,
+            blue below
+          </div>
+          <div className="overflow-x-auto">
+            <div className="min-w-[680px] space-y-1">
+              <div className="flex gap-1 pl-14">
+                {Array.from({ length: 24 }, (_, h) => (
+                  <div key={h} className="w-5 text-center text-[10px] text-muted-foreground">
+                    {h}
+                  </div>
+                ))}
+              </div>
+              {temp.grid.map((row) => (
+                <div key={row.date} className="flex items-center gap-1">
+                  <div className="w-14 pr-1 text-[10px] tabular-nums text-muted-foreground">
+                    {row.date}
+                  </div>
+                  {row.hours.map((v, h) => (
+                    <div
+                      key={h}
+                      title={`${row.date} ${String(h).padStart(2, "0")}:00 · ${v == null ? "no data" : `${v}°C`}`}
+                      className={cn("h-4 w-5 rounded-sm", heatClass(v, band))}
+                    />
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {zone.equipment.length ? (
         <div className="rounded-lg border bg-card p-3">

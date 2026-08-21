@@ -898,18 +898,6 @@ export function NeutralHomeDashboard({
             </CardContent>
           </Card>
 
-          <NeutralHomeZones
-            circuits={circuits}
-            classes={classes}
-            roomMap={bundle.roomMap}
-            siteId={siteId}
-            band={{
-              min: settings?.comfort_min_c ?? DEFAULT_BAND.min,
-              max: settings?.comfort_max_c ?? DEFAULT_BAND.max,
-            }}
-            temperaturePeriodId={period.source_temperature_filename ? period.id : null}
-          />
-
           {period.source_temperature_filename ? (
             <NeutralHomeTemperature
               periodId={period.id}
@@ -921,8 +909,21 @@ export function NeutralHomeDashboard({
               }}
               roomMap={bundle.roomMap}
               circuits={circuits}
+              classes={classes}
             />
           ) : null}
+
+          <NeutralHomeZones
+            circuits={circuits}
+            classes={classes}
+            roomMap={bundle.roomMap}
+            siteId={siteId}
+            band={{
+              min: settings?.comfort_min_c ?? DEFAULT_BAND.min,
+              max: settings?.comfort_max_c ?? DEFAULT_BAND.max,
+            }}
+            temperaturePeriodId={period.source_temperature_filename ? period.id : null}
+          />
         </>
       )}
     </div>

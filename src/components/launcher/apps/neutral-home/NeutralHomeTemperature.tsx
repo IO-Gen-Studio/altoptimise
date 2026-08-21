@@ -1,26 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { Thermometer, ThermometerSnowflake, ThermometerSun, Timer } from "lucide-react";
-import {
-  CartesianGrid,
-  Legend,
-  Line,
-  LineChart,
-  ReferenceArea,
-  ResponsiveContainer,
-  Tooltip as RTooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { loadNhRoomHours, type NhRoomMap } from "@/lib/neutral-home.functions";
 import type { CircuitRecord } from "@/lib/neutral-home/analytics";
+import { zoneNames, zoneRooms, type ClassMap } from "@/lib/neutral-home/zones";
 import {
-  combineRooms,
-  dailySeries,
   hourOfDayMatrix,
   roomStats,
   siteSummary,
@@ -55,6 +42,7 @@ export function NeutralHomeTemperature({
   band,
   roomMap,
   circuits,
+  classes,
 }: {
   periodId: string;
   periodLabel: string;
@@ -62,6 +50,7 @@ export function NeutralHomeTemperature({
   band: ComfortBand;
   roomMap: NhRoomMap[];
   circuits: CircuitRecord[];
+  classes: ClassMap;
 }) {
   const [rows, setRows] = useState<RoomHourRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -88,8 +77,6 @@ export function NeutralHomeTemperature({
 
   const stats = useMemo(() => roomStats(rows, band), [rows, band]);
   const summary = useMemo(() => siteSummary(stats), [stats]);
-  const topRooms = useMemo(() => stats.slice(0, 5).map((s) => s.room), [stats]);
-  const daily = useMemo(() => dailySeries(rows, topRooms), [rows, topRooms]);
   const matrix = useMemo(() => hourOfDayMatrix(rows), [rows]);
   const mapping = useMemo(() => {
     const m = new Map<string, string>();
@@ -97,7 +84,14 @@ export function NeutralHomeTemperature({
       if (r.site_id === siteId && r.circuit_name) m.set(r.room_name, r.circuit_name);
     return m;
   }, [roomMap, siteId]);
-  const combined = useMemo(() => combineRooms(stats, circuits, mapping), [stats, circuits, mapping]);
+  const zones = useMemo(() => zoneNames(circuits, classes), [circuits, classes]);
+  const zonesWithTemp = useMemo(() => {
+    const byZone = zoneRooms(mapping, classes);
+    const withData = new Set(stats.map((s) => s.room));
+    let n = 0;
+    for (const [, rooms] of byZone) if (rooms.some((r) => withData.has(r))) n += 1;
+    return n;
+  }, [mapping, classes, stats]);
   const outOfBand = useMemo(() => stats.filter((s) => s.flag !== "ok"), [stats]);
 
   if (loading)
@@ -132,8 +126,8 @@ export function NeutralHomeTemperature({
         <Stat
           icon={Thermometer}
           label="Zones Monitored"
-          value={String(summary.rooms)}
-          sub={`${summary.hours.toLocaleString()} room-hours`}
+          value={`${zonesWithTemp} of ${zones.length}`}
+          sub={`${summary.rooms} rooms · ${summary.hours.toLocaleString()} room-hours`}
         />
         <Stat
           icon={Timer}
@@ -154,49 +148,6 @@ export function NeutralHomeTemperature({
           sub={summary.coolest?.room ?? ""}
         />
       </div>
-
-      <Card>
-        <CardContent className="p-5">
-          <h2 className="text-base font-semibold tracking-tight">Daily average temperature</h2>
-          <p className="pb-3 text-sm text-muted-foreground">
-            Five warmest rooms · shaded band is the {band.min}–{band.max} °C comfort target
-          </p>
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={daily} margin={{ top: 8, right: 12, bottom: 0, left: -18 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis dataKey="date" tick={{ fontSize: 11 }} stroke="var(--muted-foreground)" />
-                <YAxis
-                  tick={{ fontSize: 11 }}
-                  stroke="var(--muted-foreground)"
-                  unit="°"
-                  domain={["auto", "auto"]}
-                />
-                <ReferenceArea y1={band.min} y2={band.max} fill="var(--chart-2)" fillOpacity={0.1} />
-                <RTooltip
-                  contentStyle={{
-                    background: "var(--card)",
-                    border: "1px solid var(--border)",
-                    borderRadius: 8,
-                    fontSize: 12,
-                  }}
-                />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                {topRooms.map((room, i) => (
-                  <Line
-                    key={room}
-                    type="monotone"
-                    dataKey={room}
-                    stroke={LINE_COLORS[i % LINE_COLORS.length]}
-                    strokeWidth={2}
-                    dot={false}
-                  />
-                ))}
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </CardContent>
-      </Card>
 
       <Card>
         <CardContent className="p-5">
@@ -286,62 +237,6 @@ export function NeutralHomeTemperature({
               ))}
             </div>
           </ScrollArea>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="p-5">
-          <h2 className="text-base font-semibold tracking-tight">
-            Temperature vs. consumption
-          </h2>
-          <p className="pb-3 text-sm text-muted-foreground">
-            Rooms mapped to a meter. Overheating cost is the share of heating effort spent above{" "}
-            {band.max} °C applied to that meter's usage and cost.
-          </p>
-          {!combined.length ? (
-            <p className="text-sm text-muted-foreground">
-              No rooms are mapped to meters yet — map them in the site configuration.
-            </p>
-          ) : (
-            <div className="overflow-x-auto rounded-lg border">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-xs text-muted-foreground">
-                    <th className="px-3 py-2 font-medium">Room</th>
-                    <th className="px-3 py-2 font-medium">Meter</th>
-                    <th className="px-3 py-2 text-right font-medium">Avg °C</th>
-                    <th className="px-3 py-2 text-right font-medium">kWh</th>
-                    <th className="px-3 py-2 text-right font-medium">Cost £</th>
-                    <th className="px-3 py-2 text-right font-medium">Overheat share</th>
-                    <th className="px-3 py-2 text-right font-medium">Wasted kWh</th>
-                    <th className="px-3 py-2 text-right font-medium">Wasted £</th>
-                    <th className="px-3 py-2 text-right font-medium">kWh / degree-hour</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {combined.map((r) => (
-                    <tr key={r.room} className="border-t">
-                      <td className="px-3 py-2">{r.room}</td>
-                      <td className="px-3 py-2 text-muted-foreground">{r.circuit}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">{num(r.avg)}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">{num(r.usage_kwh, 0)}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">{num(r.cost_gbp, 2)}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">
-                        {num(r.wasteShare * 100, 1)}%
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums">{num(r.wastedKwh, 0)}</td>
-                      <td className="px-3 py-2 text-right tabular-nums font-medium">
-                        {num(r.wastedGbp, 2)}
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums">
-                        {r.kwhPerDegreeHour == null ? "—" : num(r.kwhPerDegreeHour, 2)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
         </CardContent>
       </Card>
     </div>
