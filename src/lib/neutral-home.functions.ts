@@ -282,8 +282,12 @@ export const saveNhPeriod = createServerFn({ method: "POST" })
         .from("neutral_home_periods" as any)
         .update({
           label: data.label,
-          source_headline_filename: data.source_headline_filename ?? null,
-          source_daynight_filename: data.source_daynight_filename ?? null,
+          ...(data.source_headline_filename
+            ? { source_headline_filename: data.source_headline_filename }
+            : {}),
+          ...(data.source_daynight_filename
+            ? { source_daynight_filename: data.source_daynight_filename }
+            : {}),
           ...(data.source_temperature_filename
             ? { source_temperature_filename: data.source_temperature_filename }
             : {}),
@@ -291,11 +295,13 @@ export const saveNhPeriod = createServerFn({ method: "POST" })
         .eq("id", periodId);
       if (error) throw new Error(error.message);
       if (data.mode === "replace") {
-        const { error: delErr } = await supabase
-          .from("neutral_home_circuits" as any)
-          .delete()
-          .eq("period_id", periodId);
-        if (delErr) throw new Error(delErr.message);
+        if (data.circuits.length) {
+          const { error: delErr } = await supabase
+            .from("neutral_home_circuits" as any)
+            .delete()
+            .eq("period_id", periodId);
+          if (delErr) throw new Error(delErr.message);
+        }
         if (data.hasTemperature) {
           const { error: delTemp } = await supabase
             .from("neutral_home_room_hours" as any)
