@@ -131,7 +131,7 @@ export function NeutralHomeTemperature({
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Stat
           icon={Thermometer}
-          label="Rooms monitored"
+          label="Zones Monitored"
           value={String(summary.rooms)}
           sub={`${summary.hours.toLocaleString()} room-hours`}
         />
