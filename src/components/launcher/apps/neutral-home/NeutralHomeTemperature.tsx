@@ -137,19 +137,19 @@ export function NeutralHomeTemperature({
         />
         <Stat
           icon={Timer}
-          label="Hours in comfort band"
+          label="Hours in Comfort Band"
           value={`${num(summary.inBandPct, 1)}%`}
           sub={`${band.min}–${band.max} °C`}
         />
         <Stat
           icon={ThermometerSun}
-          label="Warmest room"
+          label="Warmest Zone"
           value={summary.warmest ? `${num(summary.warmest.avg)} °C` : "—"}
           sub={summary.warmest?.room ?? ""}
         />
         <Stat
           icon={ThermometerSnowflake}
-          label="Coolest room"
+          label="Coolest Zone"
           value={summary.coolest ? `${num(summary.coolest.avg)} °C` : "—"}
           sub={summary.coolest?.room ?? ""}
         />
