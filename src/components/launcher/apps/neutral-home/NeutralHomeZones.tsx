@@ -1,5 +1,13 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, LayoutGrid, ArrowDown, ArrowUp } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  LayoutGrid,
+  ArrowDown,
+  ArrowUp,
+  ThermometerSnowflake,
+  ThermometerSun,
+} from "lucide-react";
 import {
   CartesianGrid,
   Line,
