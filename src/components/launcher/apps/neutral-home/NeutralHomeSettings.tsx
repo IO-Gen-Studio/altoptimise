@@ -614,21 +614,22 @@ function UploadDrawer({
   const [busy, setBusy] = useState(false);
 
   const analyse = async () => {
-    if (!headline) {
-      toast.error("The Headline Usage Report is required");
+    if (!headline && !daynight && !temps.length) {
+      toast.error("Pick at least one report to upload");
       return;
     }
     setBusy(true);
     const t = toast.loading("Parsing reports…");
     try {
       const [h, d] = await Promise.all([
-        parseHeadlineReport(headline),
+        headline ? parseHeadlineReport(headline) : Promise.resolve(null),
         daynight ? parseDayNightReport(daynight) : Promise.resolve(null),
       ]);
-      const merged = mergeReports(h, d);
+      const merged = h || d ? mergeReports(h, d) : null;
       setResult(merged);
-      setLabel(merged.range?.label ?? "");
+      if (merged?.range) setLabel(merged.range.label);
 
+      let temp: TemperatureReport | null = null;
       if (temps.length) {
         const parsed: TemperatureReport[] = [];
         for (const f of temps) {
@@ -639,18 +640,37 @@ function UploadDrawer({
             ),
           );
         }
-        setTempResult(mergeTemperatureReports(parsed));
+        temp = mergeTemperatureReports(parsed);
         setProgress("");
-      } else {
-        setTempResult(null);
       }
-      toast.success(`Parsed ${merged.circuits.length} circuits`, { id: t });
+      setTempResult(temp);
+      if (!merged?.range && temp?.startISO && temp.endISO) {
+        setLabel((l) => l || monthLabel(temp!.startISO!));
+      }
+      toast.success(
+        merged
+          ? `Parsed ${merged.circuits.length} circuits`
+          : `Parsed ${temp?.rooms.length ?? 0} rooms`,
+        { id: t },
+      );
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not parse the files", { id: t });
     } finally {
       setBusy(false);
     }
   };
+
+  /** Period range: from the usage reports when present, otherwise from the temperature file. */
+  const range = result?.range
+    ? result.range
+    : tempResult?.startISO && tempResult.endISO
+      ? {
+          startISO: tempResult.startISO,
+          endISO: tempResult.endISO,
+          label: monthLabel(tempResult.startISO),
+        }
+      : null;
+
 
   const commit = async () => {
     if (!result || !result.range) return;
