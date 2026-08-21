@@ -816,7 +816,10 @@ function UploadDrawer({
         "The temperature date range does not overlap the usage period — combined analysis will be empty.",
       );
   }
-  const blocked = !result || !!v?.errors.length || !!tempErrors.length;
+  const analysed = !!result || !!tempResult;
+  if (analysed && !range)
+    tempErrors.push("Could not read a reporting date range from the uploaded file(s).");
+  const blocked = !analysed || !range || !!v?.errors.length || !!tempErrors.length;
 
   return (
     <Dialog
@@ -829,14 +832,19 @@ function UploadDrawer({
         <DialogHeader>
           <DialogTitle>Upload Envisij reports — {site.name}</DialogTitle>
           <DialogDescription>
-            The Headline Usage Report is the key upload. The Day/Night report adds the day/night
-            split and the Temperature History adds room-level comfort analysis — both are optional.
+            Upload any combination of the three reports — each one can be uploaded on its own. The
+            Headline report carries cost, carbon and intensity, the Day/Night report adds the
+            day/night split, and the Temperature History adds room-level comfort analysis.
             Temperature files are aggregated to hourly averages in your browser before saving.
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-3 sm:grid-cols-3">
-          <FileSlot label="1. Headline Usage Report" file={headline} onPick={setHeadline} />
+          <FileSlot
+            label="1. Headline Usage Report (optional)"
+            file={headline}
+            onPick={setHeadline}
+          />
           <FileSlot
             label="2. Day/Night Group Overview (optional)"
             file={daynight}
@@ -872,15 +880,19 @@ function UploadDrawer({
           </RadioGroup>
         </div>
 
-        {result ? (
+        {analysed ? (
           <div className="space-y-3 rounded-lg border p-4">
             <div className="flex flex-wrap items-center gap-3 text-sm">
-              <Badge variant="outline">{v?.headlineCount} headline rows</Badge>
-              <Badge variant="outline">{v?.daynightCount} day/night rows</Badge>
-              <Badge variant="outline">{result.circuits.length} joined circuits</Badge>
-              {result.range ? (
+              {result ? (
+                <>
+                  <Badge variant="outline">{v?.headlineCount} headline rows</Badge>
+                  <Badge variant="outline">{v?.daynightCount} day/night rows</Badge>
+                  <Badge variant="outline">{result.circuits.length} joined circuits</Badge>
+                </>
+              ) : null}
+              {range ? (
                 <Badge variant="outline">
-                  {result.range.startISO} → {result.range.endISO}
+                  {range.startISO} → {range.endISO}
                 </Badge>
               ) : null}
               {tempResult ? (
@@ -925,7 +937,7 @@ function UploadDrawer({
             ) : null}
             {!v?.errors.length && !v?.warnings.length && !tempErrors.length && !tempWarnings.length ? (
               <div className="flex items-center gap-2 text-sm text-emerald-600">
-                <CheckCircle2 className="h-4 w-4" /> All circuits matched cleanly.
+                <CheckCircle2 className="h-4 w-4" /> Everything parsed cleanly.
               </div>
             ) : null}
           </div>
@@ -935,7 +947,7 @@ function UploadDrawer({
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button variant="secondary" onClick={analyse} disabled={busy || !headline}>
+          <Button variant="secondary" onClick={analyse} disabled={busy || (!headline && !daynight && !temps.length)}>
             {busy ? "Working…" : "Validate"}
           </Button>
           <Button onClick={commit} disabled={busy || blocked}>
