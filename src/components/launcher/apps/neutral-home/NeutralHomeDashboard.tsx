@@ -48,6 +48,8 @@ import {
   NIGHT_FLAG_THRESHOLD,
   type CircuitRecord,
 } from "@/lib/neutral-home/analytics";
+import { NeutralHomeTemperature } from "./NeutralHomeTemperature";
+import { DEFAULT_BAND } from "@/lib/neutral-home/temp-analytics";
 import {
   allMetricDefs,
   applyCategoryOverrides,
@@ -845,6 +847,20 @@ export function NeutralHomeDashboard({
               </div>
             </CardContent>
           </Card>
+
+          {period.source_temperature_filename ? (
+            <NeutralHomeTemperature
+              periodId={period.id}
+              periodLabel={period.label}
+              siteId={siteId}
+              band={{
+                min: settings?.comfort_min_c ?? DEFAULT_BAND.min,
+                max: settings?.comfort_max_c ?? DEFAULT_BAND.max,
+              }}
+              roomMap={bundle.roomMap}
+              circuits={circuits}
+            />
+          ) : null}
         </>
       )}
     </div>
