@@ -207,6 +207,8 @@ export interface ZoneTempSeries {
   zone: string;
   rooms: string[];
   daily: { date: string; avg: number }[];
+  /** day × hour-of-day average temperature grid for the period */
+  grid: { date: string; hours: (number | null)[] }[];
   avg: number;
   min: number;
   max: number;
