@@ -386,6 +386,7 @@ export const loadNhRoomHours = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({ periodId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }): Promise<RoomHourRow[]> => {
     const out: RoomHourRow[] = [];
+    const seen = new Set<string>();
     const pageSize = 1000;
     // Keyset pagination: deep .range() offsets make Postgres re-scan and sort
     // every earlier row, which times out on large periods.
@@ -403,10 +404,13 @@ export const loadNhRoomHours = createServerFn({ method: "POST" })
       const { data: rows, error } = await q;
       if (error) throw new Error(error.message);
       const batch = (rows ?? []) as unknown as RoomHourRow[];
-      const fresh = cursor
-        ? batch.filter((r) => !out.some((o) => o.hour_ts === r.hour_ts && o.room_name === r.room_name))
-        : batch;
-      out.push(...fresh);
+      for (const r of batch) {
+        const key = `${r.hour_ts}|${r.room_name}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(r);
+      }
+
       if (batch.length < pageSize) break;
       const nextCursor = String(batch[batch.length - 1].hour_ts);
       if (nextCursor === cursor) break;
