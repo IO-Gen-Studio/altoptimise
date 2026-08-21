@@ -520,67 +520,11 @@ const MeterCategoryInput = z.object({
   zone_circuit_name: z.string().trim().max(300).nullable().optional(),
 });
 
-type MeterCategoryPatch = z.infer<typeof MeterCategoryInput>;
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
-async function applyMeterCategory(
-  supabase: any,
-  patch: MeterCategoryPatch,
-): Promise<void> {
-  const table = () => supabase.from("neutral_home_meter_categories" as any);
-  const { data: existing, error: findErr } = await table()
-    .select("category,kind,zone_circuit_name")
-    .eq("site_id", patch.site_id)
-    .eq("circuit_name", patch.circuit_name)
-    .maybeSingle();
-  if (findErr) throw new Error(findErr.message);
-
-  const row = (existing ?? null) as {
-    category: string | null;
-    kind: string | null;
-    zone_circuit_name: string | null;
-  } | null;
-
-  const next = {
-    category: patch.category !== undefined ? patch.category : (row?.category ?? null),
-    kind: (patch.kind ?? row?.kind ?? "other") as NhCircuitKind,
-    zone_circuit_name:
-      patch.zone_circuit_name !== undefined
-        ? patch.zone_circuit_name
-        : (row?.zone_circuit_name ?? null),
-  };
-  if (next.kind !== "equipment") next.zone_circuit_name = null;
-
-  // Nothing worth storing — drop the row so the circuit falls back to defaults.
-  if (!next.category && next.kind === "other" && !next.zone_circuit_name) {
-    if (row) {
-      const { error } = await table()
-        .delete()
-        .eq("site_id", patch.site_id)
-        .eq("circuit_name", patch.circuit_name);
-      if (error) throw new Error(error.message);
-    }
-    return;
-  }
-
-  const { error } = await table().upsert(
-    {
-      organization_id: patch.organization_id,
-      site_id: patch.site_id,
-      circuit_name: patch.circuit_name,
-      ...next,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "site_id,circuit_name" },
-  );
-  if (error) throw new Error(error.message);
-}
-/* eslint-enable @typescript-eslint/no-explicit-any */
-
 export const setNhMeterCategory = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => MeterCategoryInput.parse(d))
   .handler(async ({ data, context }) => {
+    const { applyMeterCategory } = await import("./neutral-home/meter-category.server");
     await applyMeterCategory(context.supabase, data);
     return { ok: true };
   });
@@ -599,6 +543,7 @@ export const setNhMeterCategoriesBulk = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => MeterCategoryBulkInput.parse(d))
   .handler(async ({ data, context }) => {
+    const { applyMeterCategory } = await import("./neutral-home/meter-category.server");
     for (const name of data.circuit_names) {
       await applyMeterCategory(context.supabase, {
         organization_id: data.organization_id,
