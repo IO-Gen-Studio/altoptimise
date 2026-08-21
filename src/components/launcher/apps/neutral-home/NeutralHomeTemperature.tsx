@@ -22,15 +22,6 @@ const LINE_COLORS = [
   "var(--chart-5)",
 ];
 
-function heatColor(v: number | null, band: ComfortBand) {
-  if (v == null) return "bg-muted";
-  if (v > band.max + 2) return "bg-red-500/70";
-  if (v > band.max) return "bg-amber-500/60";
-  if (v < band.min - 2) return "bg-blue-500/60";
-  if (v < band.min) return "bg-sky-400/50";
-  return "bg-emerald-500/50";
-}
-
 export function NeutralHomeTemperature({
   periodId,
   periodLabel,
@@ -73,7 +64,6 @@ export function NeutralHomeTemperature({
 
   const stats = useMemo(() => roomStats(rows, band), [rows, band]);
   const summary = useMemo(() => siteSummary(stats), [stats]);
-  const matrix = useMemo(() => hourOfDayMatrix(rows), [rows]);
   const mapping = useMemo(() => {
     const m = new Map<string, string>();
     for (const r of roomMap)
@@ -88,7 +78,6 @@ export function NeutralHomeTemperature({
     for (const [, rooms] of byZone) if (rooms.some((r) => withData.has(r))) n += 1;
     return n;
   }, [mapping, classes, stats]);
-  const outOfBand = useMemo(() => stats.filter((s) => s.flag !== "ok"), [stats]);
 
   if (loading)
     return (
