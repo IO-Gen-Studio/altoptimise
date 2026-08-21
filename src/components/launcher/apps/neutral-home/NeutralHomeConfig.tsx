@@ -44,6 +44,8 @@ import {
   METRIC_SOURCE_UNIT,
   type MetricSource,
 } from "@/lib/neutral-home/config";
+import { classMap } from "@/lib/neutral-home/zones";
+import { ZoneMappingTable } from "./ZoneMappingTable";
 
 interface Props {
   orgId: string;
@@ -109,6 +111,8 @@ export function NeutralHomeConfig({
     [bundle.roomMap, siteId],
   );
 
+  const classes = useMemo(() => classMap(bundle.meterCategories, siteId), [bundle.meterCategories, siteId]);
+
   const overrideOf = (name: string) =>
     bundle.meterCategories.find((o) => o.site_id === siteId && o.circuit_name === name)?.category ??
     "";
@@ -166,8 +170,8 @@ export function NeutralHomeConfig({
 
       <Tabs defaultValue="categories">
         <TabsList>
-          <TabsTrigger value="categories">Categories</TabsTrigger>
-          <TabsTrigger value="meters">Meter categories</TabsTrigger>
+          <TabsTrigger value="categories">Sub-categories</TabsTrigger>
+          <TabsTrigger value="meters">Circuits &amp; zones</TabsTrigger>
           <TabsTrigger value="metrics">Metrics</TabsTrigger>
           <TabsTrigger value="rooms">Rooms &amp; comfort</TabsTrigger>
           <TabsTrigger value="comparison">Period comparison</TabsTrigger>
@@ -296,60 +300,16 @@ export function NeutralHomeConfig({
         </TabsContent>
 
         <TabsContent value="meters" className="mt-4">
-          {!circuitNames.length ? (
-            <p className="text-sm text-muted-foreground">Upload a period for this site first.</p>
-          ) : (
-            <ScrollArea className="h-[420px] rounded-lg border">
-              <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-card">
-                  <tr className="text-left text-xs text-muted-foreground">
-                    <th className="px-4 py-2 font-medium">Meter / circuit</th>
-                    <th className="px-4 py-2 font-medium">Category</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {circuitNames.map(([name, autoCat]) => {
-                    const override = overrideOf(name);
-                    return (
-                      <tr key={name} className="border-t">
-                        <td className="px-4 py-2">{name}</td>
-                        <td className="px-4 py-2">
-                          <Select
-                            value={override || "auto"}
-                            disabled={disabled}
-                            onValueChange={(v) =>
-                              run("Updating category…", () =>
-                                setNhMeterCategory({
-                                  data: {
-                                    organization_id: orgId,
-                                    site_id: siteId,
-                                    circuit_name: name,
-                                    category: v === "auto" ? null : v,
-                                  },
-                                }),
-                              )
-                            }
-                          >
-                            <SelectTrigger className="w-56">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="auto">Auto ({autoCat})</SelectItem>
-                              {options.map((o) => (
-                                <SelectItem key={o.code} value={o.code}>
-                                  {o.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </ScrollArea>
-          )}
+          <ZoneMappingTable
+            orgId={orgId}
+            siteId={siteId}
+            circuits={circuitNames}
+            classes={classes}
+            overrideOf={overrideOf}
+            options={options}
+            disabled={disabled}
+            run={run}
+          />
         </TabsContent>
 
         <TabsContent value="metrics" className="mt-4 space-y-4">

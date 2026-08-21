@@ -49,6 +49,8 @@ import {
   type CircuitRecord,
 } from "@/lib/neutral-home/analytics";
 import { NeutralHomeTemperature } from "./NeutralHomeTemperature";
+import { NeutralHomeZones } from "./NeutralHomeZones";
+import { classMap, zoneOf } from "@/lib/neutral-home/zones";
 import { DEFAULT_BAND } from "@/lib/neutral-home/temp-analytics";
 import {
   allMetricDefs,
@@ -174,6 +176,7 @@ export function NeutralHomeDashboard({
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [showAggregates, setShowAggregates] = useState(true);
   const [groupByCategory, setGroupByCategory] = useState(false);
+  const [groupByZone, setGroupByZone] = useState(false);
   const [basis, setBasis] = useState<Basis>("kwh");
 
   const period = sitePeriods.find((p) => p.id === periodId) ?? sitePeriods[0];
@@ -200,10 +203,14 @@ export function NeutralHomeDashboard({
     [bundle.categories, siteId],
   );
   const labels = useMemo(() => categoryLabelMap(siteCategories), [siteCategories]);
+  const classes = useMemo(
+    () => classMap(bundle.meterCategories, siteId),
+    [bundle.meterCategories, siteId],
+  );
   const overrides = useMemo(() => {
     const m = new Map<string, string>();
     for (const o of bundle.meterCategories)
-      if (o.site_id === siteId) m.set(o.circuit_name, o.category);
+      if (o.site_id === siteId && o.category) m.set(o.circuit_name, o.category);
     return m;
   }, [bundle.meterCategories, siteId]);
 
@@ -320,7 +327,40 @@ export function NeutralHomeDashboard({
       isAggregate: c.is_aggregate,
     }));
 
-    if (groupByCategory) {
+    if (groupByZone) {
+      const map = new Map<string, LeagueRow>();
+      for (const r of rows) {
+        const zone = zoneOf(classes, r.name) ?? "Unassigned";
+        const member = {
+          name: r.name,
+          usage_kwh: r.usage_kwh,
+          cost_gbp: r.cost_gbp,
+          co2_kg: r.co2_kg,
+        };
+        const existing = map.get(zone);
+        if (existing) {
+          existing.usage_kwh += r.usage_kwh;
+          existing.co2_kg += r.co2_kg;
+          existing.cost_gbp += r.cost_gbp;
+          existing.day_kwh += r.day_kwh;
+          existing.night_kwh += r.night_kwh;
+          existing.meters = (existing.meters ?? 0) + 1;
+          existing.members!.push(member);
+        } else {
+          map.set(zone, {
+            ...r,
+            key: `zone:${zone}`,
+            name: zone,
+            category: zone,
+            categoryLabel: zone,
+            isAggregate: false,
+            meters: 1,
+            members: [member],
+          });
+        }
+      }
+      rows = Array.from(map.values());
+    } else if (groupByCategory) {
       const map = new Map<string, LeagueRow>();
       for (const r of rows) {
         const existing = map.get(r.category);
@@ -360,7 +400,7 @@ export function NeutralHomeDashboard({
             : a.categoryLabel.localeCompare(b.categoryLabel)) * dir
         : (a[sortKey] - b[sortKey]) * dir,
     );
-  }, [circuits, showAggregates, groupByCategory, sortKey, sortDir, labels]);
+  }, [circuits, showAggregates, groupByCategory, groupByZone, classes, sortKey, sortDir, labels]);
 
   const toggleSort = (key: SortKey) => {
     if (key === sortKey) {
@@ -715,7 +755,13 @@ export function NeutralHomeDashboard({
                       onCheckedChange={setGroupByCategory}
                     />
                     <Label htmlFor="nh-group" className="text-xs">
-                      Group by Category
+                      Group by Sub-category
+                    </Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Switch id="nh-zone-group" checked={groupByZone} onCheckedChange={setGroupByZone} />
+                    <Label htmlFor="nh-zone-group" className="text-xs">
+                      Group by Zone
                     </Label>
                   </div>
                 </div>
@@ -725,16 +771,16 @@ export function NeutralHomeDashboard({
                   <thead>
                     <tr className="text-left text-xs text-muted-foreground">
                       <SortTh
-                        label={groupByCategory ? "Category" : "Circuit"}
+                        label={groupByZone ? "Zone" : groupByCategory ? "Sub-category" : "Circuit"}
                         col="name"
                         sortKey={sortKey}
                         sortDir={sortDir}
                         onSort={toggleSort}
                         align="left"
                       />
-                      {groupByCategory ? null : (
+                      {groupByCategory || groupByZone ? null : (
                         <SortTh
-                          label="Category"
+                          label="Sub-category"
                           col="category"
                           sortKey={sortKey}
                           sortDir={sortDir}
@@ -789,7 +835,7 @@ export function NeutralHomeDashboard({
                               total
                             </Badge>
                           ) : null}
-                          {groupByCategory ? (
+                          {groupByCategory || groupByZone ? (
                             <HoverCard openDelay={80}>
                               <HoverCardTrigger asChild>
                                 <Badge variant="outline" className="ml-2 cursor-help text-[10px]">
@@ -851,6 +897,18 @@ export function NeutralHomeDashboard({
               </div>
             </CardContent>
           </Card>
+
+          <NeutralHomeZones
+            circuits={circuits}
+            classes={classes}
+            roomMap={bundle.roomMap}
+            siteId={siteId}
+            band={{
+              min: settings?.comfort_min_c ?? DEFAULT_BAND.min,
+              max: settings?.comfort_max_c ?? DEFAULT_BAND.max,
+            }}
+            temperaturePeriodId={period.source_temperature_filename ? period.id : null}
+          />
 
           {period.source_temperature_filename ? (
             <NeutralHomeTemperature

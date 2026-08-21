@@ -59,11 +59,18 @@ export interface NhCategoryRow {
   sort_order: number;
 }
 
+export type NhCircuitKind = "zone" | "equipment" | "other";
+
 export interface NhMeterCategory {
   site_id: string;
   organization_id: string;
   circuit_name: string;
-  category: string;
+  /** sub-category override; null keeps the auto-detected one */
+  category: string | null;
+  /** high-level classification */
+  kind: NhCircuitKind;
+  /** for equipment: the zone circuit it belongs to */
+  zone_circuit_name: string | null;
 }
 
 export interface NhMetric {
@@ -506,34 +513,70 @@ const MeterCategoryInput = z.object({
   organization_id: z.string().uuid(),
   site_id: z.string().uuid(),
   circuit_name: z.string().trim().min(1).max(300),
-  /** null clears the override and falls back to the auto-detected category */
-  category: z.string().trim().max(60).nullable(),
+  /** null clears the sub-category override and falls back to the auto-detected one */
+  category: z.string().trim().max(60).nullable().optional(),
+  kind: z.enum(["zone", "equipment", "other"]).optional(),
+  /** null clears the zone link */
+  zone_circuit_name: z.string().trim().max(300).nullable().optional(),
 });
 
 export const setNhMeterCategory = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => MeterCategoryInput.parse(d))
   .handler(async ({ data, context }) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const table = context.supabase.from("neutral_home_meter_categories" as any);
-    if (!data.category) {
-      const { error } = await table
-        .delete()
-        .eq("site_id", data.site_id)
-        .eq("circuit_name", data.circuit_name);
-      if (error) throw new Error(error.message);
-      return { ok: true };
-    }
-    const { error } = await table.upsert(
-      {
+    const { applyMeterCategory } = await import("./neutral-home/meter-category.server");
+    await applyMeterCategory(context.supabase, data);
+    return { ok: true };
+  });
+
+const MeterCategoryBulkInput = z.object({
+  organization_id: z.string().uuid(),
+  site_id: z.string().uuid(),
+  circuit_names: z.array(z.string().trim().min(1).max(300)).min(1).max(2000),
+  category: z.string().trim().max(60).nullable().optional(),
+  kind: z.enum(["zone", "equipment", "other"]).optional(),
+  zone_circuit_name: z.string().trim().max(300).nullable().optional(),
+});
+
+/** Applies the same classification change to many circuits at once. */
+export const setNhMeterCategoriesBulk = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => MeterCategoryBulkInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const { applyMeterCategory } = await import("./neutral-home/meter-category.server");
+    for (const name of data.circuit_names) {
+      await applyMeterCategory(context.supabase, {
         organization_id: data.organization_id,
         site_id: data.site_id,
-        circuit_name: data.circuit_name,
-        category: data.category,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "site_id,circuit_name" },
-    );
+        circuit_name: name,
+        ...(data.category !== undefined ? { category: data.category } : {}),
+        ...(data.kind !== undefined ? { kind: data.kind } : {}),
+        ...(data.zone_circuit_name !== undefined
+          ? { zone_circuit_name: data.zone_circuit_name }
+          : {}),
+      });
+    }
+    return { ok: true, updated: data.circuit_names.length };
+  });
+
+/** Clears every equipment link that points at the given zone circuit. */
+export const clearNhZoneLinks = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        site_id: z.string().uuid(),
+        zone_circuit_name: z.string().trim().min(1).max(300),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { error } = await context.supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .from("neutral_home_meter_categories" as any)
+      .update({ zone_circuit_name: null, updated_at: new Date().toISOString() })
+      .eq("site_id", data.site_id)
+      .eq("zone_circuit_name", data.zone_circuit_name);
     if (error) throw new Error(error.message);
     return { ok: true };
   });

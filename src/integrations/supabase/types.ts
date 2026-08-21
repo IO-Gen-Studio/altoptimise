@@ -530,25 +530,31 @@ export type Database = {
       }
       neutral_home_meter_categories: {
         Row: {
-          category: string
+          category: string | null
           circuit_name: string
+          kind: string
           organization_id: string
           site_id: string
           updated_at: string
+          zone_circuit_name: string | null
         }
         Insert: {
-          category: string
+          category?: string | null
           circuit_name: string
+          kind?: string
           organization_id: string
           site_id: string
           updated_at?: string
+          zone_circuit_name?: string | null
         }
         Update: {
-          category?: string
+          category?: string | null
           circuit_name?: string
+          kind?: string
           organization_id?: string
           site_id?: string
           updated_at?: string
+          zone_circuit_name?: string | null
         }
         Relationships: [
           {
