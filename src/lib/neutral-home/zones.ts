@@ -202,3 +202,79 @@ export function zoneComfort(
   }
   return out.sort((a, b) => b.avg - a.avg);
 }
+
+export interface ZoneTempSeries {
+  zone: string;
+  rooms: string[];
+  daily: { date: string; avg: number }[];
+  avg: number;
+  min: number;
+  max: number;
+  hours: number;
+  hoursInBand: number;
+}
+
+/** Daily average temperature per zone, plus avg/min/max across the period. */
+export function zoneDailyTemps(
+  rows: RoomHourRow[],
+  band: ComfortBand,
+  mapping: Map<string, string>,
+  cls: ClassMap,
+): Map<string, ZoneTempSeries> {
+  const byZone = zoneRooms(mapping, cls);
+  const zoneOfRoom = new Map<string, string>();
+  for (const [zone, rooms] of byZone) for (const r of rooms) zoneOfRoom.set(r, zone);
+
+  const acc = new Map<
+    string,
+    {
+      rooms: Set<string>;
+      days: Map<string, { sum: number; n: number }>;
+      sum: number;
+      n: number;
+      min: number;
+      max: number;
+      inBand: number;
+    }
+  >();
+
+  for (const r of rows) {
+    if (r.temp_avg == null) continue;
+    const zone = zoneOfRoom.get(r.room_name);
+    if (!zone) continue;
+    let a = acc.get(zone);
+    if (!a) {
+      a = { rooms: new Set(), days: new Map(), sum: 0, n: 0, min: Infinity, max: -Infinity, inBand: 0 };
+      acc.set(zone, a);
+    }
+    a.rooms.add(r.room_name);
+    const date = r.hour_ts.slice(0, 10);
+    const cur = a.days.get(date) ?? { sum: 0, n: 0 };
+    cur.sum += r.temp_avg;
+    cur.n += 1;
+    a.days.set(date, cur);
+    a.sum += r.temp_avg;
+    a.n += 1;
+    if (r.temp_avg < a.min) a.min = r.temp_avg;
+    if (r.temp_avg > a.max) a.max = r.temp_avg;
+    if (r.temp_avg >= band.min && r.temp_avg <= band.max) a.inBand += 1;
+  }
+
+  const out = new Map<string, ZoneTempSeries>();
+  for (const [zone, a] of acc) {
+    if (!a.n) continue;
+    out.set(zone, {
+      zone,
+      rooms: Array.from(a.rooms).sort((x, y) => x.localeCompare(y)),
+      daily: Array.from(a.days.entries())
+        .sort((x, y) => x[0].localeCompare(y[0]))
+        .map(([date, v]) => ({ date: date.slice(5), avg: Number((v.sum / v.n).toFixed(1)) })),
+      avg: Number((a.sum / a.n).toFixed(1)),
+      min: Number(a.min.toFixed(1)),
+      max: Number(a.max.toFixed(1)),
+      hours: a.n,
+      hoursInBand: a.inBand,
+    });
+  }
+  return out;
+}

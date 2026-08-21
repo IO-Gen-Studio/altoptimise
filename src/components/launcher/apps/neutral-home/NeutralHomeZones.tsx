@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
-import { LayoutGrid, Moon, PoundSterling, Thermometer, Zap } from "lucide-react";
+import { Fragment, useEffect, useMemo, useState } from "react";
+import { ChevronDown, ChevronRight, LayoutGrid, ArrowDown, ArrowUp } from "lucide-react";
 import {
-  Bar,
-  BarChart,
   CartesianGrid,
-  Legend,
+  Line,
+  LineChart,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip as RTooltip,
   XAxis,
@@ -13,29 +13,35 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { loadNhRoomHours, type NhRoomMap } from "@/lib/neutral-home.functions";
 import type { CircuitRecord } from "@/lib/neutral-home/analytics";
 import type { ComfortBand, RoomHourRow } from "@/lib/neutral-home/temp-analytics";
 import {
   zoneAggregates,
-  zoneComfort,
+  zoneDailyTemps,
   type ClassMap,
+  type ZoneAgg,
+  type ZoneTempSeries,
 } from "@/lib/neutral-home/zones";
 
 const num = (v: number, dp = 0) =>
   v.toLocaleString(undefined, { minimumFractionDigits: dp, maximumFractionDigits: dp });
 
-const FLAG_CLASS: Record<"ok" | "warn" | "bad", string> = {
-  ok: "text-emerald-600",
-  warn: "text-amber-600",
-  bad: "text-red-600",
-};
+type SortKey = "zone" | "totalKwh" | "co2Kg" | "costGbp" | "dayKwh" | "nightKwh";
+
+const COLUMNS: { key: SortKey; label: string; align: "left" | "right" }[] = [
+  { key: "zone", label: "Zone", align: "left" },
+  { key: "totalKwh", label: "Usage (kWh)", align: "right" },
+  { key: "co2Kg", label: "CO2 (kg)", align: "right" },
+  { key: "costGbp", label: "Cost (£)", align: "right" },
+  { key: "dayKwh", label: "Day (kWh)", align: "right" },
+  { key: "nightKwh", label: "Night (kWh)", align: "right" },
+];
 
 /**
- * Zone-level reporting: rolls each zone up with the equipment mapped into it
- * and joins the comfort data of the rooms that belong to those circuits.
+ * Zone league table: each zone rolled up with the equipment mapped into it,
+ * expandable to its daily average temperature against the comfort band.
  */
 export function NeutralHomeZones({
   circuits,
@@ -54,6 +60,11 @@ export function NeutralHomeZones({
   temperaturePeriodId: string | null;
 }) {
   const [rows, setRows] = useState<RoomHourRow[]>([]);
+  const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({
+    key: "totalKwh",
+    dir: "desc",
+  });
+  const [open, setOpen] = useState<string | null>(null);
 
   useEffect(() => {
     if (!temperaturePeriodId) {
@@ -82,21 +93,31 @@ export function NeutralHomeZones({
     return m;
   }, [roomMap, siteId]);
 
-  const comfort = useMemo(
-    () => (rows.length ? zoneComfort(rows, band, mapping, classes, aggs) : []),
-    [rows, band, mapping, classes, aggs],
-  );
-  const comfortByZone = useMemo(() => new Map(comfort.map((c) => [c.zone, c])), [comfort]);
-
-  const chartData = useMemo(
+  const temps = useMemo(
     () =>
-      aggs.slice(0, 14).map((a) => ({
-        name: a.zone.length > 24 ? `${a.zone.slice(0, 23)}…` : a.zone,
-        Zone: Number(a.ownKwh.toFixed(2)),
-        Equipment: Number(a.equipmentKwh.toFixed(2)),
-      })),
-    [aggs],
+      rows.length
+        ? zoneDailyTemps(rows, band, mapping, classes)
+        : new Map<string, ZoneTempSeries>(),
+    [rows, band, mapping, classes],
   );
+
+  const sorted = useMemo(() => {
+    const list = [...aggs];
+    const { key, dir } = sort;
+    list.sort((a, b) => {
+      const cmp =
+        key === "zone" ? a.zone.localeCompare(b.zone) : (a[key] as number) - (b[key] as number);
+      return dir === "asc" ? cmp : -cmp;
+    });
+    return list;
+  }, [aggs, sort]);
+
+  const toggleSort = (key: SortKey) =>
+    setSort((s) =>
+      s.key === key
+        ? { key, dir: s.dir === "asc" ? "desc" : "asc" }
+        : { key, dir: key === "zone" ? "asc" : "desc" },
+    );
 
   if (!aggs.length) {
     return (
@@ -104,7 +125,7 @@ export function NeutralHomeZones({
         <CardContent className="p-5">
           <div className="flex items-center gap-2 pb-2">
             <LayoutGrid className="h-4 w-4 text-muted-foreground" />
-            <h2 className="text-base font-semibold tracking-tight">Zones</h2>
+            <h2 className="text-base font-semibold tracking-tight">Zone league table</h2>
           </div>
           <p className="text-sm text-muted-foreground">
             No zones yet. In Settings → Circuits &amp; zones, set a circuit's Category to
@@ -115,140 +136,243 @@ export function NeutralHomeZones({
     );
   }
 
-  const totalKwh = aggs.reduce((a, z) => a + z.totalKwh, 0);
-
   return (
-    <div className="space-y-4">
-      <Card>
-        <CardContent className="p-5">
-          <div className="flex flex-wrap items-center justify-between gap-3 pb-4">
-            <div className="flex items-center gap-2">
-              <LayoutGrid className="h-4 w-4 text-muted-foreground" />
-              <div>
-                <h2 className="text-base font-semibold tracking-tight">Zones</h2>
-                <p className="text-sm text-muted-foreground">
-                  Zone consumption including the equipment mapped into it.
-                </p>
-              </div>
-            </div>
-            <Badge variant="outline">{aggs.length} zones</Badge>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {aggs.map((z) => {
-              const c = comfortByZone.get(z.zone);
-              return (
-                <div key={z.zone} className="rounded-lg border p-4">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="text-sm font-medium">{z.zone}</div>
-                    <Badge variant="outline" className="text-[10px]">
-                      {z.equipment.length} equipment
-                    </Badge>
-                  </div>
-                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-                    <div className="flex items-center gap-1.5">
-                      <Zap className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span className="tabular-nums font-medium">{num(z.totalKwh, 1)} kWh</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <PoundSterling className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span className="tabular-nums font-medium">£{num(z.costGbp, 2)}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <Moon className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span className="tabular-nums">{num(z.nightPct, 1)}% night</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <Thermometer className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span className={cn("tabular-nums", c ? FLAG_CLASS[c.flag] : "")}>
-                        {c ? `${num(c.avg, 1)}°C` : "no temp"}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="mt-3 text-[11px] text-muted-foreground">
-                    Own {num(z.ownKwh, 1)} kWh · equipment {num(z.equipmentKwh, 1)} kWh ·{" "}
-                    {totalKwh > 0 ? num((z.totalKwh / totalKwh) * 100, 1) : "0"}% of zone total
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="mt-5 h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 40 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                <XAxis
-                  dataKey="name"
-                  angle={-35}
-                  textAnchor="end"
-                  interval={0}
-                  height={60}
-                  tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
-                />
-                <YAxis tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
-                <RTooltip
-                  contentStyle={{
-                    background: "var(--popover)",
-                    border: "1px solid var(--border)",
-                    borderRadius: 8,
-                    fontSize: 12,
-                  }}
-                />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Bar dataKey="Zone" stackId="z" fill="var(--chart-1)" radius={[0, 0, 0, 0]} />
-                <Bar dataKey="Equipment" stackId="z" fill="var(--chart-3)" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </CardContent>
-      </Card>
-
-      {comfort.length ? (
-        <Card>
-          <CardContent className="p-5">
-            <div className="pb-3">
-              <h2 className="text-base font-semibold tracking-tight">Zone comfort &amp; usage</h2>
+    <Card>
+      <CardContent className="p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-4">
+          <div className="flex items-center gap-2">
+            <LayoutGrid className="h-4 w-4 text-muted-foreground" />
+            <div>
+              <h2 className="text-base font-semibold tracking-tight">Zone league table</h2>
               <p className="text-sm text-muted-foreground">
-                Room temperatures aggregated to the zone their circuit reports under (comfort band{" "}
-                {band.min}–{band.max}°C).
+                Each zone including the equipment mapped into it. Click a zone for its temperature
+                profile.
               </p>
             </div>
-            <ScrollArea className="max-h-[380px]">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-xs text-muted-foreground">
-                    <th className="py-2 pr-3 font-medium">Zone</th>
-                    <th className="py-2 pr-3 font-medium">Rooms</th>
-                    <th className="py-2 text-right font-medium">Avg °C</th>
-                    <th className="py-2 text-right font-medium">In band %</th>
-                    <th className="py-2 text-right font-medium">Hrs above</th>
-                    <th className="py-2 text-right font-medium">Hrs below</th>
-                    <th className="py-2 text-right font-medium">Usage (kWh)</th>
-                    <th className="py-2 text-right font-medium">Cost (£)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {comfort.map((c) => (
-                    <tr key={c.zone} className="border-t">
-                      <td className="py-2 pr-3">{c.zone}</td>
-                      <td className="py-2 pr-3 text-xs text-muted-foreground">{c.rooms.length}</td>
-                      <td className={cn("py-2 text-right tabular-nums", FLAG_CLASS[c.flag])}>
-                        {num(c.avg, 1)}
+          </div>
+          <Badge variant="outline">{aggs.length} zones</Badge>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-xs text-muted-foreground">
+                <th className="w-8 py-2" />
+                {COLUMNS.map((c) => (
+                  <th
+                    key={c.key}
+                    className={cn(
+                      "py-2 font-medium",
+                      c.align === "right" ? "text-right pl-3" : "text-left pr-3",
+                    )}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => toggleSort(c.key)}
+                      className="inline-flex items-center gap-1 hover:text-foreground"
+                    >
+                      {c.label}
+                      {sort.key === c.key ? (
+                        sort.dir === "asc" ? (
+                          <ArrowUp className="h-3 w-3" />
+                        ) : (
+                          <ArrowDown className="h-3 w-3" />
+                        )
+                      ) : null}
+                    </button>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map((z, i) => {
+                const isOpen = open === z.zone;
+                return (
+                  <Fragment key={z.zone}>
+                    <tr
+                      onClick={() => setOpen(isOpen ? null : z.zone)}
+                      className={cn(
+                        "cursor-pointer border-t transition-colors hover:bg-muted/50",
+                        isOpen && "bg-muted/40",
+                      )}
+                    >
+                      <td className="py-2 text-muted-foreground">
+                        {isOpen ? (
+                          <ChevronDown className="h-4 w-4" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4" />
+                        )}
                       </td>
-                      <td className="py-2 text-right tabular-nums">{num(c.inBandPct, 1)}</td>
-                      <td className="py-2 text-right tabular-nums">{num(c.hoursAbove)}</td>
-                      <td className="py-2 text-right tabular-nums">{num(c.hoursBelow)}</td>
-                      <td className="py-2 text-right tabular-nums">{num(c.totalKwh, 1)}</td>
-                      <td className="py-2 text-right tabular-nums">{num(c.costGbp, 2)}</td>
+                      <td className="py-2 pr-3">
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-xs tabular-nums text-muted-foreground">
+                            {i + 1}
+                          </span>
+                          <span className="font-medium">{z.zone}</span>
+                        </div>
+                        <div className="text-[11px] text-muted-foreground">
+                          {z.equipment.length} equipment circuit
+                          {z.equipment.length === 1 ? "" : "s"}
+                        </div>
+                      </td>
+                      <td className="py-2 pl-3 text-right tabular-nums font-medium">
+                        {num(z.totalKwh, 1)}
+                      </td>
+                      <td className="py-2 pl-3 text-right tabular-nums">{num(z.co2Kg, 1)}</td>
+                      <td className="py-2 pl-3 text-right tabular-nums">{num(z.costGbp, 2)}</td>
+                      <td className="py-2 pl-3 text-right tabular-nums">{num(z.dayKwh, 1)}</td>
+                      <td className="py-2 pl-3 text-right tabular-nums">{num(z.nightKwh, 1)}</td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </ScrollArea>
-          </CardContent>
-        </Card>
+                    {isOpen ? (
+                      <tr className="border-t bg-muted/20">
+                        <td colSpan={COLUMNS.length + 1} className="p-4">
+                          <ZoneDetail zone={z} band={band} temp={temps.get(z.zone)} />
+                        </td>
+                      </tr>
+                    ) : null}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ZoneDetail({
+  zone,
+  band,
+  temp,
+}: {
+  zone: ZoneAgg;
+  band: ComfortBand;
+  temp?: ZoneTempSeries;
+}) {
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,1fr)]">
+        <div className="rounded-lg border bg-card p-3">
+          <div className="pb-2 text-xs font-medium text-muted-foreground">
+            Daily average temperature · comfort band {band.min}–{band.max}°C
+          </div>
+          {temp?.daily.length ? (
+            <div className="h-56">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={temp.daily} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                  <XAxis
+                    dataKey="date"
+                    tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+                  />
+                  <YAxis
+                    domain={["auto", "auto"]}
+                    tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+                    unit="°"
+                  />
+                  <RTooltip
+                    contentStyle={{
+                      background: "var(--popover)",
+                      border: "1px solid var(--border)",
+                      borderRadius: 8,
+                      fontSize: 12,
+                    }}
+                    formatter={(v: number) => [`${v}°C`, "Avg"]}
+                  />
+                  <ReferenceLine
+                    y={band.min}
+                    stroke="var(--muted-foreground)"
+                    strokeDasharray="4 4"
+                    label={{
+                      value: `${band.min}°C`,
+                      position: "insideLeft",
+                      fontSize: 10,
+                      fill: "var(--muted-foreground)",
+                    }}
+                  />
+                  <ReferenceLine
+                    y={band.max}
+                    stroke="var(--muted-foreground)"
+                    strokeDasharray="4 4"
+                    label={{
+                      value: `${band.max}°C`,
+                      position: "insideLeft",
+                      fontSize: 10,
+                      fill: "var(--muted-foreground)",
+                    }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="avg"
+                    stroke="var(--chart-1)"
+                    strokeWidth={2}
+                    dot={false}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <p className="py-10 text-center text-sm text-muted-foreground">
+              No temperature data for this zone.
+            </p>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          {temp ? (
+            <>
+              <Stat label="Average temperature" value={`${num(temp.avg, 1)}°C`} />
+              <Stat label="Highest temperature" value={`${num(temp.max, 1)}°C`} />
+              <Stat label="Lowest temperature" value={`${num(temp.min, 1)}°C`} />
+              <p className="text-[11px] text-muted-foreground">
+                {num(temp.hoursInBand)} of {num(temp.hours)} readings in band ·{" "}
+                {temp.rooms.length} room{temp.rooms.length === 1 ? "" : "s"} mapped
+              </p>
+            </>
+          ) : (
+            <div className="rounded-lg border bg-card p-3 text-sm text-muted-foreground">
+              Map rooms to this zone's circuits in Settings → Rooms &amp; comfort to see temperature
+              stats.
+            </div>
+          )}
+        </div>
+      </div>
+
+      {zone.equipment.length ? (
+        <div className="rounded-lg border bg-card p-3">
+          <div className="pb-2 text-xs font-medium text-muted-foreground">Equipment circuits</div>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs text-muted-foreground">
+                <th className="py-1 pr-3 font-medium">Circuit</th>
+                <th className="py-1 text-right font-medium">Usage (kWh)</th>
+                <th className="py-1 text-right font-medium">Cost (£)</th>
+                <th className="py-1 text-right font-medium">CO2 (kg)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {zone.equipment.map((e) => (
+                <tr key={e.circuit} className="border-t">
+                  <td className="py-1.5 pr-3">{e.circuit}</td>
+                  <td className="py-1.5 text-right tabular-nums">{num(e.kwh, 1)}</td>
+                  <td className="py-1.5 text-right tabular-nums">{num(e.costGbp, 2)}</td>
+                  <td className="py-1.5 text-right tabular-nums">{num(e.co2Kg, 1)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       ) : null}
+    </div>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border bg-card p-3">
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="text-xl font-semibold tabular-nums">{value}</div>
     </div>
   );
 }
