@@ -590,6 +590,28 @@ function MultiFileSlot({
   );
 }
 
+const MONTH_NAMES = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
+
+/** "2026-07-01" -> "Jul 2026" */
+function monthLabel(iso: string): string {
+  const [y, m] = iso.split("-");
+  const name = MONTH_NAMES[Number(m) - 1] ?? m;
+  return `${name} ${y}`;
+}
+
 function UploadDrawer({
   site,
   orgId,
@@ -688,7 +710,7 @@ function UploadDrawer({
           source_temperature_filename: tempResult?.fileName ?? null,
           hasTemperature: !!tempResult?.hours.length,
           mode,
-          circuits: result.circuits.map((c) => ({
+          circuits: (result?.circuits ?? []).map((c) => ({
             circuit_name: c.circuit_name,
             category: c.category,
             is_aggregate: c.is_aggregate,
@@ -734,7 +756,7 @@ function UploadDrawer({
         const fresh = tempResult.rooms.filter((r) => !mappedRooms.has(r));
         const entries = suggestMatches(
           fresh,
-          result.circuits.map((c) => c.circuit_name),
+          (result?.circuits ?? []).map((c) => c.circuit_name),
         ).map((s) => {
           const auto = !!s.circuit && s.confidence >= AUTO_MATCH_THRESHOLD;
           if (auto) autoMapped += 1;
@@ -754,7 +776,7 @@ function UploadDrawer({
 
       toast.success(
         [
-          `Saved ${res.circuits} circuits`,
+          res.circuits ? `Saved ${res.circuits} circuits` : `Saved period ${label.trim() || range.label}`,
           hours.length ? `${hours.length.toLocaleString()} hourly temperature rows` : null,
           autoMapped ? `${autoMapped} rooms auto-mapped` : null,
         ]
