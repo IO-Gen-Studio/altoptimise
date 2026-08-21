@@ -28,7 +28,14 @@ import {
 const num = (v: number, dp = 0) =>
   v.toLocaleString(undefined, { minimumFractionDigits: dp, maximumFractionDigits: dp });
 
-type SortKey = "zone" | "totalKwh" | "co2Kg" | "costGbp" | "dayKwh" | "nightKwh";
+type SortKey =
+  | "zone"
+  | "totalKwh"
+  | "co2Kg"
+  | "costGbp"
+  | "dayKwh"
+  | "nightKwh"
+  | "avgTemp";
 
 const COLUMNS: { key: SortKey; label: string; align: "left" | "right" }[] = [
   { key: "zone", label: "Zone", align: "left" },
@@ -37,7 +44,17 @@ const COLUMNS: { key: SortKey; label: string; align: "left" | "right" }[] = [
   { key: "costGbp", label: "Cost (£)", align: "right" },
   { key: "dayKwh", label: "Day (kWh)", align: "right" },
   { key: "nightKwh", label: "Night (kWh)", align: "right" },
+  { key: "avgTemp", label: "Avg temp (°C)", align: "right" },
 ];
+
+function heatClass(v: number | null, band: ComfortBand) {
+  if (v == null) return "bg-muted";
+  if (v > band.max + 2) return "bg-red-500/70";
+  if (v > band.max) return "bg-amber-500/60";
+  if (v < band.min - 2) return "bg-blue-500/60";
+  if (v < band.min) return "bg-sky-400/50";
+  return "bg-emerald-500/50";
+}
 
 /**
  * Zone league table: each zone rolled up with the equipment mapped into it,
