@@ -255,7 +255,7 @@ const SavePeriodInput = z.object({
   source_daynight_filename: z.string().max(300).nullable().optional(),
   source_temperature_filename: z.string().max(600).nullable().optional(),
   mode: z.enum(["merge", "replace"]),
-  circuits: z.array(CircuitInput).min(1).max(3000),
+  circuits: z.array(CircuitInput).max(3000),
   /** when true a replace also clears previously stored temperature rows */
   hasTemperature: z.boolean().optional(),
 });
