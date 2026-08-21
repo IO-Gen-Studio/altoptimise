@@ -385,7 +385,6 @@ function ZoneDetail({
         <div className="space-y-2">
           {temp ? (
             <>
-              <Stat label="Average temperature" value={`${num(temp.avg, 1)}°C`} />
               <Stat label="Highest temperature" value={`${num(temp.max, 1)}°C`} />
               <Stat label="Lowest temperature" value={`${num(temp.min, 1)}°C`} />
               <p className="text-[11px] text-muted-foreground">
@@ -401,6 +400,40 @@ function ZoneDetail({
           )}
         </div>
       </div>
+
+      {temp?.grid.length ? (
+        <div className="rounded-lg border bg-card p-3">
+          <div className="pb-2 text-xs font-medium text-muted-foreground">
+            Hourly temperature heatmap · green in band ({band.min}–{band.max}°C), amber/red above,
+            blue below
+          </div>
+          <div className="overflow-x-auto">
+            <div className="min-w-[680px] space-y-1">
+              <div className="flex gap-1 pl-14">
+                {Array.from({ length: 24 }, (_, h) => (
+                  <div key={h} className="w-5 text-center text-[10px] text-muted-foreground">
+                    {h}
+                  </div>
+                ))}
+              </div>
+              {temp.grid.map((row) => (
+                <div key={row.date} className="flex items-center gap-1">
+                  <div className="w-14 pr-1 text-[10px] tabular-nums text-muted-foreground">
+                    {row.date}
+                  </div>
+                  {row.hours.map((v, h) => (
+                    <div
+                      key={h}
+                      title={`${row.date} ${String(h).padStart(2, "0")}:00 · ${v == null ? "no data" : `${v}°C`}`}
+                      className={cn("h-4 w-5 rounded-sm", heatClass(v, band))}
+                    />
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {zone.equipment.length ? (
         <div className="rounded-lg border bg-card p-3">
