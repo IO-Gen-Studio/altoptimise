@@ -1,14 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Thermometer, ThermometerSnowflake, ThermometerSun, Timer } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { cn } from "@/lib/utils";
 import { loadNhRoomHours, type NhRoomMap } from "@/lib/neutral-home.functions";
 import type { CircuitRecord } from "@/lib/neutral-home/analytics";
 import { zoneNames, zoneRooms, type ClassMap } from "@/lib/neutral-home/zones";
 import {
-  hourOfDayMatrix,
   roomStats,
   siteSummary,
   type ComfortBand,
