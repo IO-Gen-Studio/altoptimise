@@ -232,6 +232,8 @@ export function zoneDailyTemps(
     {
       rooms: Set<string>;
       days: Map<string, { sum: number; n: number }>;
+      /** date -> hour-of-day -> running average accumulator */
+      cells: Map<string, { sum: number; n: number }[]>;
       sum: number;
       n: number;
       min: number;
@@ -246,7 +248,16 @@ export function zoneDailyTemps(
     if (!zone) continue;
     let a = acc.get(zone);
     if (!a) {
-      a = { rooms: new Set(), days: new Map(), sum: 0, n: 0, min: Infinity, max: -Infinity, inBand: 0 };
+      a = {
+        rooms: new Set(),
+        days: new Map(),
+        cells: new Map(),
+        sum: 0,
+        n: 0,
+        min: Infinity,
+        max: -Infinity,
+        inBand: 0,
+      };
       acc.set(zone, a);
     }
     a.rooms.add(r.room_name);
@@ -255,6 +266,18 @@ export function zoneDailyTemps(
     cur.sum += r.temp_avg;
     cur.n += 1;
     a.days.set(date, cur);
+
+    const hour = Number(r.hour_ts.slice(11, 13));
+    if (Number.isFinite(hour) && hour >= 0 && hour < 24) {
+      let row = a.cells.get(date);
+      if (!row) {
+        row = Array.from({ length: 24 }, () => ({ sum: 0, n: 0 }));
+        a.cells.set(date, row);
+      }
+      row[hour]!.sum += r.temp_avg;
+      row[hour]!.n += 1;
+    }
+
     a.sum += r.temp_avg;
     a.n += 1;
     if (r.temp_avg < a.min) a.min = r.temp_avg;
@@ -271,6 +294,12 @@ export function zoneDailyTemps(
       daily: Array.from(a.days.entries())
         .sort((x, y) => x[0].localeCompare(y[0]))
         .map(([date, v]) => ({ date: date.slice(5), avg: Number((v.sum / v.n).toFixed(1)) })),
+      grid: Array.from(a.cells.entries())
+        .sort((x, y) => x[0].localeCompare(y[0]))
+        .map(([date, hours]) => ({
+          date: date.slice(5),
+          hours: hours.map((c) => (c.n ? Number((c.sum / c.n).toFixed(1)) : null)),
+        })),
       avg: Number((a.sum / a.n).toFixed(1)),
       min: Number(a.min.toFixed(1)),
       max: Number(a.max.toFixed(1)),
