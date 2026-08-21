@@ -383,17 +383,27 @@ export interface MergeResult {
 }
 
 export function mergeReports(
-  headline: ParsedReport<HeadlineRow>,
+  headline: ParsedReport<HeadlineRow> | null,
   daynight: ParsedReport<DayNightRow> | null,
 ): MergeResult {
   const errors: string[] = [];
   const warnings: string[] = [];
 
-  if (!headline.rows.length) errors.push("Headline Usage Report has no data rows.");
-  if (headline.missingColumns.length)
-    errors.push(`Headline report is missing columns: ${headline.missingColumns.join(", ")}.`);
+  if (!headline && !daynight) errors.push("No usage report supplied.");
+
+  if (headline) {
+    if (!headline.rows.length) errors.push("Headline Usage Report has no data rows.");
+    if (headline.missingColumns.length)
+      errors.push(`Headline report is missing columns: ${headline.missingColumns.join(", ")}.`);
+  } else if (daynight) {
+    warnings.push(
+      "No Headline Usage Report supplied — circuits are saved with day/night values only (no cost, carbon or intensity figures).",
+    );
+  }
+
   if (!daynight) {
-    warnings.push("No Day/Night report supplied — circuits are saved without a day/night split.");
+    if (headline)
+      warnings.push("No Day/Night report supplied — circuits are saved without a day/night split.");
   } else {
     if (!daynight.rows.length)
       warnings.push("Day/Night Group Overview Report has no data rows — day/night values are left blank.");
@@ -401,10 +411,10 @@ export function mergeReports(
       warnings.push(`Day/Night report is missing columns: ${daynight.missingColumns.join(", ")}.`);
   }
 
-  const range = headline.range ?? daynight?.range ?? null;
-  if (!range) errors.push("Could not read the reporting date range from either file header.");
+  const range = headline?.range ?? daynight?.range ?? null;
+  if (!range) errors.push("Could not read the reporting date range from the file header.");
   if (
-    headline.range &&
+    headline?.range &&
     daynight?.range &&
     (headline.range.startISO !== daynight.range.startISO ||
       headline.range.endISO !== daynight.range.endISO)
@@ -414,32 +424,50 @@ export function mergeReports(
     );
   }
 
+  const headlineRows = headline?.rows ?? [];
+  const dnRows = daynight?.rows ?? [];
   const dnMap = new Map<string, DayNightRow>();
-  for (const r of daynight?.rows ?? []) dnMap.set(keyOf(r.name), r);
-  const hlKeys = new Set(headline.rows.map((r) => keyOf(r.name)));
+  for (const r of dnRows) dnMap.set(keyOf(r.name), r);
+  const hlKeys = new Set(headlineRows.map((r) => keyOf(r.name)));
 
-  const onlyInHeadline = headline.rows
-    .filter((r) => !dnMap.has(keyOf(r.name)))
-    .map((r) => r.name);
-  const onlyInDayNight = (daynight?.rows ?? [])
-    .filter((r) => !hlKeys.has(keyOf(r.name)))
-    .map((r) => r.name);
+  const onlyInHeadline = headlineRows.filter((r) => !dnMap.has(keyOf(r.name))).map((r) => r.name);
+  const onlyInDayNight = dnRows.filter((r) => !hlKeys.has(keyOf(r.name))).map((r) => r.name);
 
-  if (daynight && headline.rows.length !== daynight.rows.length) {
+  if (headline && daynight && headlineRows.length !== dnRows.length) {
     warnings.push(
-      `Meter counts differ: ${headline.rows.length} rows in the headline report vs ${daynight.rows.length} in the day/night report.`,
+      `Meter counts differ: ${headlineRows.length} rows in the headline report vs ${dnRows.length} in the day/night report.`,
     );
   }
-  if (daynight && onlyInHeadline.length)
+  if (headline && daynight && onlyInHeadline.length)
     warnings.push(
       `${onlyInHeadline.length} circuit(s) are missing from the day/night report — they are still imported, without a day/night split.`,
     );
-  if (onlyInDayNight.length)
+  if (headline && onlyInDayNight.length)
     warnings.push(`${onlyInDayNight.length} circuit(s) appear only in the day/night report and were skipped.`);
+
+  const emptyHeadline = (name: string): HeadlineRow => ({
+    name,
+    usage_kwh: null,
+    co2_kg: null,
+    blended_p_kwh: null,
+    day_p_kwh: null,
+    night_p_kwh: null,
+    total_cost_p: null,
+    usage_kwh_per_person: null,
+    usage_kwh_per_m2: null,
+    cost_p_per_person: null,
+    cost_p_per_m2: null,
+    co2_kg_per_person: null,
+    co2_kg_per_m2: null,
+  });
+
+  const base: HeadlineRow[] = headline
+    ? headlineRows
+    : dnRows.map((r) => ({ ...emptyHeadline(r.name), usage_kwh: r.total_kwh }));
 
   const seen = new Set<string>();
   const circuits: MergedCircuit[] = [];
-  for (const h of headline.rows) {
+  for (const h of base) {
     const k = keyOf(h.name);
     if (seen.has(k)) continue;
     seen.add(k);
@@ -460,12 +488,12 @@ export function mergeReports(
   return {
     circuits,
     range,
-    projectName: headline.projectName ?? daynight?.projectName ?? null,
+    projectName: headline?.projectName ?? daynight?.projectName ?? null,
     validation: {
       errors,
       warnings,
-      headlineCount: headline.rows.length,
-      daynightCount: daynight?.rows.length ?? 0,
+      headlineCount: headlineRows.length,
+      daynightCount: dnRows.length,
       onlyInHeadline,
       onlyInDayNight,
     },

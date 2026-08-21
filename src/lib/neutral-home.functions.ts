@@ -255,7 +255,7 @@ const SavePeriodInput = z.object({
   source_daynight_filename: z.string().max(300).nullable().optional(),
   source_temperature_filename: z.string().max(600).nullable().optional(),
   mode: z.enum(["merge", "replace"]),
-  circuits: z.array(CircuitInput).min(1).max(3000),
+  circuits: z.array(CircuitInput).max(3000),
   /** when true a replace also clears previously stored temperature rows */
   hasTemperature: z.boolean().optional(),
 });
@@ -282,8 +282,12 @@ export const saveNhPeriod = createServerFn({ method: "POST" })
         .from("neutral_home_periods" as any)
         .update({
           label: data.label,
-          source_headline_filename: data.source_headline_filename ?? null,
-          source_daynight_filename: data.source_daynight_filename ?? null,
+          ...(data.source_headline_filename
+            ? { source_headline_filename: data.source_headline_filename }
+            : {}),
+          ...(data.source_daynight_filename
+            ? { source_daynight_filename: data.source_daynight_filename }
+            : {}),
           ...(data.source_temperature_filename
             ? { source_temperature_filename: data.source_temperature_filename }
             : {}),
@@ -291,11 +295,13 @@ export const saveNhPeriod = createServerFn({ method: "POST" })
         .eq("id", periodId);
       if (error) throw new Error(error.message);
       if (data.mode === "replace") {
-        const { error: delErr } = await supabase
-          .from("neutral_home_circuits" as any)
-          .delete()
-          .eq("period_id", periodId);
-        if (delErr) throw new Error(delErr.message);
+        if (data.circuits.length) {
+          const { error: delErr } = await supabase
+            .from("neutral_home_circuits" as any)
+            .delete()
+            .eq("period_id", periodId);
+          if (delErr) throw new Error(delErr.message);
+        }
         if (data.hasTemperature) {
           const { error: delTemp } = await supabase
             .from("neutral_home_room_hours" as any)
