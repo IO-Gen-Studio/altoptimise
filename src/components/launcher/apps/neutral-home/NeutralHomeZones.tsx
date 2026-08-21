@@ -211,8 +211,7 @@ export function NeutralHomeZones({
                           <span className="font-medium">{z.zone}</span>
                         </div>
                         <div className="text-[11px] text-muted-foreground">
-                          {z.equipment.length} equipment circuit
-                          {z.equipment.length === 1 ? "" : "s"}
+                          {z.equipment.length} equipment mapped
                         </div>
                       </td>
                       <td className="py-2 pl-3 text-right tabular-nums font-medium">
