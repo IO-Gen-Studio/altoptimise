@@ -118,16 +118,36 @@ export function NeutralHomeZones({
     [rows, band, mapping, classes],
   );
 
+  /** warmest / coldest zone by average temperature, for the grid tags */
+  const extremes = useMemo(() => {
+    let warmest: string | null = null;
+    let coldest: string | null = null;
+    let hi = -Infinity;
+    let lo = Infinity;
+    for (const [zone, t] of temps) {
+      if (t.avg > hi) {
+        hi = t.avg;
+        warmest = zone;
+      }
+      if (t.avg < lo) {
+        lo = t.avg;
+        coldest = zone;
+      }
+    }
+    return { warmest, coldest };
+  }, [temps]);
+
   const sorted = useMemo(() => {
     const list = [...aggs];
     const { key, dir } = sort;
+    const val = (z: ZoneAgg) =>
+      key === "avgTemp" ? (temps.get(z.zone)?.avg ?? -Infinity) : (z[key as keyof ZoneAgg] as number);
     list.sort((a, b) => {
-      const cmp =
-        key === "zone" ? a.zone.localeCompare(b.zone) : (a[key] as number) - (b[key] as number);
+      const cmp = key === "zone" ? a.zone.localeCompare(b.zone) : val(a) - val(b);
       return dir === "asc" ? cmp : -cmp;
     });
     return list;
-  }, [aggs, sort]);
+  }, [aggs, sort, temps]);
 
   const toggleSort = (key: SortKey) =>
     setSort((s) =>
