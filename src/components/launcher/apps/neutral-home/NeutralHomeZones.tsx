@@ -283,7 +283,11 @@ export function NeutralHomeZones({
                       <td className="py-2 pl-3 text-right tabular-nums">{num(z.dayKwh, 1)}</td>
                       <td className="py-2 pl-3 text-right tabular-nums">{num(z.nightKwh, 1)}</td>
                       <td className="py-2 pl-3 text-right tabular-nums">
-                        {t ? `${num(t.avg, 1)}` : "—"}
+                        {t ? (
+                          num(t.avg, 1)
+                        ) : (
+                          <span className="text-xs italic text-muted-foreground">No data</span>
+                        )}
                       </td>
                     </tr>
                     {isOpen ? (
@@ -400,40 +404,6 @@ function ZoneDetail({
           )}
         </div>
       </div>
-
-      {temp?.grid.length ? (
-        <div className="rounded-lg border bg-card p-3">
-          <div className="pb-2 text-xs font-medium text-muted-foreground">
-            Hourly temperature heatmap · green in band ({band.min}–{band.max}°C), amber/red above,
-            blue below
-          </div>
-          <div className="overflow-x-auto">
-            <div className="min-w-[680px] space-y-1">
-              <div className="flex gap-1 pl-14">
-                {Array.from({ length: 24 }, (_, h) => (
-                  <div key={h} className="w-5 text-center text-[10px] text-muted-foreground">
-                    {h}
-                  </div>
-                ))}
-              </div>
-              {temp.grid.map((row) => (
-                <div key={row.date} className="flex items-center gap-1">
-                  <div className="w-14 pr-1 text-[10px] tabular-nums text-muted-foreground">
-                    {row.date}
-                  </div>
-                  {row.hours.map((v, h) => (
-                    <div
-                      key={h}
-                      title={`${row.date} ${String(h).padStart(2, "0")}:00 · ${v == null ? "no data" : `${v}°C`}`}
-                      className={cn("h-4 w-5 rounded-sm", heatClass(v, band))}
-                    />
-                  ))}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      ) : null}
 
       {zone.equipment.length ? (
         <div className="rounded-lg border bg-card p-3">
