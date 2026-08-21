@@ -224,7 +224,60 @@ export function NeutralHomeZones({
             <tbody>
               {sorted.map((z, i) => {
                 const isOpen = open === z.zone;
+                const t = temps.get(z.zone);
+                const isWarmest = extremes.warmest === z.zone;
+                const isColdest = extremes.coldest === z.zone;
                 return (
+                  <Fragment key={z.zone}>
+                    <tr
+                      onClick={() => setOpen(isOpen ? null : z.zone)}
+                      className={cn(
+                        "cursor-pointer border-t transition-colors hover:bg-muted/50",
+                        isOpen && "bg-muted/40",
+                      )}
+                    >
+                      <td className="py-2 text-muted-foreground">
+                        {isOpen ? (
+                          <ChevronDown className="h-4 w-4" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4" />
+                        )}
+                      </td>
+                      <td className="py-2 pr-3">
+                        <div className="flex flex-wrap items-baseline gap-2">
+                          <span className="text-xs tabular-nums text-muted-foreground">
+                            {i + 1}
+                          </span>
+                          <span className="font-medium">{z.zone}</span>
+                          {isWarmest ? (
+                            <Badge
+                              variant="outline"
+                              className="gap-1 border-amber-500/50 text-amber-600"
+                            >
+                              <ThermometerSun className="h-3 w-3" /> Warmest
+                            </Badge>
+                          ) : null}
+                          {isColdest ? (
+                            <Badge variant="outline" className="gap-1 border-sky-500/50 text-sky-600">
+                              <ThermometerSnowflake className="h-3 w-3" /> Coldest
+                            </Badge>
+                          ) : null}
+                        </div>
+                        <div className="text-[11px] text-muted-foreground">
+                          {z.equipment.length} equipment mapped
+                        </div>
+                      </td>
+                      <td className="py-2 pl-3 text-right tabular-nums font-medium">
+                        {num(z.totalKwh, 1)}
+                      </td>
+                      <td className="py-2 pl-3 text-right tabular-nums">{num(z.co2Kg, 1)}</td>
+                      <td className="py-2 pl-3 text-right tabular-nums">{num(z.costGbp, 2)}</td>
+                      <td className="py-2 pl-3 text-right tabular-nums">{num(z.dayKwh, 1)}</td>
+                      <td className="py-2 pl-3 text-right tabular-nums">{num(z.nightKwh, 1)}</td>
+                      <td className="py-2 pl-3 text-right tabular-nums">
+                        {t ? `${num(t.avg, 1)}` : "—"}
+                      </td>
+                    </tr>
                   <Fragment key={z.zone}>
                     <tr
                       onClick={() => setOpen(isOpen ? null : z.zone)}
