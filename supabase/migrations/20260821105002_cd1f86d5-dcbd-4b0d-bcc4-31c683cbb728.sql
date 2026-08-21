@@ -1,0 +1,1 @@
+CREATE INDEX IF NOT EXISTS neutral_home_room_hours_period_hour_idx ON public.neutral_home_room_hours USING btree (period_id, hour_ts, room_name);
