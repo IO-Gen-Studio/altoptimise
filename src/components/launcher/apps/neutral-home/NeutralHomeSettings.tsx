@@ -671,9 +671,8 @@ function UploadDrawer({
         }
       : null;
 
-
   const commit = async () => {
-    if (!result || !result.range) return;
+    if (!range) return;
     setBusy(true);
     const t = toast.loading("Saving period…");
     try {
@@ -681,9 +680,9 @@ function UploadDrawer({
         data: {
           organization_id: orgId,
           site_id: site.id,
-          label: label.trim() || result.range.label,
-          period_start: result.range.startISO,
-          period_end: result.range.endISO,
+          label: label.trim() || range.label,
+          period_start: range.startISO,
+          period_end: range.endISO,
           source_headline_filename: headline?.name ?? null,
           source_daynight_filename: daynight?.name ?? null,
           source_temperature_filename: tempResult?.fileName ?? null,
