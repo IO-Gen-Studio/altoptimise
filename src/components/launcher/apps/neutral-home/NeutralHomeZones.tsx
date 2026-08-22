@@ -417,11 +417,11 @@ function ZoneDetail({
 
       {zone.equipment.length ? (
         <div className="rounded-lg border bg-card p-3">
-          <div className="pb-2 text-xs font-medium text-muted-foreground">Equipment circuits</div>
+          <div className="pb-2 text-xs font-medium text-muted-foreground">Breakdown of Equipment Mapped in the Zone</div>
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-muted-foreground">
-                <th className="py-1 pr-3 font-medium">Circuit</th>
+                <th className="py-1 pr-3 font-medium">Description</th>
                 <th className="py-1 text-right font-medium">Usage (kWh)</th>
                 <th className="py-1 text-right font-medium">Cost (£)</th>
                 <th className="py-1 text-right font-medium">CO2 (kg)</th>
