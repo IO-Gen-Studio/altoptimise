@@ -58,6 +58,7 @@ import {
   buildComparison,
   categoryLabelMap,
   findLastYearPeriod,
+  normalizeMetricKeys,
   sumOf,
   type MetricDef,
 } from "@/lib/neutral-home/config";
@@ -93,7 +94,12 @@ function convertDefs(defs: MetricDef[], basis: Basis): MetricDef[] {
   const column = basis === "cost" ? ("total_cost_p" as const) : ("co2_kg" as const);
   const unit = basis === "cost" ? "£" : "kg";
   return defs.map((d) => {
-    if (d.unit !== "kWh" || !d.select) return d;
+    if (d.unit !== "kWh") return d;
+    if (d.evaluateWith) {
+      const withCol = d.evaluateWith;
+      return { ...d, unit, evaluate: (rows: CircuitRecord[]) => withCol(rows, column) };
+    }
+    if (!d.select) return d;
     const select = d.select;
     return {
       ...d,
@@ -248,8 +254,10 @@ export function NeutralHomeDashboard({
   );
   const selectedKeys = useMemo(() => {
     const s = bundle.settings.find((x) => x.site_id === siteId);
-    return s?.comparison_metrics?.length ? s.comparison_metrics : null;
-  }, [bundle.settings, siteId]);
+    return s?.comparison_metrics?.length
+      ? normalizeMetricKeys(s.comparison_metrics, siteMetrics)
+      : null;
+  }, [bundle.settings, siteId, siteMetrics]);
   const shownDefs = useMemo(
     () =>
       selectedKeys

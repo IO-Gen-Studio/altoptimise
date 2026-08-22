@@ -40,8 +40,13 @@ import {
 import {
   allMetricDefs,
   categoryOptions,
+  FIXED_METRICS,
+  fixedMetricRow,
   METRIC_SOURCE_LABEL,
   METRIC_SOURCE_UNIT,
+  normalizeMetricKeys,
+  userMetricRows,
+  type FixedMetricSlot,
   type MetricSource,
 } from "@/lib/neutral-home/config";
 import { classMap } from "@/lib/neutral-home/zones";
@@ -118,8 +123,9 @@ export function NeutralHomeConfig({
     "";
 
   const metricDefs = useMemo(() => allMetricDefs(siteMetrics), [siteMetrics]);
+  const userRows = useMemo(() => userMetricRows(siteMetrics), [siteMetrics]);
   const selected = settings?.comparison_metrics?.length
-    ? settings.comparison_metrics
+    ? normalizeMetricKeys(settings.comparison_metrics, siteMetrics)
     : metricDefs.filter((d) => d.system).map((d) => d.key);
 
   const run = async (label: string, fn: () => Promise<unknown>) => {
@@ -314,10 +320,54 @@ export function NeutralHomeConfig({
 
         <TabsContent value="metrics" className="mt-4 space-y-4">
           <div>
+            <h3 className="text-sm font-semibold">Fixed metrics</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              These five metrics exist on every site. Map each one to the circuits it should read.
+            </p>
+            <div className="mt-2 space-y-2">
+              {FIXED_METRICS.map((f) => {
+                const row = fixedMetricRow(siteMetrics, f.slot);
+                return (
+                  <div
+                    key={f.slot}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3"
+                  >
+                    <div>
+                      <div className="text-sm font-medium">
+                        {f.name} <span className="text-muted-foreground">({f.unit})</span>
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {f.derived
+                          ? f.description
+                          : `${row?.circuit_names.length ? `${row.circuit_names.length} meters mapped` : "No meters mapped yet"} · ${
+                              (row?.lower_is_better ?? f.lowerIsBetter)
+                                ? "decrease is good"
+                                : "increase is good"
+                            }`}
+                      </div>
+                    </div>
+                    {f.derived ? (
+                      <Badge variant="outline">Derived</Badge>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={disabled}
+                        onClick={() => setMetricDialog(fixedDraft(f, row))}
+                      >
+                        {row ? "Edit mapping" : "Map meters"}
+                      </Button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div>
             <h3 className="text-sm font-semibold">System metrics</h3>
             <div className="mt-2 flex flex-wrap gap-2">
               {metricDefs
-                .filter((d) => d.system)
+                .filter((d) => d.system && !d.slot)
                 .map((d) => (
                   <Badge key={d.key} variant="outline">
                     {d.label} ({d.unit})
@@ -337,14 +387,14 @@ export function NeutralHomeConfig({
                 <Plus className="h-3.5 w-3.5" /> New metric
               </Button>
             </div>
-            {!siteMetrics.length ? (
+            {!userRows.length ? (
               <p className="mt-2 text-sm text-muted-foreground">
                 No user metrics yet. A user metric sums a chosen value across the meters you map to
                 it.
               </p>
             ) : (
               <div className="mt-2 space-y-2">
-                {siteMetrics.map((m) => (
+                {userRows.map((m) => (
                   <div
                     key={m.id}
                     className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3"
@@ -601,6 +651,8 @@ interface MetricDraft {
   unit: string;
   circuit_names: string[];
   lower_is_better: boolean;
+  /** Set for the fixed metrics — name, value and unit are locked. */
+  fixed?: FixedMetricSlot;
 }
 
 const emptyMetric = (): MetricDraft => ({
@@ -618,6 +670,16 @@ const draftFrom = (m: NhMetric): MetricDraft => ({
   unit: m.unit,
   circuit_names: m.circuit_names,
   lower_is_better: m.lower_is_better,
+});
+
+const fixedDraft = (f: FixedMetricSlot, row?: NhMetric): MetricDraft => ({
+  id: row?.id,
+  name: f.name,
+  source: f.source,
+  unit: f.unit,
+  circuit_names: row?.circuit_names ?? [],
+  lower_is_better: row?.lower_is_better ?? f.lowerIsBetter,
+  fixed: f,
 });
 
 function MetricDialog({
@@ -651,43 +713,50 @@ function MetricDialog({
     >
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{d.id ? "Edit metric" : "New metric"}</DialogTitle>
+          <DialogTitle>
+            {d.fixed ? `${d.fixed.name} — mapped meters` : d.id ? "Edit metric" : "New metric"}
+          </DialogTitle>
           <DialogDescription>
-            A user metric sums the chosen value across the mapped meters. Leave all meters unchecked
-            to use every sub-circuit.
+            {d.fixed
+              ? d.fixed.description
+              : "A user metric sums the chosen value across the mapped meters. Leave all meters unchecked to use every sub-circuit."}
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-3">
-          <div className="grid gap-1.5">
-            <Label>Metric name</Label>
-            <Input value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} />
-          </div>
-          <div className="grid gap-1.5">
-            <Label>Value</Label>
-            <Select
-              value={d.source}
-              onValueChange={(v) => setD({ ...d, source: v as MetricSource })}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {SOURCES.map((s) => (
-                  <SelectItem key={s} value={s}>
-                    {METRIC_SOURCE_LABEL[s]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid gap-1.5">
-            <Label>Unit</Label>
-            <Input
-              value={d.unit}
-              placeholder={METRIC_SOURCE_UNIT[d.source]}
-              onChange={(e) => setD({ ...d, unit: e.target.value })}
-            />
-          </div>
+          {d.fixed ? null : (
+            <>
+              <div className="grid gap-1.5">
+                <Label>Metric name</Label>
+                <Input value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} />
+              </div>
+              <div className="grid gap-1.5">
+                <Label>Value</Label>
+                <Select
+                  value={d.source}
+                  onValueChange={(v) => setD({ ...d, source: v as MetricSource })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SOURCES.map((s) => (
+                      <SelectItem key={s} value={s}>
+                        {METRIC_SOURCE_LABEL[s]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-1.5">
+                <Label>Unit</Label>
+                <Input
+                  value={d.unit}
+                  placeholder={METRIC_SOURCE_UNIT[d.source]}
+                  onChange={(e) => setD({ ...d, unit: e.target.value })}
+                />
+              </div>
+            </>
+          )}
           <div className="grid gap-1.5">
             <Label>Direction of a good change</Label>
             <Select
