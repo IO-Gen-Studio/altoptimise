@@ -123,8 +123,9 @@ export function NeutralHomeConfig({
     "";
 
   const metricDefs = useMemo(() => allMetricDefs(siteMetrics), [siteMetrics]);
+  const userRows = useMemo(() => userMetricRows(siteMetrics), [siteMetrics]);
   const selected = settings?.comparison_metrics?.length
-    ? settings.comparison_metrics
+    ? normalizeMetricKeys(settings.comparison_metrics, siteMetrics)
     : metricDefs.filter((d) => d.system).map((d) => d.key);
 
   const run = async (label: string, fn: () => Promise<unknown>) => {
