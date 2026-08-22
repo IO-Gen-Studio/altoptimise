@@ -394,7 +394,7 @@ export function NeutralHomeConfig({
               </p>
             ) : (
               <div className="mt-2 space-y-2">
-                {siteMetrics.map((m) => (
+                {userRows.map((m) => (
                   <div
                     key={m.id}
                     className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3"
