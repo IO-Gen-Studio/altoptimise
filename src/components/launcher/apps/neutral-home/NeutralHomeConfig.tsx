@@ -320,10 +320,54 @@ export function NeutralHomeConfig({
 
         <TabsContent value="metrics" className="mt-4 space-y-4">
           <div>
+            <h3 className="text-sm font-semibold">Fixed metrics</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              These five metrics exist on every site. Map each one to the circuits it should read.
+            </p>
+            <div className="mt-2 space-y-2">
+              {FIXED_METRICS.map((f) => {
+                const row = fixedMetricRow(siteMetrics, f.slot);
+                return (
+                  <div
+                    key={f.slot}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3"
+                  >
+                    <div>
+                      <div className="text-sm font-medium">
+                        {f.name} <span className="text-muted-foreground">({f.unit})</span>
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {f.derived
+                          ? f.description
+                          : `${row?.circuit_names.length ? `${row.circuit_names.length} meters mapped` : "No meters mapped yet"} · ${
+                              (row?.lower_is_better ?? f.lowerIsBetter)
+                                ? "decrease is good"
+                                : "increase is good"
+                            }`}
+                      </div>
+                    </div>
+                    {f.derived ? (
+                      <Badge variant="outline">Derived</Badge>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={disabled}
+                        onClick={() => setMetricDialog(fixedDraft(f, row))}
+                      >
+                        {row ? "Edit mapping" : "Map meters"}
+                      </Button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div>
             <h3 className="text-sm font-semibold">System metrics</h3>
             <div className="mt-2 flex flex-wrap gap-2">
               {metricDefs
-                .filter((d) => d.system)
+                .filter((d) => d.system && !d.slot)
                 .map((d) => (
                   <Badge key={d.key} variant="outline">
                     {d.label} ({d.unit})
@@ -343,7 +387,7 @@ export function NeutralHomeConfig({
                 <Plus className="h-3.5 w-3.5" /> New metric
               </Button>
             </div>
-            {!siteMetrics.length ? (
+            {!userRows.length ? (
               <p className="mt-2 text-sm text-muted-foreground">
                 No user metrics yet. A user metric sums a chosen value across the meters you map to
                 it.
