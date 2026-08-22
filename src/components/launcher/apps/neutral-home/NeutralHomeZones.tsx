@@ -403,7 +403,7 @@ function ZoneDetail({
               <Stat label="Highest temperature" value={`${num(temp.max, 1)}°C`} />
               <Stat label="Lowest temperature" value={`${num(temp.min, 1)}°C`} />
               <p className="text-[11px] text-muted-foreground">
-                {temp.rooms.length} room{temp.rooms.length === 1 ? "" : "s"} mapped
+                {"\n"}
               </p>
             </>
           ) : (
