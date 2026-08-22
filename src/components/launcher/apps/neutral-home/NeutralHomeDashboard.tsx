@@ -313,7 +313,9 @@ export function NeutralHomeDashboard({
   );
 
   const leaderboard = useMemo<LeagueRow[]>(() => {
-    const base = showAggregates ? circuits : detailCircuits(circuits);
+    const base = (showAggregates ? circuits : detailCircuits(circuits)).filter(
+      (c) => kindOf(classes, c.circuit_name) !== "zone",
+    );
     let rows: LeagueRow[] = base.map((c) => ({
       key: c.id,
       name: c.circuit_name,
