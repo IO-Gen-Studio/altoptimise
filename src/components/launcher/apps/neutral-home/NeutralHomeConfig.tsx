@@ -40,8 +40,13 @@ import {
 import {
   allMetricDefs,
   categoryOptions,
+  FIXED_METRICS,
+  fixedMetricRow,
   METRIC_SOURCE_LABEL,
   METRIC_SOURCE_UNIT,
+  normalizeMetricKeys,
+  userMetricRows,
+  type FixedMetricSlot,
   type MetricSource,
 } from "@/lib/neutral-home/config";
 import { classMap } from "@/lib/neutral-home/zones";
