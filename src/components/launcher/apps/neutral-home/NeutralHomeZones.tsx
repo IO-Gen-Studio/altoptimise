@@ -444,6 +444,35 @@ function ZoneDetail({
   );
 }
 
+/** Share of readings inside the comfort band, scored 0–100. */
+function ComfortScore({ inBand, total }: { inBand: number; total: number }) {
+  const score = total > 0 ? (inBand / total) * 100 : 0;
+  const tone =
+    score >= 85 ? "text-emerald-600" : score >= 50 ? "text-amber-600" : "text-destructive";
+  const rating = score >= 85 ? "Good" : score >= 50 ? "Fair" : "Poor";
+  return (
+    <div className="rounded-lg border bg-card p-3">
+      <div className="text-xs text-muted-foreground">Comfort score</div>
+      <div className={cn("text-xl font-semibold tabular-nums", tone)}>
+        {num(score, 0)}
+        <span className="text-sm font-normal"> / 100</span>
+      </div>
+      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
+        <div
+          className={cn(
+            "h-full rounded-full",
+            score >= 85 ? "bg-emerald-500" : score >= 50 ? "bg-amber-500" : "bg-destructive",
+          )}
+          style={{ width: `${Math.min(100, Math.max(0, score))}%` }}
+        />
+      </div>
+      <div className="pt-1 text-[11px] text-muted-foreground">
+        {rating} · {num(inBand)} of {num(total)} readings in band
+      </div>
+    </div>
+  );
+}
+
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg border bg-card p-3">
