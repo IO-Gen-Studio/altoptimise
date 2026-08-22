@@ -88,6 +88,10 @@ export interface MetricDef {
   select?: (circuits: CircuitRecord[]) => CircuitRecord[];
   /** Which uploaded column the metric reads. */
   column?: MetricSource;
+  /** Fixed-slot metrics evaluate a different column with their own formula. */
+  evaluateWith?: (circuits: CircuitRecord[], column: MetricSource) => number;
+  /** Set for the five fixed metrics present on every site. */
+  slot?: FixedSlot;
 }
 
 const kpiOf = (rows: CircuitRecord[]): PeriodKpis => computeKpis(rows);
