@@ -399,10 +399,10 @@ function ZoneDetail({
         <div className="space-y-2">
           {temp ? (
             <>
+              <ComfortScore inBand={temp.hoursInBand} total={temp.hours} />
               <Stat label="Highest temperature" value={`${num(temp.max, 1)}°C`} />
               <Stat label="Lowest temperature" value={`${num(temp.min, 1)}°C`} />
               <p className="text-[11px] text-muted-foreground">
-                {num(temp.hoursInBand)} of {num(temp.hours)} readings in band ·{" "}
                 {temp.rooms.length} room{temp.rooms.length === 1 ? "" : "s"} mapped
               </p>
             </>
