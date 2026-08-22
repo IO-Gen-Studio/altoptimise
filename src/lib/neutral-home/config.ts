@@ -273,7 +273,7 @@ export function fixedMetricDefs(siteMetrics: NhMetric[]): MetricDef[] {
       const exp = pick(fixedMetricRow(siteMetrics, "export")?.circuit_names ?? []);
       const imp = pick(fixedMetricRow(siteMetrics, "import")?.circuit_names ?? []);
       const evaluateWith = (rows: CircuitRecord[], column: MetricSource) =>
-        sumOf(imp(rows), column) - sumOf(exp(rows), column);
+        sumOf(imp(rows), column) + sumOf(exp(rows), column);
       return {
         key: `fixed:${f.slot}`,
         label: f.name,
