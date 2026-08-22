@@ -94,7 +94,12 @@ function convertDefs(defs: MetricDef[], basis: Basis): MetricDef[] {
   const column = basis === "cost" ? ("total_cost_p" as const) : ("co2_kg" as const);
   const unit = basis === "cost" ? "£" : "kg";
   return defs.map((d) => {
-    if (d.unit !== "kWh" || !d.select) return d;
+    if (d.unit !== "kWh") return d;
+    if (d.evaluateWith) {
+      const withCol = d.evaluateWith;
+      return { ...d, unit, evaluate: (rows: CircuitRecord[]) => withCol(rows, column) };
+    }
+    if (!d.select) return d;
     const select = d.select;
     return {
       ...d,
