@@ -651,6 +651,8 @@ interface MetricDraft {
   unit: string;
   circuit_names: string[];
   lower_is_better: boolean;
+  /** Set for the fixed metrics — name, value and unit are locked. */
+  fixed?: FixedMetricSlot;
 }
 
 const emptyMetric = (): MetricDraft => ({
@@ -668,6 +670,16 @@ const draftFrom = (m: NhMetric): MetricDraft => ({
   unit: m.unit,
   circuit_names: m.circuit_names,
   lower_is_better: m.lower_is_better,
+});
+
+const fixedDraft = (f: FixedMetricSlot, row?: NhMetric): MetricDraft => ({
+  id: row?.id,
+  name: f.name,
+  source: f.source,
+  unit: f.unit,
+  circuit_names: row?.circuit_names ?? [],
+  lower_is_better: row?.lower_is_better ?? f.lowerIsBetter,
+  fixed: f,
 });
 
 function MetricDialog({
