@@ -713,43 +713,50 @@ function MetricDialog({
     >
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{d.id ? "Edit metric" : "New metric"}</DialogTitle>
+          <DialogTitle>
+            {d.fixed ? `${d.fixed.name} — mapped meters` : d.id ? "Edit metric" : "New metric"}
+          </DialogTitle>
           <DialogDescription>
-            A user metric sums the chosen value across the mapped meters. Leave all meters unchecked
-            to use every sub-circuit.
+            {d.fixed
+              ? d.fixed.description
+              : "A user metric sums the chosen value across the mapped meters. Leave all meters unchecked to use every sub-circuit."}
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-3">
-          <div className="grid gap-1.5">
-            <Label>Metric name</Label>
-            <Input value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} />
-          </div>
-          <div className="grid gap-1.5">
-            <Label>Value</Label>
-            <Select
-              value={d.source}
-              onValueChange={(v) => setD({ ...d, source: v as MetricSource })}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {SOURCES.map((s) => (
-                  <SelectItem key={s} value={s}>
-                    {METRIC_SOURCE_LABEL[s]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid gap-1.5">
-            <Label>Unit</Label>
-            <Input
-              value={d.unit}
-              placeholder={METRIC_SOURCE_UNIT[d.source]}
-              onChange={(e) => setD({ ...d, unit: e.target.value })}
-            />
-          </div>
+          {d.fixed ? null : (
+            <>
+              <div className="grid gap-1.5">
+                <Label>Metric name</Label>
+                <Input value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} />
+              </div>
+              <div className="grid gap-1.5">
+                <Label>Value</Label>
+                <Select
+                  value={d.source}
+                  onValueChange={(v) => setD({ ...d, source: v as MetricSource })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SOURCES.map((s) => (
+                      <SelectItem key={s} value={s}>
+                        {METRIC_SOURCE_LABEL[s]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-1.5">
+                <Label>Unit</Label>
+                <Input
+                  value={d.unit}
+                  placeholder={METRIC_SOURCE_UNIT[d.source]}
+                  onChange={(e) => setD({ ...d, unit: e.target.value })}
+                />
+              </div>
+            </>
+          )}
           <div className="grid gap-1.5">
             <Label>Direction of a good change</Label>
             <Select
