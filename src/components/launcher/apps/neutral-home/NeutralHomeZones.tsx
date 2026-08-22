@@ -421,7 +421,7 @@ function ZoneDetail({
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-muted-foreground">
-                <th className="py-1 pr-3 font-medium">Description</th>
+                <th className="py-1 pr-3 font-medium">Equipment Description</th>
                 <th className="py-1 text-right font-medium">Usage (kWh)</th>
                 <th className="py-1 text-right font-medium">Cost (£)</th>
                 <th className="py-1 text-right font-medium">CO2 (kg)</th>
