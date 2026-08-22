@@ -271,8 +271,28 @@ export function NeutralHomeZones({
                       </td>
                       <td className="py-2 pl-3 text-right tabular-nums">{num(z.co2Kg, 1)}</td>
                       <td className="py-2 pl-3 text-right tabular-nums">{num(z.costGbp, 2)}</td>
-                      <td className="py-2 pl-3 text-right tabular-nums">{num(z.dayKwh, 1)}</td>
-                      <td className="py-2 pl-3 text-right tabular-nums">{num(z.nightKwh, 1)}</td>
+                      <td className="py-2 pl-3 text-right tabular-nums">
+                        {num(z.dayKwh, 1)}{" "}
+                        <span className="text-xs text-muted-foreground">
+                          ({num(100 - z.nightPct, 1)}%)
+                        </span>
+                      </td>
+                      <td
+                        className={cn(
+                          "py-2 pl-3 text-right tabular-nums",
+                          z.nightPct > 20 && "font-semibold text-destructive",
+                        )}
+                      >
+                        {num(z.nightKwh, 1)}{" "}
+                        <span
+                          className={cn(
+                            "text-xs",
+                            z.nightPct > 20 ? "text-destructive" : "text-muted-foreground",
+                          )}
+                        >
+                          ({num(z.nightPct, 1)}%)
+                        </span>
+                      </td>
                       <td className="py-2 pl-3 text-right tabular-nums">
                         {t ? (
                           num(t.avg, 1)
