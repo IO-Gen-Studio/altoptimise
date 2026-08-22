@@ -177,7 +177,6 @@ export function NeutralHomeZones({
       <CardContent className="p-5">
         <div className="flex flex-wrap items-center justify-between gap-3 pb-4">
           <div className="flex items-center gap-2">
-            <LayoutGrid className="h-4 w-4 text-muted-foreground" />
             <div>
               <h2 className="text-base font-semibold tracking-tight">Zone Consumption and Temperature Overview</h2>
               <p className="text-sm text-muted-foreground">
