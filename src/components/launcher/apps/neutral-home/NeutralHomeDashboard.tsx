@@ -58,6 +58,7 @@ import {
   buildComparison,
   categoryLabelMap,
   findLastYearPeriod,
+  normalizeMetricKeys,
   sumOf,
   type MetricDef,
 } from "@/lib/neutral-home/config";
