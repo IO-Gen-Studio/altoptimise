@@ -177,7 +177,6 @@ export function NeutralHomeZones({
       <CardContent className="p-5">
         <div className="flex flex-wrap items-center justify-between gap-3 pb-4">
           <div className="flex items-center gap-2">
-            <LayoutGrid className="h-4 w-4 text-muted-foreground" />
             <div>
               <h2 className="text-base font-semibold tracking-tight">Zone Consumption and Temperature Overview</h2>
               <p className="text-sm text-muted-foreground">
@@ -271,8 +270,28 @@ export function NeutralHomeZones({
                       </td>
                       <td className="py-2 pl-3 text-right tabular-nums">{num(z.co2Kg, 1)}</td>
                       <td className="py-2 pl-3 text-right tabular-nums">{num(z.costGbp, 2)}</td>
-                      <td className="py-2 pl-3 text-right tabular-nums">{num(z.dayKwh, 1)}</td>
-                      <td className="py-2 pl-3 text-right tabular-nums">{num(z.nightKwh, 1)}</td>
+                      <td className="py-2 pl-3 text-right tabular-nums">
+                        {num(z.dayKwh, 1)}{" "}
+                        <span className="text-xs text-muted-foreground">
+                          ({num(100 - z.nightPct, 1)}%)
+                        </span>
+                      </td>
+                      <td
+                        className={cn(
+                          "py-2 pl-3 text-right tabular-nums",
+                          z.nightPct > 20 && "font-semibold text-destructive",
+                        )}
+                      >
+                        {num(z.nightKwh, 1)}{" "}
+                        <span
+                          className={cn(
+                            "text-xs",
+                            z.nightPct > 20 ? "text-destructive" : "text-muted-foreground",
+                          )}
+                        >
+                          ({num(z.nightPct, 1)}%)
+                        </span>
+                      </td>
                       <td className="py-2 pl-3 text-right tabular-nums">
                         {t ? (
                           num(t.avg, 1)
@@ -380,10 +399,10 @@ function ZoneDetail({
         <div className="space-y-2">
           {temp ? (
             <>
+              <ComfortScore inBand={temp.hoursInBand} total={temp.hours} />
               <Stat label="Highest temperature" value={`${num(temp.max, 1)}°C`} />
               <Stat label="Lowest temperature" value={`${num(temp.min, 1)}°C`} />
               <p className="text-[11px] text-muted-foreground">
-                {num(temp.hoursInBand)} of {num(temp.hours)} readings in band ·{" "}
                 {temp.rooms.length} room{temp.rooms.length === 1 ? "" : "s"} mapped
               </p>
             </>
@@ -421,6 +440,35 @@ function ZoneDetail({
           </table>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/** Share of readings inside the comfort band, scored 0–100. */
+function ComfortScore({ inBand, total }: { inBand: number; total: number }) {
+  const score = total > 0 ? (inBand / total) * 100 : 0;
+  const tone =
+    score >= 85 ? "text-emerald-600" : score >= 50 ? "text-amber-600" : "text-destructive";
+  const rating = score >= 85 ? "Good" : score >= 50 ? "Fair" : "Poor";
+  return (
+    <div className="rounded-lg border bg-card p-3">
+      <div className="text-xs text-muted-foreground">Comfort score</div>
+      <div className={cn("text-xl font-semibold tabular-nums", tone)}>
+        {num(score, 0)}
+        <span className="text-sm font-normal"> / 100</span>
+      </div>
+      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
+        <div
+          className={cn(
+            "h-full rounded-full",
+            score >= 85 ? "bg-emerald-500" : score >= 50 ? "bg-amber-500" : "bg-destructive",
+          )}
+          style={{ width: `${Math.min(100, Math.max(0, score))}%` }}
+        />
+      </div>
+      <div className="pt-1 text-[11px] text-muted-foreground">
+        {rating} · {num(inBand)} of {num(total)} readings in band
+      </div>
     </div>
   );
 }

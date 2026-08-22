@@ -50,7 +50,7 @@ import {
 } from "@/lib/neutral-home/analytics";
 import { NeutralHomeTemperature } from "./NeutralHomeTemperature";
 import { NeutralHomeZones } from "./NeutralHomeZones";
-import { classMap, zoneOf } from "@/lib/neutral-home/zones";
+import { classMap, kindOf, zoneOf } from "@/lib/neutral-home/zones";
 import { DEFAULT_BAND } from "@/lib/neutral-home/temp-analytics";
 import {
   allMetricDefs,
@@ -313,7 +313,9 @@ export function NeutralHomeDashboard({
   );
 
   const leaderboard = useMemo<LeagueRow[]>(() => {
-    const base = showAggregates ? circuits : detailCircuits(circuits);
+    const base = (showAggregates ? circuits : detailCircuits(circuits)).filter(
+      (c) => kindOf(classes, c.circuit_name) !== "zone",
+    );
     let rows: LeagueRow[] = base.map((c) => ({
       key: c.id,
       name: c.circuit_name,
