@@ -187,8 +187,149 @@ export function userMetricDef(m: NhMetric): MetricDef {
   };
 }
 
+/* ---------------- fixed metrics (every site) ---------------- */
+
+export type FixedSlot = "consumption" | "solar" | "export" | "import" | "net";
+
+export interface FixedMetricSlot {
+  slot: FixedSlot;
+  /** Stored metric name — also the lookup key for the site's circuit mapping. */
+  name: string;
+  unit: string;
+  source: MetricSource;
+  lowerIsBetter: boolean;
+  /** Derived slots have no circuit mapping of their own. */
+  derived?: boolean;
+  description: string;
+}
+
+export const FIXED_METRICS: FixedMetricSlot[] = [
+  {
+    slot: "consumption",
+    name: "Consumption",
+    unit: "kWh",
+    source: "usage_kwh",
+    lowerIsBetter: true,
+    description: "Sum of the circuits mapped as site consumption.",
+  },
+  {
+    slot: "solar",
+    name: "Solar Generation",
+    unit: "kWh",
+    source: "usage_kwh",
+    lowerIsBetter: false,
+    description: "Sum of the circuits mapped as PV / solar generation.",
+  },
+  {
+    slot: "export",
+    name: "Export Energy",
+    unit: "kWh",
+    source: "usage_kwh",
+    lowerIsBetter: false,
+    description: "Sum of the circuits mapped as export.",
+  },
+  {
+    slot: "import",
+    name: "Import Energy",
+    unit: "kWh",
+    source: "usage_kwh",
+    lowerIsBetter: true,
+    description: "Sum of the circuits mapped as import.",
+  },
+  {
+    slot: "net",
+    name: "Net Energy",
+    unit: "kWh",
+    source: "usage_kwh",
+    lowerIsBetter: false,
+    derived: true,
+    description: "Export Energy minus Import Energy — derived from the two mappings above.",
+  },
+];
+
+const FIXED_BY_NAME = new Map(FIXED_METRICS.map((f) => [f.name.toLowerCase(), f]));
+
+export const fixedSlotOfName = (name: string): FixedMetricSlot | undefined =>
+  FIXED_BY_NAME.get(name.trim().toLowerCase());
+
+/** The stored row that carries a fixed slot's circuit mapping for this site. */
+export const fixedMetricRow = (
+  siteMetrics: NhMetric[],
+  slot: FixedSlot,
+): NhMetric | undefined => {
+  const def = FIXED_METRICS.find((f) => f.slot === slot);
+  if (!def) return undefined;
+  return siteMetrics.find((m) => m.name.trim().toLowerCase() === def.name.toLowerCase());
+};
+
+const pick = (names: string[]) => {
+  const set = new Set(names);
+  return (rows: CircuitRecord[]) => (set.size ? rows.filter((r) => set.has(r.circuit_name)) : []);
+};
+
+export function fixedMetricDefs(siteMetrics: NhMetric[]): MetricDef[] {
+  return FIXED_METRICS.map((f) => {
+    if (f.slot === "net") {
+      const exp = pick(fixedMetricRow(siteMetrics, "export")?.circuit_names ?? []);
+      const imp = pick(fixedMetricRow(siteMetrics, "import")?.circuit_names ?? []);
+      const evaluateWith = (rows: CircuitRecord[], column: MetricSource) =>
+        sumOf(exp(rows), column) - sumOf(imp(rows), column);
+      return {
+        key: `fixed:${f.slot}`,
+        label: f.name,
+        unit: f.unit,
+        lowerIsBetter: f.lowerIsBetter,
+        system: true,
+        slot: f.slot,
+        column: f.source,
+        select: (rows: CircuitRecord[]) => [...exp(rows), ...imp(rows)],
+        evaluate: (rows: CircuitRecord[]) => evaluateWith(rows, f.source),
+        evaluateWith,
+      } satisfies MetricDef;
+    }
+    const row = fixedMetricRow(siteMetrics, f.slot);
+    const source = (row?.source as MetricSource) ?? f.source;
+    const select = pick(row?.circuit_names ?? []);
+    return {
+      key: `fixed:${f.slot}`,
+      label: f.name,
+      unit: row?.unit || f.unit,
+      lowerIsBetter: row?.lower_is_better ?? f.lowerIsBetter,
+      system: true,
+      slot: f.slot,
+      column: source,
+      select,
+      evaluate: (rows: CircuitRecord[]) => sumOf(select(rows), source),
+    } satisfies MetricDef;
+  });
+}
+
+/** Rows the user created themselves (fixed-slot rows are managed separately). */
+export const userMetricRows = (siteMetrics: NhMetric[]): NhMetric[] =>
+  siteMetrics.filter((m) => !fixedSlotOfName(m.name));
+
 export function allMetricDefs(siteMetrics: NhMetric[]): MetricDef[] {
-  return [...SYSTEM_METRICS, ...siteMetrics.map(userMetricDef)];
+  return [
+    ...fixedMetricDefs(siteMetrics),
+    ...SYSTEM_METRICS,
+    ...userMetricRows(siteMetrics).map(userMetricDef),
+  ];
+}
+
+/** Migrates saved selections that pointed at the old user-metric rows. */
+export function normalizeMetricKeys(keys: string[], siteMetrics: NhMetric[]): string[] {
+  const byId = new Map(
+    siteMetrics
+      .map((m) => [m.id, fixedSlotOfName(m.name)?.slot] as const)
+      .filter(([, slot]) => !!slot) as [string, FixedSlot][],
+  );
+  const out: string[] = [];
+  for (const k of keys) {
+    const slot = k.startsWith("user:") ? byId.get(k.slice(5)) : undefined;
+    const next = slot ? `fixed:${slot}` : k;
+    if (!out.includes(next)) out.push(next);
+  }
+  return out;
 }
 
 export interface ComparisonCell {
