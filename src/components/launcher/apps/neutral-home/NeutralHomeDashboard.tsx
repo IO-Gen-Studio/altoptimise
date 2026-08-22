@@ -254,8 +254,10 @@ export function NeutralHomeDashboard({
   );
   const selectedKeys = useMemo(() => {
     const s = bundle.settings.find((x) => x.site_id === siteId);
-    return s?.comparison_metrics?.length ? s.comparison_metrics : null;
-  }, [bundle.settings, siteId]);
+    return s?.comparison_metrics?.length
+      ? normalizeMetricKeys(s.comparison_metrics, siteMetrics)
+      : null;
+  }, [bundle.settings, siteId, siteMetrics]);
   const shownDefs = useMemo(
     () =>
       selectedKeys
