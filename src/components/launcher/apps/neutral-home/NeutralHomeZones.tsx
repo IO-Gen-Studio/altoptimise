@@ -348,11 +348,24 @@ export function NeutralHomeZones({
                           <span className="text-xs italic text-muted-foreground">No data</span>
                         )}
                       </td>
+                      <td className="py-2 pl-3 text-right tabular-nums">
+                        {kwhPerHdd(z.totalKwh, totalHdd) == null ? (
+                          <span className="text-xs italic text-muted-foreground">No data</span>
+                        ) : (
+                          num(kwhPerHdd(z.totalKwh, totalHdd) as number, 2)
+                        )}
+                      </td>
                     </tr>
                     {isOpen ? (
                       <tr className="border-t bg-muted/20">
                         <td colSpan={COLUMNS.length + 1} className="p-4">
-                          <ZoneDetail zone={z} band={band} temp={temps.get(z.zone)} />
+                          <ZoneDetail
+                            zone={z}
+                            band={band}
+                            temp={temps.get(z.zone)}
+                            outside={outside}
+                            totalHdd={totalHdd}
+                          />
                         </td>
                       </tr>
                     ) : null}
