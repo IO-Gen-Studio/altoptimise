@@ -286,7 +286,7 @@ export function NeutralHomeSettings({ orgId, bundle, canEdit, onChanged }: Props
                 onChange={(e) => setDraft({ ...draft, address: e.target.value })}
               />
             </div>
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <div className="grid gap-1.5">
                 <Label htmlFor="nh-postcode">Postcode</Label>
                 <Input
@@ -854,7 +854,7 @@ function UploadDrawer({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <FileSlot
             label="1. Headline Usage Report (optional)"
             file={headline}
