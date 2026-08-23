@@ -710,31 +710,42 @@ export function NeutralHomeDashboard({
                       </tr>
                     </thead>
                     <tbody>
+                      <SectionRow
+                        title="Energy Performance"
+                        span={
+                          2 + (compareCircuits.length ? 2 : 0) + (baselineCircuits.length ? 2 : 0)
+                        }
+                      />
                       {basisRows.map((r) => (
-                        <tr key={r.key} className="border-t">
-                          <td className="py-2">{r.label}</td>
-                          <td className="py-2 text-right">
-                            {num(r.current, 2)} {r.unit}
-                          </td>
-                          {compareCircuits.length ? (
-                            <>
-                              <td className="py-2 text-right text-muted-foreground">
-                                {r.lastYear ? `${num(r.lastYear.value, 2)} ${r.unit}` : "—"}
-                              </td>
-                              <ChangeCell cell={r.lastYear} unit={r.unit} />
-                            </>
-                          ) : null}
-                          {baselineCircuits.length ? (
-                            <>
-                              <td className="py-2 text-right text-muted-foreground">
-                                {r.baseline ? `${num(r.baseline.value, 2)} ${r.unit}` : "—"}
-                              </td>
-                              <ChangeCell cell={r.baseline} unit={r.unit} />
-                            </>
-                          ) : null}
-                        </tr>
+                        <MetricRow
+                          key={r.key}
+                          row={r}
+                          showLastYear={!!compareCircuits.length}
+                          showBaseline={!!baselineCircuits.length}
+                        />
                       ))}
+                      {disciplineRows.length ? (
+                        <>
+                          <SectionRow
+                            title="Main Consumers by Discipline"
+                            span={
+                              2 +
+                              (compareCircuits.length ? 2 : 0) +
+                              (baselineCircuits.length ? 2 : 0)
+                            }
+                          />
+                          {disciplineRows.map((r) => (
+                            <MetricRow
+                              key={r.key}
+                              row={r}
+                              showLastYear={!!compareCircuits.length}
+                              showBaseline={!!baselineCircuits.length}
+                            />
+                          ))}
+                        </>
+                      ) : null}
                     </tbody>
+
                   </table>
                 </div>
               </CardContent>
