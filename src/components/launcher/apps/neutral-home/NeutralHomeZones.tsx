@@ -153,17 +153,25 @@ export function NeutralHomeZones({
     return { warmest, coldest };
   }, [temps]);
 
+  const totalHdd = useMemo(() => periodHdd(weatherDays), [weatherDays]);
+  const outsideMean = useMemo(() => periodMeanTemp(weatherDays), [weatherDays]);
+  const outside = useMemo(() => outsideByDay(weatherDays), [weatherDays]);
+
   const sorted = useMemo(() => {
     const list = [...aggs];
     const { key, dir } = sort;
     const val = (z: ZoneAgg) =>
-      key === "avgTemp" ? (temps.get(z.zone)?.avg ?? -Infinity) : (z[key as keyof ZoneAgg] as number);
+      key === "avgTemp"
+        ? (temps.get(z.zone)?.avg ?? -Infinity)
+        : key === "kwhPerHdd"
+          ? (kwhPerHdd(z.totalKwh, totalHdd) ?? -Infinity)
+          : (z[key as keyof ZoneAgg] as number);
     list.sort((a, b) => {
       const cmp = key === "zone" ? a.zone.localeCompare(b.zone) : val(a) - val(b);
       return dir === "asc" ? cmp : -cmp;
     });
     return list;
-  }, [aggs, sort, temps]);
+  }, [aggs, sort, temps, totalHdd]);
 
   const toggleSort = (key: SortKey) =>
     setSort((s) =>
