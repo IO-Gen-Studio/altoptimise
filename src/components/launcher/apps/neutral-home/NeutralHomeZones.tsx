@@ -75,6 +75,9 @@ export function NeutralHomeZones({
   siteId,
   band,
   temperaturePeriodId,
+  weatherDays = [],
+  hddBase,
+  weatherNote,
 }: {
   circuits: CircuitRecord[];
   classes: ClassMap;
@@ -83,6 +86,11 @@ export function NeutralHomeZones({
   band: ComfortBand;
   /** period id when the period has temperature data, otherwise null */
   temperaturePeriodId: string | null;
+  /** daily outside air temperature + HDD for the active period */
+  weatherDays?: WeatherDay[];
+  hddBase: number;
+  /** reason weather is unavailable, when it is */
+  weatherNote?: string | null;
 }) {
   const [rows, setRows] = useState<RoomHourRow[]>([]);
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({
