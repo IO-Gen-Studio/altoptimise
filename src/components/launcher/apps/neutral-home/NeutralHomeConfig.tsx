@@ -570,37 +570,83 @@ export function NeutralHomeConfig({
           )}
         </TabsContent>
 
-        <TabsContent value="comparison" className="mt-4 space-y-3">
-          <p className="text-sm text-muted-foreground">
-            Choose which metrics appear in the Period comparison table for this site.
-          </p>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {metricDefs.map((d) => (
-              <label key={d.key} className="flex items-center gap-2 rounded-lg border p-3 text-sm">
-                <Checkbox
-                  checked={selected.includes(d.key)}
-                  disabled={disabled}
-                  onCheckedChange={(v) => {
-                    const next = v ? [...selected, d.key] : selected.filter((k) => k !== d.key);
-                    void run("Saving comparison metrics…", () =>
-                      saveNhSiteSettings({
-                        data: {
-                          organization_id: orgId,
-                          site_id: siteId,
-                          comparison_metrics: next,
-                        },
-                      }),
-                    );
-                  }}
-                />
-                <span>{d.label}</span>
-                <span className="ml-auto text-xs text-muted-foreground">
-                  {d.system ? "system" : "user"} · {d.unit}
-                </span>
-              </label>
-            ))}
+        <TabsContent value="comparison" className="mt-4 space-y-5">
+          <div className="space-y-3">
+            <div>
+              <h3 className="text-sm font-semibold">Energy Performance</h3>
+              <p className="text-sm text-muted-foreground">
+                Metrics shown in the first section of the Performance Metrics table.
+              </p>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {metricDefs.map((d) => (
+                <label
+                  key={d.key}
+                  className="flex items-center gap-2 rounded-lg border p-3 text-sm"
+                >
+                  <Checkbox
+                    checked={selected.includes(d.key)}
+                    disabled={disabled}
+                    onCheckedChange={(v) => {
+                      const next = v ? [...selected, d.key] : selected.filter((k) => k !== d.key);
+                      void run("Saving comparison metrics…", () =>
+                        saveNhSiteSettings({
+                          data: {
+                            organization_id: orgId,
+                            site_id: siteId,
+                            comparison_metrics: next,
+                          },
+                        }),
+                      );
+                    }}
+                  />
+                  <span>{d.label}</span>
+                  <span className="ml-auto text-xs text-muted-foreground">
+                    {d.system ? "system" : "user"} · {d.unit}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <div>
+              <h3 className="text-sm font-semibold">Main Consumers by Discipline</h3>
+              <p className="text-sm text-muted-foreground">
+                Choose which sub-categories are reported in the second section of the Performance
+                Metrics table.
+              </p>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {options.map((o) => {
+                const key = disciplineKey(o.code);
+                return (
+                  <label key={key} className="flex items-center gap-2 rounded-lg border p-3 text-sm">
+                    <Checkbox
+                      checked={selected.includes(key)}
+                      disabled={disabled}
+                      onCheckedChange={(v) => {
+                        const next = v ? [...selected, key] : selected.filter((k) => k !== key);
+                        void run("Saving disciplines…", () =>
+                          saveNhSiteSettings({
+                            data: {
+                              organization_id: orgId,
+                              site_id: siteId,
+                              comparison_metrics: next,
+                            },
+                          }),
+                        );
+                      }}
+                    />
+                    <span>{o.label}</span>
+                    <span className="ml-auto text-xs text-muted-foreground">sub-category</span>
+                  </label>
+                );
+              })}
+            </div>
           </div>
         </TabsContent>
+
       </Tabs>
     </>
   );
