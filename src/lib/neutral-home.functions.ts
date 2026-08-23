@@ -777,7 +777,15 @@ export const syncNhWeather = createServerFn({ method: "POST" })
       // takes effect even when the external weather service is unavailable.
       hdd: day.temp_mean == null ? null : Math.max(0, base - day.temp_mean),
     }));
-    const fetched = await fetchOpenMeteo(lat, lon, data.from, data.to);
+    let fetched: Awaited<ReturnType<typeof fetchOpenMeteo>> = [];
+    try {
+      fetched = await fetchOpenMeteo(lat, lon, data.from, data.to);
+    } catch {
+      // A weather-provider outage must not hide previously cached HDD values.
+      return cached.length
+        ? { days: cached }
+        : { days: [], error: "Weather data unavailable right now." };
+    }
     if (!fetched.length) {
       return cached.length
         ? { days: cached }
