@@ -300,12 +300,23 @@ export function NeutralHomeDashboard({
       ? normalizeMetricKeys(s.comparison_metrics, siteMetrics)
       : null;
   }, [bundle.settings, siteId, siteMetrics]);
+  const selection = useMemo(
+    () => (selectedKeys ? splitSelection(selectedKeys) : null),
+    [selectedKeys],
+  );
   const shownDefs = useMemo(
     () =>
-      selectedKeys
-        ? metricDefs.filter((d) => selectedKeys.includes(d.key))
+      selection
+        ? metricDefs.filter((d) => selection.metrics.includes(d.key))
         : metricDefs.filter((d) => d.system),
-    [metricDefs, selectedKeys],
+    [metricDefs, selection],
+  );
+  const disciplineShownDefs = useMemo(
+    () =>
+      selection?.disciplines.length
+        ? disciplineDefs(selection.disciplines, labels, (c) => kindOf(classes, c) === "zone")
+        : [],
+    [selection, labels, classes],
   );
   const comparisonRows = useMemo(
     () =>
@@ -326,6 +337,17 @@ export function NeutralHomeDashboard({
       baselineCircuits.length ? baselineCircuits : null,
     );
   }, [basis, shownDefs, circuits, compareCircuits, baselineCircuits]);
+
+  const disciplineRows = useMemo(() => {
+    if (!disciplineShownDefs.length) return [];
+    return buildComparison(
+      convertDefs(disciplineShownDefs, basis),
+      circuits,
+      compareCircuits.length ? compareCircuits : null,
+      baselineCircuits.length ? baselineCircuits : null,
+    );
+  }, [basis, disciplineShownDefs, circuits, compareCircuits, baselineCircuits]);
+
 
   const filtered = useMemo(() => detailCircuits(circuits), [circuits]);
 
