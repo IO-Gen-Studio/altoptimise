@@ -421,7 +421,7 @@ function ZoneDetail({
           {temp?.daily.length ? (
             <div className="h-56">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={temp.daily} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                <LineChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
                   <XAxis
                     dataKey="date"
@@ -439,7 +439,10 @@ function ZoneDetail({
                       borderRadius: 8,
                       fontSize: 12,
                     }}
-                    formatter={(v: number) => [`${v}°C`, "Avg"]}
+                    formatter={(v: number, n) => [
+                      `${v}°C`,
+                      n === "outside" ? "Outside" : "Zone avg",
+                    ]}
                   />
                   <ReferenceLine
                     y={band.min}
@@ -470,6 +473,15 @@ function ZoneDetail({
                     strokeWidth={2}
                     dot={false}
                   />
+                  <Line
+                    type="monotone"
+                    dataKey="outside"
+                    stroke="var(--chart-2)"
+                    strokeWidth={2}
+                    strokeDasharray="5 3"
+                    dot={false}
+                    connectNulls
+                  />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -486,8 +498,14 @@ function ZoneDetail({
               <ComfortScore inBand={temp.hoursInBand} total={temp.hours} />
               <Stat label="Highest temperature" value={`${num(temp.max, 1)}°C`} />
               <Stat label="Lowest temperature" value={`${num(temp.min, 1)}°C`} />
+              <Stat
+                label="kWh / HDD"
+                value={perHdd == null ? "—" : num(perHdd, 2)}
+              />
               <p className="text-[11px] text-muted-foreground">
-                {"\n"}
+                {uplift == null
+                  ? "\n"
+                  : `Average ${num(uplift, 1)}°C above outside air`}
               </p>
             </>
           ) : (
