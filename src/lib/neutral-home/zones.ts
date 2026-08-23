@@ -62,7 +62,12 @@ export interface ZoneMemberRow {
   kwh: number;
   costGbp: number;
   co2Kg: number;
+  dayKwh: number;
+  nightKwh: number;
+  /** night share of the equipment's own day+night total */
+  nightPct: number;
 }
+
 
 export interface ZoneAgg {
   zone: string;
