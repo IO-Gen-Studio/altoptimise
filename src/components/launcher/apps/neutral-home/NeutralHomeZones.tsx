@@ -230,6 +230,12 @@ export function NeutralHomeZones({
                 HDD base:{" "}
                 <span className="font-medium tabular-nums text-foreground">{num(hddBase, 1)}°C</span>
               </span>
+              {totalHdd === 0 ? (
+                <span className="italic">
+                  No heating degree days this period — outside air stayed above the{" "}
+                  {num(hddBase, 1)}°C base, so kWh / HDD is not applicable.
+                </span>
+              ) : null}
             </>
           ) : (
             <span>{weatherNote ?? "No weather data for this period."}</span>
@@ -350,7 +356,16 @@ export function NeutralHomeZones({
                       </td>
                       <td className="py-2 pl-3 text-right tabular-nums">
                         {kwhPerHdd(z.totalKwh, totalHdd) == null ? (
-                          <span className="text-xs italic text-muted-foreground">No data</span>
+                          <span
+                            className="text-xs italic text-muted-foreground"
+                            title={
+                              weatherDays.length
+                                ? `No heating degree days (base ${hddBase}°C) in this period`
+                                : "No outside temperature data for this period"
+                            }
+                          >
+                            n/a
+                          </span>
                         ) : (
                           num(kwhPerHdd(z.totalKwh, totalHdd) as number, 2)
                         )}
@@ -500,7 +515,7 @@ function ZoneDetail({
               <Stat label="Lowest temperature" value={`${num(temp.min, 1)}°C`} />
               <Stat
                 label="kWh / HDD"
-                value={perHdd == null ? "—" : num(perHdd, 2)}
+                value={perHdd == null ? "n/a" : num(perHdd, 2)}
               />
               <p className="text-[11px] text-muted-foreground">
                 {uplift == null
