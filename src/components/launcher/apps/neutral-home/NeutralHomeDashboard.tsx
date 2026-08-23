@@ -147,6 +147,56 @@ function ChangeCell({
   );
 }
 
+/** Grouping heading inside the performance metrics table. */
+function SectionRow({ title, span }: { title: string; span: number }) {
+  return (
+    <tr className="border-t bg-muted/40">
+      <td
+        colSpan={span}
+        className="py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
+      >
+        {title}
+      </td>
+    </tr>
+  );
+}
+
+function MetricRow({
+  row,
+  showLastYear,
+  showBaseline,
+}: {
+  row: ComparisonRow;
+  showLastYear: boolean;
+  showBaseline: boolean;
+}) {
+  return (
+    <tr className="border-t">
+      <td className="py-2">{row.label}</td>
+      <td className="py-2 text-right">
+        {num(row.current, 2)} {row.unit}
+      </td>
+      {showLastYear ? (
+        <>
+          <td className="py-2 text-right text-muted-foreground">
+            {row.lastYear ? `${num(row.lastYear.value, 2)} ${row.unit}` : "—"}
+          </td>
+          <ChangeCell cell={row.lastYear} unit={row.unit} />
+        </>
+      ) : null}
+      {showBaseline ? (
+        <>
+          <td className="py-2 text-right text-muted-foreground">
+            {row.baseline ? `${num(row.baseline.value, 2)} ${row.unit}` : "—"}
+          </td>
+          <ChangeCell cell={row.baseline} unit={row.unit} />
+        </>
+      ) : null}
+    </tr>
+  );
+}
+
+
 export function NeutralHomeDashboard({
   bundle,
   onExporter,
