@@ -33,9 +33,9 @@ export function periodMeanTemp(days: WeatherDay[]): number | null {
 export const kwhPerHdd = (kwh: number, totalHdd: number): number | null =>
   totalHdd > 0 ? kwh / totalHdd : null;
 
-/** Outside temperature keyed by ISO date, for chart joins. */
+/** Outside temperature keyed by MM-DD, matching the zone daily series. */
 export function outsideByDay(days: WeatherDay[]): Map<string, number> {
   const m = new Map<string, number>();
-  for (const d of days) if (d.temp_mean != null) m.set(d.day.slice(0, 10), d.temp_mean);
+  for (const d of days) if (d.temp_mean != null) m.set(d.day.slice(5, 10), d.temp_mean);
   return m;
 }
