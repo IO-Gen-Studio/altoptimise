@@ -728,6 +728,15 @@ export const syncNhWeather = createServerFn({ method: "POST" })
   .handler(async ({ data, context }): Promise<{ days: WeatherDay[]; error?: string }> => {
     const { supabase } = context;
     /* eslint-disable @typescript-eslint/no-explicit-any */
+    const { data: cachedRows, error: cacheErr } = await supabase
+      .from("neutral_home_weather_days" as any)
+      .select("day,temp_min,temp_mean,temp_max,hdd")
+      .eq("site_id", data.site_id)
+      .gte("day", data.from)
+      .lte("day", data.to)
+      .order("day");
+    if (cacheErr) throw new Error(cacheErr.message);
+
     const { data: site, error: siteErr } = await supabase
       .from("neutral_home_sites" as any)
       .select("id,postcode,latitude,longitude,hdd_base_c")
@@ -762,8 +771,26 @@ export const syncNhWeather = createServerFn({ method: "POST" })
     }
 
     const base = s.hdd_base_c ?? 15.5;
-    const fetched = await fetchOpenMeteo(lat, lon, data.from, data.to);
-    if (!fetched.length) return { days: [], error: "No weather data available for this period." };
+    const cached = ((cachedRows ?? []) as unknown as WeatherDay[]).map((day) => ({
+      ...day,
+      // Recalculate from cached temperatures so changing the site's HDD base
+      // takes effect even when the external weather service is unavailable.
+      hdd: day.temp_mean == null ? null : Math.max(0, base - day.temp_mean),
+    }));
+    let fetched: Awaited<ReturnType<typeof fetchOpenMeteo>> = [];
+    try {
+      fetched = await fetchOpenMeteo(lat, lon, data.from, data.to);
+    } catch {
+      // A weather-provider outage must not hide previously cached HDD values.
+      return cached.length
+        ? { days: cached }
+        : { days: [], error: "Weather data unavailable right now." };
+    }
+    if (!fetched.length) {
+      return cached.length
+        ? { days: cached }
+        : { days: [], error: "No weather data available for this period." };
+    }
 
     const rows = fetched.map((d) => ({
       organization_id: data.organization_id,
