@@ -4,6 +4,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { CircuitRecord } from "@/lib/neutral-home/analytics";
 import type { RoomHourRow } from "@/lib/neutral-home/temp-analytics";
+import type { WeatherDay } from "@/lib/neutral-home/weather";
 
 export interface NhSite {
   id: string;
@@ -14,6 +15,9 @@ export interface NhSite {
   floor_area_m2: number | null;
   occupancy: number | null;
   notes: string | null;
+  hdd_base_c?: number | null;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 export interface NhPeriod {
@@ -180,6 +184,7 @@ const SiteInput = z.object({
   floor_area_m2: z.number().min(0).nullable().optional(),
   occupancy: z.number().min(0).nullable().optional(),
   notes: z.string().max(2000).nullable().optional(),
+  hdd_base_c: z.number().min(0).max(30).nullable().optional(),
 });
 
 export const upsertNhSite = createServerFn({ method: "POST" })
@@ -194,6 +199,7 @@ export const upsertNhSite = createServerFn({ method: "POST" })
       floor_area_m2: data.floor_area_m2 ?? null,
       occupancy: data.occupancy ?? null,
       notes: data.notes ?? null,
+      ...(data.hdd_base_c == null ? {} : { hdd_base_c: data.hdd_base_c }),
     };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const table = context.supabase.from("neutral_home_sites" as any);
@@ -683,4 +689,136 @@ export const saveNhSiteSettings = createServerFn({ method: "POST" })
       );
     if (error) throw new Error(error.message);
     return { ok: true };
+  });
+/* ---------------------------------------------------------------- weather */
+
+const WeatherInput = z.object({
+  organization_id: z.string().uuid(),
+  site_id: z.string().uuid(),
+  from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+
+export const loadNhWeather = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    WeatherInput.omit({ organization_id: true }).parse(d),
+  )
+  .handler(async ({ data, context }): Promise<WeatherDay[]> => {
+    const { data: rows, error } = await context.supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .from("neutral_home_weather_days" as any)
+      .select("day,temp_min,temp_mean,temp_max,hdd")
+      .eq("site_id", data.site_id)
+      .gte("day", data.from)
+      .lte("day", data.to)
+      .order("day");
+    if (error) throw new Error(error.message);
+    return (rows ?? []) as unknown as WeatherDay[];
+  });
+
+async function fetchOpenMeteo(lat: number, lon: number, from: string, to: string) {
+  const daily = "temperature_2m_min,temperature_2m_mean,temperature_2m_max";
+  const qs = `latitude=${lat}&longitude=${lon}&start_date=${from}&end_date=${to}&daily=${daily}&timezone=Europe%2FLondon`;
+  const urls = [
+    `https://archive-api.open-meteo.com/v1/archive?${qs}`,
+    `https://api.open-meteo.com/v1/forecast?${qs}`,
+  ];
+  for (const url of urls) {
+    const res = await fetch(url);
+    if (!res.ok) continue;
+    const json = (await res.json()) as {
+      daily?: {
+        time?: string[];
+        temperature_2m_min?: (number | null)[];
+        temperature_2m_mean?: (number | null)[];
+        temperature_2m_max?: (number | null)[];
+      };
+    };
+    const time = json.daily?.time ?? [];
+    const mean = json.daily?.temperature_2m_mean ?? [];
+    if (time.length && mean.some((v) => v != null)) {
+      return time.map((day, i) => ({
+        day,
+        temp_min: json.daily?.temperature_2m_min?.[i] ?? null,
+        temp_mean: mean[i] ?? null,
+        temp_max: json.daily?.temperature_2m_max?.[i] ?? null,
+      }));
+    }
+  }
+  return [];
+}
+
+/**
+ * Resolve the site's postcode to coordinates (once) and cache daily outside
+ * air temperatures + heating degree days for the requested window.
+ */
+export const syncNhWeather = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => WeatherInput.parse(d))
+  .handler(async ({ data, context }): Promise<{ days: WeatherDay[]; error?: string }> => {
+    const { supabase } = context;
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const { data: site, error: siteErr } = await supabase
+      .from("neutral_home_sites" as any)
+      .select("id,postcode,latitude,longitude,hdd_base_c")
+      .eq("id", data.site_id)
+      .single();
+    if (siteErr) throw new Error(siteErr.message);
+    const s = site as unknown as {
+      postcode: string | null;
+      latitude: number | null;
+      longitude: number | null;
+      hdd_base_c: number | null;
+    };
+
+    let lat = s.latitude;
+    let lon = s.longitude;
+    if (lat == null || lon == null) {
+      if (!s.postcode) return { days: [], error: "No postcode set for this site." };
+      const res = await fetch(
+        `https://api.postcodes.io/postcodes/${encodeURIComponent(s.postcode.trim())}`,
+      );
+      if (!res.ok) return { days: [], error: "Postcode could not be resolved." };
+      const json = (await res.json()) as {
+        result?: { latitude?: number; longitude?: number };
+      };
+      lat = json.result?.latitude ?? null;
+      lon = json.result?.longitude ?? null;
+      if (lat == null || lon == null) return { days: [], error: "Postcode could not be resolved." };
+      await supabase
+        .from("neutral_home_sites" as any)
+        .update({ latitude: lat, longitude: lon })
+        .eq("id", data.site_id);
+    }
+
+    const base = s.hdd_base_c ?? 15.5;
+    const fetched = await fetchOpenMeteo(lat, lon, data.from, data.to);
+    if (!fetched.length) return { days: [], error: "No weather data available for this period." };
+
+    const rows = fetched.map((d) => ({
+      organization_id: data.organization_id,
+      site_id: data.site_id,
+      day: d.day,
+      temp_min: d.temp_min,
+      temp_mean: d.temp_mean,
+      temp_max: d.temp_max,
+      hdd: d.temp_mean == null ? null : Math.max(0, base - d.temp_mean),
+      updated_at: new Date().toISOString(),
+    }));
+    const { error } = await supabase
+      .from("neutral_home_weather_days" as any)
+      .upsert(rows, { onConflict: "site_id,day" });
+    if (error) throw new Error(error.message);
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+
+    return {
+      days: rows.map(({ day, temp_min, temp_mean, temp_max, hdd }) => ({
+        day,
+        temp_min,
+        temp_mean,
+        temp_max,
+        hdd,
+      })),
+    };
   });
