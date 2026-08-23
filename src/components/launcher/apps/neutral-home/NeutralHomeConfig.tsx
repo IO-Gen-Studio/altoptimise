@@ -40,6 +40,8 @@ import {
 import {
   allMetricDefs,
   categoryOptions,
+  disciplineKey,
+
   FIXED_METRICS,
   fixedMetricRow,
   METRIC_SOURCE_LABEL,
