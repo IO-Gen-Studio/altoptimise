@@ -852,7 +852,10 @@ export type Database = {
           address: string | null
           created_at: string
           floor_area_m2: number | null
+          hdd_base_c: number
           id: string
+          latitude: number | null
+          longitude: number | null
           name: string
           notes: string | null
           occupancy: number | null
@@ -864,7 +867,10 @@ export type Database = {
           address?: string | null
           created_at?: string
           floor_area_m2?: number | null
+          hdd_base_c?: number
           id?: string
+          latitude?: number | null
+          longitude?: number | null
           name: string
           notes?: string | null
           occupancy?: number | null
@@ -876,7 +882,10 @@ export type Database = {
           address?: string | null
           created_at?: string
           floor_area_m2?: number | null
+          hdd_base_c?: number
           id?: string
+          latitude?: number | null
+          longitude?: number | null
           name?: string
           notes?: string | null
           occupancy?: number | null
@@ -890,6 +899,60 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      neutral_home_weather_days: {
+        Row: {
+          created_at: string
+          day: string
+          hdd: number | null
+          id: string
+          organization_id: string
+          site_id: string
+          temp_max: number | null
+          temp_mean: number | null
+          temp_min: number | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          day: string
+          hdd?: number | null
+          id?: string
+          organization_id: string
+          site_id: string
+          temp_max?: number | null
+          temp_mean?: number | null
+          temp_min?: number | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          day?: string
+          hdd?: number | null
+          id?: string
+          organization_id?: string
+          site_id?: string
+          temp_max?: number | null
+          temp_mean?: number | null
+          temp_min?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "neutral_home_weather_days_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "neutral_home_weather_days_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "neutral_home_sites"
             referencedColumns: ["id"]
           },
         ]

@@ -38,6 +38,8 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import { syncNhWeather } from "@/lib/neutral-home.functions";
+import { DEFAULT_HDD_BASE, type WeatherDay } from "@/lib/neutral-home/weather";
 import type { NeutralHomeBundle } from "@/lib/neutral-home.functions";
 import {
   compareKpis,
@@ -186,6 +188,43 @@ export function NeutralHomeDashboard({
   const [basis, setBasis] = useState<Basis>("kwh");
 
   const period = sitePeriods.find((p) => p.id === periodId) ?? sitePeriods[0];
+
+  const site = bundle.sites.find((s) => s.id === siteId);
+  const hddBase = site?.hdd_base_c ?? DEFAULT_HDD_BASE;
+  const [weatherDays, setWeatherDays] = useState<WeatherDay[]>([]);
+  const [weatherNote, setWeatherNote] = useState<string | null>(null);
+
+  // Cache + load outside air temperature / degree days for the active period.
+  useEffect(() => {
+    if (!site || !period) {
+      setWeatherDays([]);
+      return;
+    }
+    let cancelled = false;
+    setWeatherNote(null);
+    syncNhWeather({
+      data: {
+        organization_id: site.organization_id,
+        site_id: site.id,
+        from: period.period_start,
+        to: period.period_end,
+      },
+    })
+      .then((r) => {
+        if (cancelled) return;
+        setWeatherDays(r.days);
+        setWeatherNote(r.error ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setWeatherDays([]);
+          setWeatherNote("Weather data unavailable right now.");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [site?.id, site?.organization_id, site?.hdd_base_c, period?.id, period?.period_start, period?.period_end]);
 
   const autoLastYear = useMemo(
     () => findLastYearPeriod(period, sitePeriods),
@@ -933,6 +972,9 @@ export function NeutralHomeDashboard({
               max: settings?.comfort_max_c ?? DEFAULT_BAND.max,
             }}
             temperaturePeriodId={period.source_temperature_filename ? period.id : null}
+            weatherDays={weatherDays}
+            hddBase={hddBase}
+            weatherNote={weatherNote}
           />
         </>
       )}

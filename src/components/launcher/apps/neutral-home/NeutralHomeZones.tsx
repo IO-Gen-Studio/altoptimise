@@ -32,6 +32,13 @@ import {
   type ZoneAgg,
   type ZoneTempSeries,
 } from "@/lib/neutral-home/zones";
+import {
+  kwhPerHdd,
+  outsideByDay,
+  periodHdd,
+  periodMeanTemp,
+  type WeatherDay,
+} from "@/lib/neutral-home/weather";
 
 const num = (v: number, dp = 0) =>
   v.toLocaleString(undefined, { minimumFractionDigits: dp, maximumFractionDigits: dp });
@@ -43,7 +50,8 @@ type SortKey =
   | "costGbp"
   | "dayKwh"
   | "nightKwh"
-  | "avgTemp";
+  | "avgTemp"
+  | "kwhPerHdd";
 
 const COLUMNS: { key: SortKey; label: string; align: "left" | "right" }[] = [
   { key: "zone", label: "Zone", align: "left" },
@@ -53,6 +61,7 @@ const COLUMNS: { key: SortKey; label: string; align: "left" | "right" }[] = [
   { key: "dayKwh", label: "Day (kWh)", align: "right" },
   { key: "nightKwh", label: "Night (kWh)", align: "right" },
   { key: "avgTemp", label: "Avg temp (°C)", align: "right" },
+  { key: "kwhPerHdd", label: "kWh / HDD", align: "right" },
 ];
 
 /**
@@ -66,6 +75,9 @@ export function NeutralHomeZones({
   siteId,
   band,
   temperaturePeriodId,
+  weatherDays = [],
+  hddBase,
+  weatherNote,
 }: {
   circuits: CircuitRecord[];
   classes: ClassMap;
@@ -74,6 +86,11 @@ export function NeutralHomeZones({
   band: ComfortBand;
   /** period id when the period has temperature data, otherwise null */
   temperaturePeriodId: string | null;
+  /** daily outside air temperature + HDD for the active period */
+  weatherDays?: WeatherDay[];
+  hddBase: number;
+  /** reason weather is unavailable, when it is */
+  weatherNote?: string | null;
 }) {
   const [rows, setRows] = useState<RoomHourRow[]>([]);
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({
@@ -136,17 +153,25 @@ export function NeutralHomeZones({
     return { warmest, coldest };
   }, [temps]);
 
+  const totalHdd = useMemo(() => periodHdd(weatherDays), [weatherDays]);
+  const outsideMean = useMemo(() => periodMeanTemp(weatherDays), [weatherDays]);
+  const outside = useMemo(() => outsideByDay(weatherDays), [weatherDays]);
+
   const sorted = useMemo(() => {
     const list = [...aggs];
     const { key, dir } = sort;
     const val = (z: ZoneAgg) =>
-      key === "avgTemp" ? (temps.get(z.zone)?.avg ?? -Infinity) : (z[key as keyof ZoneAgg] as number);
+      key === "avgTemp"
+        ? (temps.get(z.zone)?.avg ?? -Infinity)
+        : key === "kwhPerHdd"
+          ? (kwhPerHdd(z.totalKwh, totalHdd) ?? -Infinity)
+          : (z[key as keyof ZoneAgg] as number);
     list.sort((a, b) => {
       const cmp = key === "zone" ? a.zone.localeCompare(b.zone) : val(a) - val(b);
       return dir === "asc" ? cmp : -cmp;
     });
     return list;
-  }, [aggs, sort, temps]);
+  }, [aggs, sort, temps, totalHdd]);
 
   const toggleSort = (key: SortKey) =>
     setSort((s) =>
@@ -187,6 +212,30 @@ export function NeutralHomeZones({
           </div>
           <Badge variant="outline">{aggs.length} zones</Badge>
         </div>
+
+        <div className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-1 rounded-lg border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+          {weatherDays.length ? (
+            <>
+              <span>
+                Heating degree days:{" "}
+                <span className="font-medium tabular-nums text-foreground">{num(totalHdd, 1)}</span>
+              </span>
+              <span>
+                Avg outside temp:{" "}
+                <span className="font-medium tabular-nums text-foreground">
+                  {outsideMean == null ? "—" : `${num(outsideMean, 1)}°C`}
+                </span>
+              </span>
+              <span>
+                HDD base:{" "}
+                <span className="font-medium tabular-nums text-foreground">{num(hddBase, 1)}°C</span>
+              </span>
+            </>
+          ) : (
+            <span>{weatherNote ?? "No weather data for this period."}</span>
+          )}
+        </div>
+
 
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -299,11 +348,24 @@ export function NeutralHomeZones({
                           <span className="text-xs italic text-muted-foreground">No data</span>
                         )}
                       </td>
+                      <td className="py-2 pl-3 text-right tabular-nums">
+                        {kwhPerHdd(z.totalKwh, totalHdd) == null ? (
+                          <span className="text-xs italic text-muted-foreground">No data</span>
+                        ) : (
+                          num(kwhPerHdd(z.totalKwh, totalHdd) as number, 2)
+                        )}
+                      </td>
                     </tr>
                     {isOpen ? (
                       <tr className="border-t bg-muted/20">
                         <td colSpan={COLUMNS.length + 1} className="p-4">
-                          <ZoneDetail zone={z} band={band} temp={temps.get(z.zone)} />
+                          <ZoneDetail
+                            zone={z}
+                            band={band}
+                            temp={temps.get(z.zone)}
+                            outside={outside}
+                            totalHdd={totalHdd}
+                          />
                         </td>
                       </tr>
                     ) : null}
@@ -322,22 +384,44 @@ function ZoneDetail({
   zone,
   band,
   temp,
+  outside,
+  totalHdd,
 }: {
   zone: ZoneAgg;
   band: ComfortBand;
   temp?: ZoneTempSeries;
+  /** MM-DD keyed outside air temperature */
+  outside: Map<string, number>;
+  totalHdd: number;
 }) {
+  const chartData = useMemo(
+    () =>
+      (temp?.daily ?? []).map((d) => ({
+        ...d,
+        outside: outside.get(d.date.length === 5 ? d.date : d.date.slice(5)) ?? null,
+      })),
+    [temp, outside],
+  );
+  const perHdd = kwhPerHdd(zone.totalKwh, totalHdd);
+  const uplift = useMemo(() => {
+    const pairs = chartData.filter((d) => d.outside != null);
+    if (!pairs.length || temp == null) return null;
+    const out = pairs.reduce((s, d) => s + (d.outside as number), 0) / pairs.length;
+    const inside = pairs.reduce((s, d) => s + d.avg, 0) / pairs.length;
+    return inside - out;
+  }, [chartData, temp]);
+
   return (
     <div className="space-y-4">
       <div className="grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,1fr)]">
         <div className="rounded-lg border bg-card p-3">
           <div className="pb-2 text-xs font-medium text-muted-foreground">
-            Daily average temperature · comfort band {band.min}–{band.max}°C
+            Daily average temperature vs outside air · comfort band {band.min}–{band.max}°C
           </div>
           {temp?.daily.length ? (
             <div className="h-56">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={temp.daily} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                <LineChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
                   <XAxis
                     dataKey="date"
@@ -355,7 +439,10 @@ function ZoneDetail({
                       borderRadius: 8,
                       fontSize: 12,
                     }}
-                    formatter={(v: number) => [`${v}°C`, "Avg"]}
+                    formatter={(v: number, n) => [
+                      `${v}°C`,
+                      n === "outside" ? "Outside" : "Zone avg",
+                    ]}
                   />
                   <ReferenceLine
                     y={band.min}
@@ -386,6 +473,15 @@ function ZoneDetail({
                     strokeWidth={2}
                     dot={false}
                   />
+                  <Line
+                    type="monotone"
+                    dataKey="outside"
+                    stroke="var(--chart-2)"
+                    strokeWidth={2}
+                    strokeDasharray="5 3"
+                    dot={false}
+                    connectNulls
+                  />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -402,8 +498,14 @@ function ZoneDetail({
               <ComfortScore inBand={temp.hoursInBand} total={temp.hours} />
               <Stat label="Highest temperature" value={`${num(temp.max, 1)}°C`} />
               <Stat label="Lowest temperature" value={`${num(temp.min, 1)}°C`} />
+              <Stat
+                label="kWh / HDD"
+                value={perHdd == null ? "—" : num(perHdd, 2)}
+              />
               <p className="text-[11px] text-muted-foreground">
-                {"\n"}
+                {uplift == null
+                  ? "\n"
+                  : `Average ${num(uplift, 1)}°C above outside air`}
               </p>
             </>
           ) : (

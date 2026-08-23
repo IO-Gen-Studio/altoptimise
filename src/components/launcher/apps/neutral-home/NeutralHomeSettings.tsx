@@ -69,6 +69,7 @@ type SiteDraft = {
   postcode: string;
   floor_area_m2: string;
   occupancy: string;
+  hdd_base_c: string;
   notes: string;
 };
 
@@ -78,6 +79,7 @@ const emptyDraft: SiteDraft = {
   postcode: "",
   floor_area_m2: "",
   occupancy: "",
+  hdd_base_c: "",
   notes: "",
 };
 
@@ -100,6 +102,7 @@ export function NeutralHomeSettings({ orgId, bundle, canEdit, onChanged }: Props
       postcode: s.postcode ?? "",
       floor_area_m2: s.floor_area_m2 == null ? "" : String(s.floor_area_m2),
       occupancy: s.occupancy == null ? "" : String(s.occupancy),
+      hdd_base_c: s.hdd_base_c == null ? "" : String(s.hdd_base_c),
       notes: s.notes ?? "",
     });
     setSiteDialog(true);
@@ -121,6 +124,7 @@ export function NeutralHomeSettings({ orgId, bundle, canEdit, onChanged }: Props
           postcode: draft.postcode.trim().toUpperCase() || null,
           floor_area_m2: draft.floor_area_m2 ? Number(draft.floor_area_m2) : null,
           occupancy: draft.occupancy ? Number(draft.occupancy) : null,
+          hdd_base_c: draft.hdd_base_c ? Number(draft.hdd_base_c) : null,
           notes: draft.notes.trim() || null,
         },
       });
@@ -282,7 +286,7 @@ export function NeutralHomeSettings({ orgId, bundle, canEdit, onChanged }: Props
                 onChange={(e) => setDraft({ ...draft, address: e.target.value })}
               />
             </div>
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <div className="grid gap-1.5">
                 <Label htmlFor="nh-postcode">Postcode</Label>
                 <Input
@@ -307,6 +311,17 @@ export function NeutralHomeSettings({ orgId, bundle, canEdit, onChanged }: Props
                   type="number"
                   value={draft.occupancy}
                   onChange={(e) => setDraft({ ...draft, occupancy: e.target.value })}
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="nh-hdd">HDD base temperature (°C)</Label>
+                <Input
+                  id="nh-hdd"
+                  type="number"
+                  step="0.1"
+                  placeholder="15.5"
+                  value={draft.hdd_base_c}
+                  onChange={(e) => setDraft({ ...draft, hdd_base_c: e.target.value })}
                 />
               </div>
             </div>
@@ -839,7 +854,7 @@ function UploadDrawer({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <FileSlot
             label="1. Headline Usage Report (optional)"
             file={headline}
