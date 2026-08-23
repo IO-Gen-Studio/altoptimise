@@ -213,6 +213,30 @@ export function NeutralHomeZones({
           <Badge variant="outline">{aggs.length} zones</Badge>
         </div>
 
+        <div className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-1 rounded-lg border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+          {weatherDays.length ? (
+            <>
+              <span>
+                Heating degree days:{" "}
+                <span className="font-medium tabular-nums text-foreground">{num(totalHdd, 1)}</span>
+              </span>
+              <span>
+                Avg outside temp:{" "}
+                <span className="font-medium tabular-nums text-foreground">
+                  {outsideMean == null ? "—" : `${num(outsideMean, 1)}°C`}
+                </span>
+              </span>
+              <span>
+                HDD base:{" "}
+                <span className="font-medium tabular-nums text-foreground">{num(hddBase, 1)}°C</span>
+              </span>
+            </>
+          ) : (
+            <span>{weatherNote ?? "No weather data for this period."}</span>
+          )}
+        </div>
+
+
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
