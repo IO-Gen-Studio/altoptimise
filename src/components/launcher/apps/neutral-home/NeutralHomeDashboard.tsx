@@ -719,7 +719,9 @@ export function NeutralHomeDashboard({
         </Card>
       ) : (
         <>
-          {comparisonRows.length && (compareCircuits.length || baselineCircuits.length) ? (
+          {(comparisonRows.length || disciplineRows.length) &&
+          (compareCircuits.length || baselineCircuits.length) ? (
+
             <Card>
               <CardContent className="p-5">
                 <div className="flex flex-wrap items-start justify-between gap-3 pb-4">
