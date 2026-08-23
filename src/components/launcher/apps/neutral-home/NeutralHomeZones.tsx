@@ -384,17 +384,39 @@ function ZoneDetail({
   zone,
   band,
   temp,
+  outside,
+  totalHdd,
 }: {
   zone: ZoneAgg;
   band: ComfortBand;
   temp?: ZoneTempSeries;
+  /** MM-DD keyed outside air temperature */
+  outside: Map<string, number>;
+  totalHdd: number;
 }) {
+  const chartData = useMemo(
+    () =>
+      (temp?.daily ?? []).map((d) => ({
+        ...d,
+        outside: outside.get(d.date.length === 5 ? d.date : d.date.slice(5)) ?? null,
+      })),
+    [temp, outside],
+  );
+  const perHdd = kwhPerHdd(zone.totalKwh, totalHdd);
+  const uplift = useMemo(() => {
+    const pairs = chartData.filter((d) => d.outside != null);
+    if (!pairs.length || temp == null) return null;
+    const out = pairs.reduce((s, d) => s + (d.outside as number), 0) / pairs.length;
+    const inside = pairs.reduce((s, d) => s + d.avg, 0) / pairs.length;
+    return inside - out;
+  }, [chartData, temp]);
+
   return (
     <div className="space-y-4">
       <div className="grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,1fr)]">
         <div className="rounded-lg border bg-card p-3">
           <div className="pb-2 text-xs font-medium text-muted-foreground">
-            Daily average temperature · comfort band {band.min}–{band.max}°C
+            Daily average temperature vs outside air · comfort band {band.min}–{band.max}°C
           </div>
           {temp?.daily.length ? (
             <div className="h-56">
