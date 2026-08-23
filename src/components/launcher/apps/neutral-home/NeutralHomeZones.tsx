@@ -32,6 +32,13 @@ import {
   type ZoneAgg,
   type ZoneTempSeries,
 } from "@/lib/neutral-home/zones";
+import {
+  kwhPerHdd,
+  outsideByDay,
+  periodHdd,
+  periodMeanTemp,
+  type WeatherDay,
+} from "@/lib/neutral-home/weather";
 
 const num = (v: number, dp = 0) =>
   v.toLocaleString(undefined, { minimumFractionDigits: dp, maximumFractionDigits: dp });
@@ -43,7 +50,8 @@ type SortKey =
   | "costGbp"
   | "dayKwh"
   | "nightKwh"
-  | "avgTemp";
+  | "avgTemp"
+  | "kwhPerHdd";
 
 const COLUMNS: { key: SortKey; label: string; align: "left" | "right" }[] = [
   { key: "zone", label: "Zone", align: "left" },
@@ -53,6 +61,7 @@ const COLUMNS: { key: SortKey; label: string; align: "left" | "right" }[] = [
   { key: "dayKwh", label: "Day (kWh)", align: "right" },
   { key: "nightKwh", label: "Night (kWh)", align: "right" },
   { key: "avgTemp", label: "Avg temp (°C)", align: "right" },
+  { key: "kwhPerHdd", label: "kWh / HDD", align: "right" },
 ];
 
 /**
