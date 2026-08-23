@@ -64,8 +64,10 @@ import {
   normalizeMetricKeys,
   splitSelection,
   sumOf,
+  type ComparisonRow,
   type MetricDef,
 } from "@/lib/neutral-home/config";
+
 
 
 type SortKey = "name" | "category" | "usage_kwh" | "co2_kg" | "cost_gbp" | "day_kwh" | "night_kwh";
