@@ -316,6 +316,50 @@ export function allMetricDefs(siteMetrics: NhMetric[]): MetricDef[] {
   ];
 }
 
+/* ---------------- main consumers by discipline (sub-category) ---------------- */
+
+/** Prefix used inside the saved selection to mark a visible sub-category. */
+export const DISCIPLINE_PREFIX = "cat:";
+
+export const disciplineKey = (code: string): string => `${DISCIPLINE_PREFIX}${code}`;
+
+/** Splits a saved selection into metric keys and sub-category codes. */
+export function splitSelection(keys: string[]): { metrics: string[]; disciplines: string[] } {
+  const metrics: string[] = [];
+  const disciplines: string[] = [];
+  for (const k of keys) {
+    if (k.startsWith(DISCIPLINE_PREFIX)) disciplines.push(k.slice(DISCIPLINE_PREFIX.length));
+    else metrics.push(k);
+  }
+  return { metrics, disciplines };
+}
+
+/**
+ * One metric per selected sub-category, summing the detail circuits in it.
+ * Zone circuits are excluded so the totals don't double-count their equipment.
+ */
+export function disciplineDefs(
+  codes: string[],
+  labels: Record<string, string>,
+  isZone: (circuit: string) => boolean,
+): MetricDef[] {
+  return codes.map((code) => {
+    const select = (rows: CircuitRecord[]) =>
+      detailCircuits(rows).filter((r) => r.category === code && !isZone(r.circuit_name));
+    return {
+      key: disciplineKey(code),
+      label: labels[code] ?? code,
+      unit: "kWh",
+      lowerIsBetter: true,
+      system: true,
+      select,
+      column: "usage_kwh" as MetricSource,
+      evaluate: (rows: CircuitRecord[]) => sumOf(select(rows), "usage_kwh"),
+    } satisfies MetricDef;
+  });
+}
+
+
 /** Migrates saved selections that pointed at the old user-metric rows. */
 export function normalizeMetricKeys(keys: string[], siteMetrics: NhMetric[]): string[] {
   const byId = new Map(

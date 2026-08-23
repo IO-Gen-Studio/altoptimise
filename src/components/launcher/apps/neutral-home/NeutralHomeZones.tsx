@@ -542,6 +542,8 @@ function ZoneDetail({
                 <th className="py-1 text-right font-medium">Usage (kWh)</th>
                 <th className="py-1 text-right font-medium">Cost (£)</th>
                 <th className="py-1 text-right font-medium">CO2 (kg)</th>
+                <th className="py-1 pl-3 text-right font-medium">Day (kWh)</th>
+                <th className="py-1 pl-3 text-right font-medium">Night (kWh)</th>
               </tr>
             </thead>
             <tbody>
@@ -551,10 +553,33 @@ function ZoneDetail({
                   <td className="py-1.5 text-right tabular-nums">{num(e.kwh, 1)}</td>
                   <td className="py-1.5 text-right tabular-nums">{num(e.costGbp, 2)}</td>
                   <td className="py-1.5 text-right tabular-nums">{num(e.co2Kg, 1)}</td>
+                  <td className="py-1.5 pl-3 text-right tabular-nums">
+                    {num(e.dayKwh, 1)}{" "}
+                    <span className="text-xs text-muted-foreground">
+                      ({num(100 - e.nightPct, 1)}%)
+                    </span>
+                  </td>
+                  <td
+                    className={cn(
+                      "py-1.5 pl-3 text-right tabular-nums",
+                      e.nightPct > 20 && "font-semibold text-destructive",
+                    )}
+                  >
+                    {num(e.nightKwh, 1)}{" "}
+                    <span
+                      className={cn(
+                        "text-xs",
+                        e.nightPct > 20 ? "text-destructive" : "text-muted-foreground",
+                      )}
+                    >
+                      ({num(e.nightPct, 1)}%)
+                    </span>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
+
         </div>
       ) : null}
     </div>

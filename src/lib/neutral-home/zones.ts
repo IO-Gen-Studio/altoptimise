@@ -62,7 +62,12 @@ export interface ZoneMemberRow {
   kwh: number;
   costGbp: number;
   co2Kg: number;
+  dayKwh: number;
+  nightKwh: number;
+  /** night share of the equipment's own day+night total */
+  nightPct: number;
 }
+
 
 export interface ZoneAgg {
   zone: string;
@@ -91,15 +96,21 @@ export function zoneAggregates(circuits: CircuitRecord[], cls: ClassMap): ZoneAg
     for (const r of rows) {
       const c = cls.get(r.circuit_name);
       if (c?.kind === "equipment" && c.zone === zone) {
+        const d = num(r.day_kwh);
+        const n = num(r.night_kwh);
         equipment.push({
           circuit: r.circuit_name,
           kwh: num(r.usage_kwh),
           costGbp: num(r.total_cost_p) / 100,
           co2Kg: num(r.co2_kg),
+          dayKwh: d,
+          nightKwh: n,
+          nightPct: d + n > 0 ? (n / (d + n)) * 100 : 0,
         });
       }
     }
     equipment.sort((a, b) => b.kwh - a.kwh);
+
 
     const ownKwh = num(own?.usage_kwh);
     const equipmentKwh = equipment.reduce((a, e) => a + e.kwh, 0);

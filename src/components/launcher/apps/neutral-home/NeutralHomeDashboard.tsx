@@ -59,11 +59,16 @@ import {
   applyCategoryOverrides,
   buildComparison,
   categoryLabelMap,
+  disciplineDefs,
   findLastYearPeriod,
   normalizeMetricKeys,
+  splitSelection,
   sumOf,
+  type ComparisonRow,
   type MetricDef,
 } from "@/lib/neutral-home/config";
+
+
 
 type SortKey = "name" | "category" | "usage_kwh" | "co2_kg" | "cost_gbp" | "day_kwh" | "night_kwh";
 
@@ -143,6 +148,56 @@ function ChangeCell({
     </td>
   );
 }
+
+/** Grouping heading inside the performance metrics table. */
+function SectionRow({ title, span }: { title: string; span: number }) {
+  return (
+    <tr className="border-t bg-muted/40">
+      <td
+        colSpan={span}
+        className="py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
+      >
+        {title}
+      </td>
+    </tr>
+  );
+}
+
+function MetricRow({
+  row,
+  showLastYear,
+  showBaseline,
+}: {
+  row: ComparisonRow;
+  showLastYear: boolean;
+  showBaseline: boolean;
+}) {
+  return (
+    <tr className="border-t">
+      <td className="py-2">{row.label}</td>
+      <td className="py-2 text-right">
+        {num(row.current, 2)} {row.unit}
+      </td>
+      {showLastYear ? (
+        <>
+          <td className="py-2 text-right text-muted-foreground">
+            {row.lastYear ? `${num(row.lastYear.value, 2)} ${row.unit}` : "—"}
+          </td>
+          <ChangeCell cell={row.lastYear} unit={row.unit} />
+        </>
+      ) : null}
+      {showBaseline ? (
+        <>
+          <td className="py-2 text-right text-muted-foreground">
+            {row.baseline ? `${num(row.baseline.value, 2)} ${row.unit}` : "—"}
+          </td>
+          <ChangeCell cell={row.baseline} unit={row.unit} />
+        </>
+      ) : null}
+    </tr>
+  );
+}
+
 
 export function NeutralHomeDashboard({
   bundle,
@@ -297,12 +352,23 @@ export function NeutralHomeDashboard({
       ? normalizeMetricKeys(s.comparison_metrics, siteMetrics)
       : null;
   }, [bundle.settings, siteId, siteMetrics]);
+  const selection = useMemo(
+    () => (selectedKeys ? splitSelection(selectedKeys) : null),
+    [selectedKeys],
+  );
   const shownDefs = useMemo(
     () =>
-      selectedKeys
-        ? metricDefs.filter((d) => selectedKeys.includes(d.key))
+      selection
+        ? metricDefs.filter((d) => selection.metrics.includes(d.key))
         : metricDefs.filter((d) => d.system),
-    [metricDefs, selectedKeys],
+    [metricDefs, selection],
+  );
+  const disciplineShownDefs = useMemo(
+    () =>
+      selection?.disciplines.length
+        ? disciplineDefs(selection.disciplines, labels, (c) => kindOf(classes, c) === "zone")
+        : [],
+    [selection, labels, classes],
   );
   const comparisonRows = useMemo(
     () =>
@@ -323,6 +389,17 @@ export function NeutralHomeDashboard({
       baselineCircuits.length ? baselineCircuits : null,
     );
   }, [basis, shownDefs, circuits, compareCircuits, baselineCircuits]);
+
+  const disciplineRows = useMemo(() => {
+    if (!disciplineShownDefs.length) return [];
+    return buildComparison(
+      convertDefs(disciplineShownDefs, basis),
+      circuits,
+      compareCircuits.length ? compareCircuits : null,
+      baselineCircuits.length ? baselineCircuits : null,
+    );
+  }, [basis, disciplineShownDefs, circuits, compareCircuits, baselineCircuits]);
+
 
   const filtered = useMemo(() => detailCircuits(circuits), [circuits]);
 
@@ -642,7 +719,9 @@ export function NeutralHomeDashboard({
         </Card>
       ) : (
         <>
-          {comparisonRows.length && (compareCircuits.length || baselineCircuits.length) ? (
+          {(comparisonRows.length || disciplineRows.length) &&
+          (compareCircuits.length || baselineCircuits.length) ? (
+
             <Card>
               <CardContent className="p-5">
                 <div className="flex flex-wrap items-start justify-between gap-3 pb-4">
@@ -685,31 +764,42 @@ export function NeutralHomeDashboard({
                       </tr>
                     </thead>
                     <tbody>
+                      <SectionRow
+                        title="Energy Performance"
+                        span={
+                          2 + (compareCircuits.length ? 2 : 0) + (baselineCircuits.length ? 2 : 0)
+                        }
+                      />
                       {basisRows.map((r) => (
-                        <tr key={r.key} className="border-t">
-                          <td className="py-2">{r.label}</td>
-                          <td className="py-2 text-right">
-                            {num(r.current, 2)} {r.unit}
-                          </td>
-                          {compareCircuits.length ? (
-                            <>
-                              <td className="py-2 text-right text-muted-foreground">
-                                {r.lastYear ? `${num(r.lastYear.value, 2)} ${r.unit}` : "—"}
-                              </td>
-                              <ChangeCell cell={r.lastYear} unit={r.unit} />
-                            </>
-                          ) : null}
-                          {baselineCircuits.length ? (
-                            <>
-                              <td className="py-2 text-right text-muted-foreground">
-                                {r.baseline ? `${num(r.baseline.value, 2)} ${r.unit}` : "—"}
-                              </td>
-                              <ChangeCell cell={r.baseline} unit={r.unit} />
-                            </>
-                          ) : null}
-                        </tr>
+                        <MetricRow
+                          key={r.key}
+                          row={r}
+                          showLastYear={!!compareCircuits.length}
+                          showBaseline={!!baselineCircuits.length}
+                        />
                       ))}
+                      {disciplineRows.length ? (
+                        <>
+                          <SectionRow
+                            title="Main Consumers by Discipline"
+                            span={
+                              2 +
+                              (compareCircuits.length ? 2 : 0) +
+                              (baselineCircuits.length ? 2 : 0)
+                            }
+                          />
+                          {disciplineRows.map((r) => (
+                            <MetricRow
+                              key={r.key}
+                              row={r}
+                              showLastYear={!!compareCircuits.length}
+                              showBaseline={!!baselineCircuits.length}
+                            />
+                          ))}
+                        </>
+                      ) : null}
                     </tbody>
+
                   </table>
                 </div>
               </CardContent>
