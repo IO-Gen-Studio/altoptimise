@@ -39,7 +39,13 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { syncNhWeather } from "@/lib/neutral-home.functions";
-import { DEFAULT_HDD_BASE, type WeatherDay } from "@/lib/neutral-home/weather";
+import {
+  DEFAULT_HDD_BASE,
+  kwhPerHdd,
+  periodHdd,
+  type WeatherDay,
+} from "@/lib/neutral-home/weather";
+
 import type { NeutralHomeBundle } from "@/lib/neutral-home.functions";
 import {
   compareKpis,
@@ -61,11 +67,15 @@ import {
   categoryLabelMap,
   disciplineDefs,
   findLastYearPeriod,
+  fixedMetricDefs,
   normalizeMetricKeys,
   splitSelection,
   sumOf,
+  type ComparisonCell,
   type ComparisonRow,
+  type FixedSlot,
   type MetricDef,
+
 } from "@/lib/neutral-home/config";
 
 
@@ -195,6 +205,95 @@ function MetricRow({
         </>
       ) : null}
     </tr>
+  );
+}
+
+
+/* ---------------- headline KPI cards ---------------- */
+
+/** [label when the metric went down, label when it went up] */
+const SAVING_WORDS: [string, string] = ["Saving", "Overspend"];
+const GENERATION_WORDS: [string, string] = ["Generated Less", "Generated More"];
+const NET_WORDS: [string, string] = ["Reduction", "Increase"];
+const HDD_WORDS: [string, string] = ["More efficient", "Less efficient"];
+
+interface CmpLine {
+  title: string;
+  up: boolean;
+  good: boolean;
+  text: string;
+  verdict: string;
+}
+
+function cmpLine(
+  title: string,
+  cell: ComparisonCell | null,
+  fmt: (n: number) => string,
+  words: [string, string],
+): CmpLine | null {
+  if (!cell) return null;
+  const up = cell.delta >= 0;
+  return {
+    title,
+    up,
+    good: cell.good,
+    text: `${fmt(Math.abs(cell.delta))}${cell.pct == null ? "" : ` (${num(Math.abs(cell.pct), 1)}%)`}`,
+    verdict: words[up ? 1 : 0]!,
+  };
+}
+
+/** Headline card: value plus one comparison line per available reference period. */
+function KpiCompare({
+  label,
+  icon: Icon,
+  value,
+  sub,
+  lines,
+}: {
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  value: string;
+  sub?: string;
+  lines: (CmpLine | null)[];
+}) {
+  const shown = lines.filter((l): l is CmpLine => l != null);
+  return (
+    <Card className="border-border/60">
+      <CardContent className="p-5">
+        <div className="flex items-center justify-between text-xs font-medium text-muted-foreground">
+          <span>{label}</span>
+          <Icon className="h-4 w-4 text-primary" />
+        </div>
+        <div className="mt-3 text-2xl font-semibold tracking-tight">{value}</div>
+        {sub ? <div className="mt-1 text-xs text-muted-foreground">{sub}</div> : null}
+        <div className="mt-3 flex flex-col gap-1">
+          {shown.length ? (
+            shown.map((l) => (
+              <div key={l.title} className="flex items-center justify-between gap-2 text-xs">
+                <span className="truncate text-muted-foreground">{l.title}</span>
+                <span
+                  className={cn(
+                    "inline-flex shrink-0 items-center gap-1 font-medium",
+                    l.good ? "text-emerald-600" : "text-red-600",
+                  )}
+                >
+                  <Triangle
+                    className={cn("h-3 w-3", l.up ? "" : "rotate-180")}
+                    fill="currentColor"
+                    strokeWidth={0}
+                    aria-hidden
+                  />
+                  {l.text}
+                  <span className="font-normal">{l.verdict}</span>
+                </span>
+              </div>
+            ))
+          ) : (
+            <div className="text-xs text-muted-foreground">No comparison period data</div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -403,6 +502,135 @@ export function NeutralHomeDashboard({
 
   const filtered = useMemo(() => detailCircuits(circuits), [circuits]);
 
+  /* ---- headline KPI cards: fixed metrics vs. last year and baseline ---- */
+
+  const fixedDefs = useMemo(() => fixedMetricDefs(siteMetrics), [siteMetrics]);
+
+  const kpiCards = useMemo(() => {
+    const ly = compareCircuits.length ? compareCircuits : null;
+    const bl = baselineCircuits.length ? baselineCircuits : null;
+    const row = (slot: FixedSlot, b: Basis): ComparisonRow | null => {
+      const defs = fixedDefs.filter((d) => d.slot === slot);
+      if (!defs.length) return null;
+      return buildComparison(convertDefs(defs, b), circuits, ly, bl)[0] ?? null;
+    };
+    return {
+      consCost: row("consumption", "cost"),
+      consCarbon: row("consumption", "carbon"),
+      consKwh: row("consumption", "kwh"),
+      solar: row("solar", "kwh"),
+      net: row("net", "kwh"),
+      imp: row("import", "kwh"),
+    };
+  }, [fixedDefs, circuits, compareCircuits, baselineCircuits]);
+
+  // Weather for the reference periods so kWh/HDD can be compared like-for-like.
+  const [compareWeatherDays, setCompareWeatherDays] = useState<WeatherDay[]>([]);
+  const [baselineWeatherDays, setBaselineWeatherDays] = useState<WeatherDay[]>([]);
+
+  useEffect(() => {
+    if (!site) return;
+    let cancelled = false;
+    const load = (
+      p: { period_start: string; period_end: string } | undefined,
+      set: (d: WeatherDay[]) => void,
+    ) => {
+      if (!p) {
+        set([]);
+        return;
+      }
+      syncNhWeather({
+        data: {
+          organization_id: site.organization_id,
+          site_id: site.id,
+          from: p.period_start,
+          to: p.period_end,
+        },
+      })
+        .then((r) => {
+          if (!cancelled) set(r.days);
+        })
+        .catch(() => {
+          if (!cancelled) set([]);
+        });
+    };
+    load(comparePeriod, setCompareWeatherDays);
+    load(baselinePeriod, setBaselineWeatherDays);
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    site?.id,
+    site?.organization_id,
+    site?.hdd_base_c,
+    comparePeriod?.id,
+    comparePeriod?.period_start,
+    comparePeriod?.period_end,
+    baselinePeriod?.id,
+    baselinePeriod?.period_start,
+    baselinePeriod?.period_end,
+  ]);
+
+  const hddCard = useMemo(() => {
+    const hddNow = periodHdd(weatherDays);
+    const value = kwhPerHdd(kpiCards.consKwh?.current ?? 0, hddNow);
+    const line = (days: WeatherDay[], prevKwh: number | undefined, title: string) => {
+      if (prevKwh == null || value == null) return null;
+      const prev = kwhPerHdd(prevKwh, periodHdd(days));
+      if (prev == null) return null;
+      const delta = value - prev;
+      return cmpLine(
+        title,
+        {
+          value: prev,
+          delta,
+          pct: prev !== 0 ? (delta / Math.abs(prev)) * 100 : null,
+          good: delta <= 0,
+        },
+        (v) => num(v, 1),
+        HDD_WORDS,
+      );
+    };
+    const prevHdd = periodHdd(compareWeatherDays);
+    const sub =
+      value == null
+        ? `No degree days — outside air stayed above the ${num(hddBase, 1)}°C base`
+        : prevHdd > 0
+          ? `${num(hddNow, 1)} HDD · ${
+              hddNow < prevHdd
+                ? "Warmer this year"
+                : hddNow > prevHdd
+                  ? "Colder this year"
+                  : "Same degree days"
+            }`
+          : `${num(hddNow, 1)} HDD (base ${num(hddBase, 1)}°C)`;
+    return {
+      value,
+      sub,
+      line: line(
+        compareWeatherDays,
+        kpiCards.consKwh?.lastYear?.value,
+        `vs. ${comparePeriod?.label ?? "last year"}`,
+      ),
+      baselineLine: baselinePeriod
+        ? line(
+            baselineWeatherDays,
+            kpiCards.consKwh?.baseline?.value,
+            `vs. baseline ${baselinePeriod.label}`,
+          )
+        : null,
+    };
+  }, [
+    weatherDays,
+    compareWeatherDays,
+    baselineWeatherDays,
+    kpiCards,
+    hddBase,
+    comparePeriod?.label,
+    baselinePeriod,
+  ]);
+
+
   const pvKwh = useMemo(() => {
     const pv = circuits.filter((c) => c.category === "pv");
     const detail = pv.filter((c) => !c.is_aggregate);
@@ -567,24 +795,104 @@ export function NeutralHomeDashboard({
     <div className="flex flex-col gap-6">
       {period ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          <Kpi
-            label="No. of Datapoints"
-            value={num(circuits.length)}
-            icon={Gauge}
-            sub={`${circuits.filter((c) => !c.is_aggregate).length} sub-circuits · ${circuits.filter((c) => c.is_aggregate).length} totals/incomers`}
-          />
-          <Kpi
+          <KpiCompare
             label="Total Consumption"
-            value={`${num(kpis.totalKwh)} kWh`}
-            icon={Zap}
-            badge={variancePct(variance, "Total consumption")}
+            icon={PoundSterling}
+            value={kpiCards.consCost ? `£${num(kpiCards.consCost.current, 2)}` : "—"}
+            sub={kpiCards.consKwh ? `${num(kpiCards.consKwh.current)} kWh consumption` : undefined}
+            lines={[
+              cmpLine(
+                `vs. ${comparePeriod?.label ?? "last year"}`,
+                kpiCards.consCost?.lastYear ?? null,
+                (v) => `£${num(v, 2)}`,
+                SAVING_WORDS,
+              ),
+              cmpLine(
+                `vs. baseline ${baselinePeriod?.label ?? ""}`.trim(),
+                kpiCards.consCost?.baseline ?? null,
+                (v) => `£${num(v, 2)}`,
+                SAVING_WORDS,
+              ),
+            ]}
           />
-          <Kpi
+          <KpiCompare
+            label="Carbon Emissions"
+            icon={Leaf}
+            value={kpiCards.consCarbon ? `${num(kpiCards.consCarbon.current / 1000, 2)} tCO₂e` : "—"}
+            sub={kpiCards.consCarbon ? `${num(kpiCards.consCarbon.current)} kg` : undefined}
+            lines={[
+              cmpLine(
+                `vs. ${comparePeriod?.label ?? "last year"}`,
+                kpiCards.consCarbon?.lastYear ?? null,
+                (v) => `${num(v / 1000, 2)} tCO₂e`,
+                SAVING_WORDS,
+              ),
+              cmpLine(
+                `vs. baseline ${baselinePeriod?.label ?? ""}`.trim(),
+                kpiCards.consCarbon?.baseline ?? null,
+                (v) => `${num(v / 1000, 2)} tCO₂e`,
+                SAVING_WORDS,
+              ),
+            ]}
+          />
+          <KpiCompare
             label="PV Generation"
-            value={`${num(pvKwh)} kWh`}
             icon={SunMedium}
-            badge={pvComparePct}
-            sub={pvKwh > 0 ? "PV / export circuits" : "No PV circuits in this period"}
+            value={kpiCards.solar ? `${num(kpiCards.solar.current)} kWh` : "—"}
+            sub={
+              kpiCards.solar && kpiCards.solar.current > 0
+                ? "Solar Generation metric"
+                : "No solar circuits mapped for this period"
+            }
+            lines={[
+              cmpLine(
+                `vs. ${comparePeriod?.label ?? "last year"}`,
+                kpiCards.solar?.lastYear ?? null,
+                (v) => `${num(v)} kWh`,
+                GENERATION_WORDS,
+              ),
+              cmpLine(
+                `vs. baseline ${baselinePeriod?.label ?? ""}`.trim(),
+                kpiCards.solar?.baseline ?? null,
+                (v) => `${num(v)} kWh`,
+                GENERATION_WORDS,
+              ),
+            ]}
+          />
+          <KpiCompare
+            label="kWh / HDD"
+            icon={Gauge}
+            value={hddCard.value == null ? "n/a" : num(hddCard.value, 1)}
+            sub={hddCard.sub}
+            lines={[hddCard.line, hddCard.baselineLine]}
+          />
+          <KpiCompare
+            label="Net Energy"
+            icon={Zap}
+            value={
+              kpiCards.net?.lastYear?.pct == null
+                ? "—"
+                : `${kpiCards.net.lastYear.pct >= 0 ? "+" : "−"}${num(Math.abs(kpiCards.net.lastYear.pct), 1)}%`
+            }
+            sub={
+              kpiCards.imp
+                ? `Import ${num(kpiCards.imp.current)} kWh · Net ${num(kpiCards.net?.current ?? 0)} kWh`
+                : undefined
+            }
+            lines={[
+              cmpLine(
+                `vs. ${comparePeriod?.label ?? "last year"}`,
+                kpiCards.net?.lastYear ?? null,
+                (v) => `${num(v)} kWh`,
+                NET_WORDS,
+              ),
+              cmpLine(
+                `vs. baseline ${baselinePeriod?.label ?? ""}`.trim(),
+                kpiCards.net?.baseline ?? null,
+                (v) => `${num(v)} kWh`,
+                NET_WORDS,
+              ),
+            ]}
           />
           <Card className="border-border/60">
             <CardContent className="p-5">
@@ -608,21 +916,10 @@ export function NeutralHomeDashboard({
               </div>
             </CardContent>
           </Card>
-          <Kpi
-            label="Total Cost"
-            value={`£${num(kpis.totalCostGbp, 2)}`}
-            icon={PoundSterling}
-            badge={variancePct(variance, "Total cost")}
-          />
-          <Kpi
-            label="Carbon Emissions"
-            value={`${num(kpis.co2Kg / 1000, 2)} tCO₂e`}
-            icon={Leaf}
-            sub={`${num(kpis.co2Kg)} kg`}
-            badge={variancePct(variance, "Carbon")}
-          />
         </div>
       ) : null}
+
+
 
       <Card className="order-first">
         <CardContent className="flex flex-wrap items-end gap-3 p-4">
