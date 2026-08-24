@@ -39,7 +39,13 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { syncNhWeather } from "@/lib/neutral-home.functions";
-import { DEFAULT_HDD_BASE, type WeatherDay } from "@/lib/neutral-home/weather";
+import {
+  DEFAULT_HDD_BASE,
+  kwhPerHdd,
+  periodHdd,
+  type WeatherDay,
+} from "@/lib/neutral-home/weather";
+
 import type { NeutralHomeBundle } from "@/lib/neutral-home.functions";
 import {
   compareKpis,
