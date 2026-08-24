@@ -270,6 +270,7 @@ function KpiCompare({
           {shown.length ? (
             shown.map((l) => (
               <div key={l.title} className="flex items-center justify-between gap-2 text-xs">
+                <span className="truncate text-muted-foreground">{l.title}</span>
                 <span
                   className={cn(
                     "inline-flex shrink-0 items-center gap-1 font-medium",
@@ -285,8 +286,8 @@ function KpiCompare({
                   {l.text}
                   <span className="font-normal">{l.verdict}</span>
                 </span>
-                <span className="truncate text-right text-muted-foreground">{l.title}</span>
               </div>
+
             ))
           ) : (
             <div className="text-xs text-muted-foreground">No comparison period data</div>
@@ -898,24 +899,35 @@ export function NeutralHomeDashboard({
             <CardContent className="p-5">
               <div className="flex items-center justify-between text-xs font-medium text-muted-foreground">
                 <span>Day / Night Split</span>
-                <div className="flex gap-1">
-                  <Sun className="h-4 w-4 text-amber-500" />
-                  <Moon className="h-4 w-4 text-indigo-500" />
-                </div>
+                <Sun className="h-4 w-4 text-primary" />
               </div>
               <div className="mt-3 text-2xl font-semibold tracking-tight">
                 {num(kpis.dayPct, 1)}% / {num(kpis.nightPct, 1)}%
               </div>
-              <div className="mt-2 flex h-2 overflow-hidden rounded-full bg-muted">
+              <div className="mt-1 text-xs text-muted-foreground">Day vs. night share of usage</div>
+              <div className="mt-3 flex h-1.5 overflow-hidden rounded-full bg-muted">
                 <div className="bg-amber-500" style={{ width: `${kpis.dayPct}%` }} />
                 <div className="bg-indigo-500" style={{ width: `${kpis.nightPct}%` }} />
               </div>
-              <div className="mt-2 flex justify-between text-xs text-muted-foreground">
-                <span>{num(kpis.dayKwh)} kWh day</span>
-                <span>{num(kpis.nightKwh)} kWh night</span>
+              <div className="mt-3 flex flex-col gap-1">
+                <div className="flex items-center justify-between gap-2 text-xs">
+                  <span className="truncate text-muted-foreground">Day</span>
+                  <span className="inline-flex shrink-0 items-center gap-1 font-medium text-amber-600">
+                    <Sun className="h-3 w-3" aria-hidden />
+                    {num(kpis.dayKwh)} kWh
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-2 text-xs">
+                  <span className="truncate text-muted-foreground">Night</span>
+                  <span className="inline-flex shrink-0 items-center gap-1 font-medium text-indigo-600">
+                    <Moon className="h-3 w-3" aria-hidden />
+                    {num(kpis.nightKwh)} kWh
+                  </span>
+                </div>
               </div>
             </CardContent>
           </Card>
+
         </div>
       ) : null}
 
