@@ -567,24 +567,104 @@ export function NeutralHomeDashboard({
     <div className="flex flex-col gap-6">
       {period ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          <Kpi
-            label="No. of Datapoints"
-            value={num(circuits.length)}
-            icon={Gauge}
-            sub={`${circuits.filter((c) => !c.is_aggregate).length} sub-circuits · ${circuits.filter((c) => c.is_aggregate).length} totals/incomers`}
-          />
-          <Kpi
+          <KpiCompare
             label="Total Consumption"
-            value={`${num(kpis.totalKwh)} kWh`}
-            icon={Zap}
-            badge={variancePct(variance, "Total consumption")}
+            icon={PoundSterling}
+            value={kpiCards.consCost ? `£${num(kpiCards.consCost.current, 2)}` : "—"}
+            sub={kpiCards.consKwh ? `${num(kpiCards.consKwh.current)} kWh consumption` : undefined}
+            lines={[
+              cmpLine(
+                `vs. ${comparePeriod?.label ?? "last year"}`,
+                kpiCards.consCost?.lastYear ?? null,
+                (v) => `£${num(v, 2)}`,
+                SAVING_WORDS,
+              ),
+              cmpLine(
+                `vs. baseline ${baselinePeriod?.label ?? ""}`.trim(),
+                kpiCards.consCost?.baseline ?? null,
+                (v) => `£${num(v, 2)}`,
+                SAVING_WORDS,
+              ),
+            ]}
           />
-          <Kpi
+          <KpiCompare
+            label="Carbon Emissions"
+            icon={Leaf}
+            value={kpiCards.consCarbon ? `${num(kpiCards.consCarbon.current / 1000, 2)} tCO₂e` : "—"}
+            sub={kpiCards.consCarbon ? `${num(kpiCards.consCarbon.current)} kg` : undefined}
+            lines={[
+              cmpLine(
+                `vs. ${comparePeriod?.label ?? "last year"}`,
+                kpiCards.consCarbon?.lastYear ?? null,
+                (v) => `${num(v / 1000, 2)} tCO₂e`,
+                SAVING_WORDS,
+              ),
+              cmpLine(
+                `vs. baseline ${baselinePeriod?.label ?? ""}`.trim(),
+                kpiCards.consCarbon?.baseline ?? null,
+                (v) => `${num(v / 1000, 2)} tCO₂e`,
+                SAVING_WORDS,
+              ),
+            ]}
+          />
+          <KpiCompare
             label="PV Generation"
-            value={`${num(pvKwh)} kWh`}
             icon={SunMedium}
-            badge={pvComparePct}
-            sub={pvKwh > 0 ? "PV / export circuits" : "No PV circuits in this period"}
+            value={kpiCards.solar ? `${num(kpiCards.solar.current)} kWh` : "—"}
+            sub={
+              kpiCards.solar && kpiCards.solar.current > 0
+                ? "Solar Generation metric"
+                : "No solar circuits mapped for this period"
+            }
+            lines={[
+              cmpLine(
+                `vs. ${comparePeriod?.label ?? "last year"}`,
+                kpiCards.solar?.lastYear ?? null,
+                (v) => `${num(v)} kWh`,
+                GENERATION_WORDS,
+              ),
+              cmpLine(
+                `vs. baseline ${baselinePeriod?.label ?? ""}`.trim(),
+                kpiCards.solar?.baseline ?? null,
+                (v) => `${num(v)} kWh`,
+                GENERATION_WORDS,
+              ),
+            ]}
+          />
+          <KpiCompare
+            label="kWh / HDD"
+            icon={Gauge}
+            value={hddCard.value == null ? "n/a" : num(hddCard.value, 1)}
+            sub={hddCard.sub}
+            lines={[hddCard.line, hddCard.baselineLine]}
+          />
+          <KpiCompare
+            label="Net Energy"
+            icon={Zap}
+            value={
+              kpiCards.net?.lastYear?.pct == null
+                ? "—"
+                : `${kpiCards.net.lastYear.pct >= 0 ? "+" : "−"}${num(Math.abs(kpiCards.net.lastYear.pct), 1)}%`
+            }
+            sub={
+              kpiCards.imp
+                ? `Import ${num(kpiCards.imp.current)} kWh · Net ${num(kpiCards.net?.current ?? 0)} kWh`
+                : undefined
+            }
+            lines={[
+              cmpLine(
+                `vs. ${comparePeriod?.label ?? "last year"}`,
+                kpiCards.net?.lastYear ?? null,
+                (v) => `${num(v)} kWh`,
+                NET_WORDS,
+              ),
+              cmpLine(
+                `vs. baseline ${baselinePeriod?.label ?? ""}`.trim(),
+                kpiCards.net?.baseline ?? null,
+                (v) => `${num(v)} kWh`,
+                NET_WORDS,
+              ),
+            ]}
           />
           <Card className="border-border/60">
             <CardContent className="p-5">
@@ -608,20 +688,9 @@ export function NeutralHomeDashboard({
               </div>
             </CardContent>
           </Card>
-          <Kpi
-            label="Total Cost"
-            value={`£${num(kpis.totalCostGbp, 2)}`}
-            icon={PoundSterling}
-            badge={variancePct(variance, "Total cost")}
-          />
-          <Kpi
-            label="Carbon Emissions"
-            value={`${num(kpis.co2Kg / 1000, 2)} tCO₂e`}
-            icon={Leaf}
-            sub={`${num(kpis.co2Kg)} kg`}
-            badge={variancePct(variance, "Carbon")}
-          />
         </div>
+      ) : null}
+
       ) : null}
 
       <Card className="order-first">
