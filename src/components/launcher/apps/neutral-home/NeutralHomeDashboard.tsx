@@ -199,6 +199,95 @@ function MetricRow({
 }
 
 
+/* ---------------- headline KPI cards ---------------- */
+
+/** [label when the metric went down, label when it went up] */
+const SAVING_WORDS: [string, string] = ["Saving", "Overspend"];
+const GENERATION_WORDS: [string, string] = ["Generated Less", "Generated More"];
+const NET_WORDS: [string, string] = ["Reduction", "Increase"];
+const HDD_WORDS: [string, string] = ["More efficient", "Less efficient"];
+
+interface CmpLine {
+  title: string;
+  up: boolean;
+  good: boolean;
+  text: string;
+  verdict: string;
+}
+
+function cmpLine(
+  title: string,
+  cell: ComparisonCell | null,
+  fmt: (n: number) => string,
+  words: [string, string],
+): CmpLine | null {
+  if (!cell) return null;
+  const up = cell.delta >= 0;
+  return {
+    title,
+    up,
+    good: cell.good,
+    text: `${fmt(Math.abs(cell.delta))}${cell.pct == null ? "" : ` (${num(Math.abs(cell.pct), 1)}%)`}`,
+    verdict: words[up ? 1 : 0]!,
+  };
+}
+
+/** Headline card: value plus one comparison line per available reference period. */
+function KpiCompare({
+  label,
+  icon: Icon,
+  value,
+  sub,
+  lines,
+}: {
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  value: string;
+  sub?: string;
+  lines: (CmpLine | null)[];
+}) {
+  const shown = lines.filter((l): l is CmpLine => l != null);
+  return (
+    <Card className="border-border/60">
+      <CardContent className="p-5">
+        <div className="flex items-center justify-between text-xs font-medium text-muted-foreground">
+          <span>{label}</span>
+          <Icon className="h-4 w-4 text-primary" />
+        </div>
+        <div className="mt-3 text-2xl font-semibold tracking-tight">{value}</div>
+        {sub ? <div className="mt-1 text-xs text-muted-foreground">{sub}</div> : null}
+        <div className="mt-3 flex flex-col gap-1">
+          {shown.length ? (
+            shown.map((l) => (
+              <div key={l.title} className="flex items-center justify-between gap-2 text-xs">
+                <span className="truncate text-muted-foreground">{l.title}</span>
+                <span
+                  className={cn(
+                    "inline-flex shrink-0 items-center gap-1 font-medium",
+                    l.good ? "text-emerald-600" : "text-red-600",
+                  )}
+                >
+                  <Triangle
+                    className={cn("h-3 w-3", l.up ? "" : "rotate-180")}
+                    fill="currentColor"
+                    strokeWidth={0}
+                    aria-hidden
+                  />
+                  {l.text}
+                  <span className="font-normal">{l.verdict}</span>
+                </span>
+              </div>
+            ))
+          ) : (
+            <div className="text-xs text-muted-foreground">No comparison period data</div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+
 export function NeutralHomeDashboard({
   bundle,
   onExporter,
