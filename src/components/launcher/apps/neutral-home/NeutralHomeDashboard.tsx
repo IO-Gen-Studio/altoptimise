@@ -492,6 +492,135 @@ export function NeutralHomeDashboard({
 
   const filtered = useMemo(() => detailCircuits(circuits), [circuits]);
 
+  /* ---- headline KPI cards: fixed metrics vs. last year and baseline ---- */
+
+  const fixedDefs = useMemo(() => fixedMetricDefs(siteMetrics), [siteMetrics]);
+
+  const kpiCards = useMemo(() => {
+    const ly = compareCircuits.length ? compareCircuits : null;
+    const bl = baselineCircuits.length ? baselineCircuits : null;
+    const row = (slot: FixedSlot, b: Basis): ComparisonRow | null => {
+      const defs = fixedDefs.filter((d) => d.slot === slot);
+      if (!defs.length) return null;
+      return buildComparison(convertDefs(defs, b), circuits, ly, bl)[0] ?? null;
+    };
+    return {
+      consCost: row("consumption", "cost"),
+      consCarbon: row("consumption", "carbon"),
+      consKwh: row("consumption", "kwh"),
+      solar: row("solar", "kwh"),
+      net: row("net", "kwh"),
+      imp: row("import", "kwh"),
+    };
+  }, [fixedDefs, circuits, compareCircuits, baselineCircuits]);
+
+  // Weather for the reference periods so kWh/HDD can be compared like-for-like.
+  const [compareWeatherDays, setCompareWeatherDays] = useState<WeatherDay[]>([]);
+  const [baselineWeatherDays, setBaselineWeatherDays] = useState<WeatherDay[]>([]);
+
+  useEffect(() => {
+    if (!site) return;
+    let cancelled = false;
+    const load = (
+      p: { period_start: string; period_end: string } | undefined,
+      set: (d: WeatherDay[]) => void,
+    ) => {
+      if (!p) {
+        set([]);
+        return;
+      }
+      syncNhWeather({
+        data: {
+          organization_id: site.organization_id,
+          site_id: site.id,
+          from: p.period_start,
+          to: p.period_end,
+        },
+      })
+        .then((r) => {
+          if (!cancelled) set(r.days);
+        })
+        .catch(() => {
+          if (!cancelled) set([]);
+        });
+    };
+    load(comparePeriod, setCompareWeatherDays);
+    load(baselinePeriod, setBaselineWeatherDays);
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    site?.id,
+    site?.organization_id,
+    site?.hdd_base_c,
+    comparePeriod?.id,
+    comparePeriod?.period_start,
+    comparePeriod?.period_end,
+    baselinePeriod?.id,
+    baselinePeriod?.period_start,
+    baselinePeriod?.period_end,
+  ]);
+
+  const hddCard = useMemo(() => {
+    const hddNow = periodHdd(weatherDays);
+    const value = kwhPerHdd(kpiCards.consKwh?.current ?? 0, hddNow);
+    const line = (days: WeatherDay[], prevKwh: number | undefined, title: string) => {
+      if (prevKwh == null || value == null) return null;
+      const prev = kwhPerHdd(prevKwh, periodHdd(days));
+      if (prev == null) return null;
+      const delta = value - prev;
+      return cmpLine(
+        title,
+        {
+          value: prev,
+          delta,
+          pct: prev !== 0 ? (delta / Math.abs(prev)) * 100 : null,
+          good: delta <= 0,
+        },
+        (v) => num(v, 1),
+        HDD_WORDS,
+      );
+    };
+    const prevHdd = periodHdd(compareWeatherDays);
+    const sub =
+      value == null
+        ? `No degree days — outside air stayed above the ${num(hddBase, 1)}°C base`
+        : prevHdd > 0
+          ? `${num(hddNow, 1)} HDD · ${
+              hddNow < prevHdd
+                ? "Warmer this year"
+                : hddNow > prevHdd
+                  ? "Colder this year"
+                  : "Same degree days"
+            }`
+          : `${num(hddNow, 1)} HDD (base ${num(hddBase, 1)}°C)`;
+    return {
+      value,
+      sub,
+      line: line(
+        compareWeatherDays,
+        kpiCards.consKwh?.lastYear?.value,
+        `vs. ${comparePeriod?.label ?? "last year"}`,
+      ),
+      baselineLine: baselinePeriod
+        ? line(
+            baselineWeatherDays,
+            kpiCards.consKwh?.baseline?.value,
+            `vs. baseline ${baselinePeriod.label}`,
+          )
+        : null,
+    };
+  }, [
+    weatherDays,
+    compareWeatherDays,
+    baselineWeatherDays,
+    kpiCards,
+    hddBase,
+    comparePeriod?.label,
+    baselinePeriod,
+  ]);
+
+
   const pvKwh = useMemo(() => {
     const pv = circuits.filter((c) => c.category === "pv");
     const detail = pv.filter((c) => !c.is_aggregate);
