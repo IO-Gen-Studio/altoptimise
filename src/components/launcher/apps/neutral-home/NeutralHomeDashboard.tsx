@@ -270,7 +270,6 @@ function KpiCompare({
           {shown.length ? (
             shown.map((l) => (
               <div key={l.title} className="flex items-center justify-between gap-2 text-xs">
-                <span className="truncate text-muted-foreground">{l.title}</span>
                 <span
                   className={cn(
                     "inline-flex shrink-0 items-center gap-1 font-medium",
@@ -286,6 +285,7 @@ function KpiCompare({
                   {l.text}
                   <span className="font-normal">{l.verdict}</span>
                 </span>
+                <span className="truncate text-right text-muted-foreground">{l.title}</span>
               </div>
             ))
           ) : (
