@@ -67,11 +67,15 @@ import {
   categoryLabelMap,
   disciplineDefs,
   findLastYearPeriod,
+  fixedMetricDefs,
   normalizeMetricKeys,
   splitSelection,
   sumOf,
+  type ComparisonCell,
   type ComparisonRow,
+  type FixedSlot,
   type MetricDef,
+
 } from "@/lib/neutral-home/config";
 
 
