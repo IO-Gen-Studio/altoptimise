@@ -29,7 +29,25 @@ export function NeutralHomeApp() {
   const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(0);
   const [exporter, setExporter] = useState<(() => void) | null>(null);
+  const [printing, setPrinting] = useState(false);
   const onExporter = useCallback((fn: (() => void) | null) => setExporter(() => fn), []);
+
+  // Expand every zone, let charts re-measure, then hand off to the browser's
+  // print dialog (Save as PDF) with the A4 print stylesheet applied.
+  const printPdf = useCallback(() => {
+    setPrinting(true);
+    document.body.classList.add("nh-printing");
+    const done = () => {
+      document.body.classList.remove("nh-printing");
+      setPrinting(false);
+      window.removeEventListener("afterprint", done);
+    };
+    window.addEventListener("afterprint", done);
+    window.setTimeout(() => {
+      window.print();
+      window.setTimeout(done, 500);
+    }, 800);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
