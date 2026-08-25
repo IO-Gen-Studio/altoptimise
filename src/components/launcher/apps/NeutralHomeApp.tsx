@@ -106,11 +106,17 @@ export function NeutralHomeApp() {
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="outline" size="icon" aria-label="Export PDF" disabled>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    aria-label="Export PDF"
+                    disabled={loading || printing}
+                    onClick={printPdf}
+                  >
                     <FileText className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>Export PDF (coming soon)</TooltipContent>
+                <TooltipContent>Export PDF (A4, all zones expanded)</TooltipContent>
               </Tooltip>
             </div>
           </TooltipProvider>
@@ -123,7 +129,7 @@ export function NeutralHomeApp() {
               </CardContent>
             </Card>
           ) : (
-            <NeutralHomeDashboard bundle={bundle} onExporter={onExporter} />
+            <NeutralHomeDashboard bundle={bundle} onExporter={onExporter} printing={printing} />
           )}
         </TabsContent>
         <TabsContent value="settings" className="mt-4">
