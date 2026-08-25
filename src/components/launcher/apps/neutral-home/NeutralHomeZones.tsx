@@ -78,6 +78,7 @@ export function NeutralHomeZones({
   weatherDays = [],
   hddBase,
   weatherNote,
+  expandAll = false,
 }: {
   circuits: CircuitRecord[];
   classes: ClassMap;
@@ -91,6 +92,8 @@ export function NeutralHomeZones({
   hddBase: number;
   /** reason weather is unavailable, when it is */
   weatherNote?: string | null;
+  /** force every zone open (used when printing the dashboard) */
+  expandAll?: boolean;
 }) {
   const [rows, setRows] = useState<RoomHourRow[]>([]);
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({
@@ -276,7 +279,7 @@ export function NeutralHomeZones({
             </thead>
             <tbody>
               {sorted.map((z, i) => {
-                const isOpen = open === z.zone;
+                const isOpen = expandAll || open === z.zone;
                 const t = temps.get(z.zone);
                 const isWarmest = extremes.warmest === z.zone;
                 const isColdest = extremes.coldest === z.zone;

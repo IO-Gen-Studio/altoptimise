@@ -29,7 +29,25 @@ export function NeutralHomeApp() {
   const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(0);
   const [exporter, setExporter] = useState<(() => void) | null>(null);
+  const [printing, setPrinting] = useState(false);
   const onExporter = useCallback((fn: (() => void) | null) => setExporter(() => fn), []);
+
+  // Expand every zone, let charts re-measure, then hand off to the browser's
+  // print dialog (Save as PDF) with the A4 print stylesheet applied.
+  const printPdf = useCallback(() => {
+    setPrinting(true);
+    document.body.classList.add("nh-printing");
+    const done = () => {
+      document.body.classList.remove("nh-printing");
+      setPrinting(false);
+      window.removeEventListener("afterprint", done);
+    };
+    window.addEventListener("afterprint", done);
+    window.setTimeout(() => {
+      window.print();
+      window.setTimeout(done, 500);
+    }, 800);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -88,11 +106,17 @@ export function NeutralHomeApp() {
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="outline" size="icon" aria-label="Export PDF" disabled>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    aria-label="Export PDF"
+                    disabled={loading || printing}
+                    onClick={printPdf}
+                  >
                     <FileText className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>Export PDF (coming soon)</TooltipContent>
+                <TooltipContent>Export PDF (A4, all zones expanded)</TooltipContent>
               </Tooltip>
             </div>
           </TooltipProvider>
@@ -105,7 +129,7 @@ export function NeutralHomeApp() {
               </CardContent>
             </Card>
           ) : (
-            <NeutralHomeDashboard bundle={bundle} onExporter={onExporter} />
+            <NeutralHomeDashboard bundle={bundle} onExporter={onExporter} printing={printing} />
           )}
         </TabsContent>
         <TabsContent value="settings" className="mt-4">

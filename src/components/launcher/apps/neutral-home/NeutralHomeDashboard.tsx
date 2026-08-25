@@ -305,9 +305,12 @@ function KpiCompare({
 export function NeutralHomeDashboard({
   bundle,
   onExporter,
+  printing = false,
 }: {
   bundle: NeutralHomeBundle;
   onExporter?: (fn: (() => void) | null) => void;
+  /** expands every collapsible section for the A4 print layout */
+  printing?: boolean;
 }) {
   const [siteId, setSiteId] = useState<string>("");
 
@@ -796,7 +799,7 @@ export function NeutralHomeDashboard({
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div id="nh-print-root" className="flex flex-col gap-6">
       {period ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           <KpiCompare
@@ -1156,6 +1159,7 @@ export function NeutralHomeDashboard({
             weatherDays={weatherDays}
             hddBase={hddBase}
             weatherNote={weatherNote}
+            expandAll={printing}
           />
 
           <Card>

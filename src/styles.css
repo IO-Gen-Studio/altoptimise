@@ -174,3 +174,51 @@
     color: var(--color-foreground);
   }
 }
+
+/* A4 print layout for the Neutral Home dashboard PDF export. */
+@media print {
+  @page {
+    size: A4;
+    margin: 10mm;
+  }
+
+  html,
+  body {
+    background: #fff;
+  }
+
+  body.nh-printing * {
+    visibility: hidden;
+  }
+
+  body.nh-printing #nh-print-root,
+  body.nh-printing #nh-print-root * {
+    visibility: visible;
+  }
+
+  body.nh-printing #nh-print-root {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    padding: 0;
+    margin: 0;
+  }
+
+  body.nh-printing #nh-print-root [data-slot="card"] {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    box-shadow: none;
+  }
+
+  body.nh-printing #nh-print-root tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  body.nh-printing #nh-print-root .overflow-x-auto,
+  body.nh-printing #nh-print-root .overflow-auto,
+  body.nh-printing #nh-print-root .overflow-hidden {
+    overflow: visible !important;
+  }
+}
