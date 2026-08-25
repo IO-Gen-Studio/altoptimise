@@ -799,7 +799,7 @@ export function NeutralHomeDashboard({
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div id="nh-print-root" className="flex flex-col gap-6">
       {period ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           <KpiCompare
