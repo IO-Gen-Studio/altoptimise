@@ -305,9 +305,12 @@ function KpiCompare({
 export function NeutralHomeDashboard({
   bundle,
   onExporter,
+  printing = false,
 }: {
   bundle: NeutralHomeBundle;
   onExporter?: (fn: (() => void) | null) => void;
+  /** expands every collapsible section for the A4 print layout */
+  printing?: boolean;
 }) {
   const [siteId, setSiteId] = useState<string>("");
 
