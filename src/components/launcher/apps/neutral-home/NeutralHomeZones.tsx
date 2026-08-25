@@ -279,7 +279,7 @@ export function NeutralHomeZones({
             </thead>
             <tbody>
               {sorted.map((z, i) => {
-                const isOpen = open === z.zone;
+                const isOpen = expandAll || open === z.zone;
                 const t = temps.get(z.zone);
                 const isWarmest = extremes.warmest === z.zone;
                 const isColdest = extremes.coldest === z.zone;
