@@ -17,7 +17,10 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
   Legend,
+  Pie,
+  PieChart,
   ResponsiveContainer,
   Tooltip as RTooltip,
   XAxis,
@@ -901,13 +904,38 @@ export function NeutralHomeDashboard({
                 <span>Day / Night Split</span>
                 <Sun className="h-4 w-4 text-primary" />
               </div>
-              <div className="mt-3 text-2xl font-semibold tracking-tight">
-                {num(kpis.dayPct, 1)}% / {num(kpis.nightPct, 1)}%
-              </div>
-              <div className="mt-1 text-xs text-muted-foreground">Day vs. night share of usage</div>
-              <div className="mt-3 flex h-1.5 overflow-hidden rounded-full bg-muted">
-                <div className="bg-amber-500" style={{ width: `${kpis.dayPct}%` }} />
-                <div className="bg-indigo-500" style={{ width: `${kpis.nightPct}%` }} />
+              <div className="mt-3 flex items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="text-2xl font-semibold tracking-tight">
+                    {num(kpis.dayPct, 1)}% / {num(kpis.nightPct, 1)}%
+                  </div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    Day vs. night share of usage
+                  </div>
+                </div>
+                <div className="h-16 w-16 shrink-0">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={[
+                          { name: "Day", value: Math.max(kpis.dayPct, 0) },
+                          { name: "Night", value: Math.max(kpis.nightPct, 0) },
+                        ]}
+                        dataKey="value"
+                        innerRadius={18}
+                        outerRadius={28}
+                        paddingAngle={1}
+                        startAngle={90}
+                        endAngle={-270}
+                        stroke="none"
+                        isAnimationActive={false}
+                      >
+                        <Cell fill="hsl(38 92% 50%)" />
+                        <Cell fill="hsl(243 75% 59%)" />
+                      </Pie>
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
               <div className="mt-3 flex flex-col gap-1">
                 <div className="flex items-center justify-between gap-2 text-xs">
@@ -1114,6 +1142,21 @@ export function NeutralHomeDashboard({
               </CardContent>
             </Card>
           ) : null}
+
+          <NeutralHomeZones
+            circuits={circuits}
+            classes={classes}
+            roomMap={bundle.roomMap}
+            siteId={siteId}
+            band={{
+              min: settings?.comfort_min_c ?? DEFAULT_BAND.min,
+              max: settings?.comfort_max_c ?? DEFAULT_BAND.max,
+            }}
+            temperaturePeriodId={period.source_temperature_filename ? period.id : null}
+            weatherDays={weatherDays}
+            hddBase={hddBase}
+            weatherNote={weatherNote}
+          />
 
           <Card>
             <CardContent className="p-5">
@@ -1360,21 +1403,6 @@ export function NeutralHomeDashboard({
               classes={classes}
             />
           ) : null}
-
-          <NeutralHomeZones
-            circuits={circuits}
-            classes={classes}
-            roomMap={bundle.roomMap}
-            siteId={siteId}
-            band={{
-              min: settings?.comfort_min_c ?? DEFAULT_BAND.min,
-              max: settings?.comfort_max_c ?? DEFAULT_BAND.max,
-            }}
-            temperaturePeriodId={period.source_temperature_filename ? period.id : null}
-            weatherDays={weatherDays}
-            hddBase={hddBase}
-            weatherNote={weatherNote}
-          />
         </>
       )}
     </div>
