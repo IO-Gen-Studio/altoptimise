@@ -1143,6 +1143,21 @@ export function NeutralHomeDashboard({
             </Card>
           ) : null}
 
+          <NeutralHomeZones
+            circuits={circuits}
+            classes={classes}
+            roomMap={bundle.roomMap}
+            siteId={siteId}
+            band={{
+              min: settings?.comfort_min_c ?? DEFAULT_BAND.min,
+              max: settings?.comfort_max_c ?? DEFAULT_BAND.max,
+            }}
+            temperaturePeriodId={period.source_temperature_filename ? period.id : null}
+            weatherDays={weatherDays}
+            hddBase={hddBase}
+            weatherNote={weatherNote}
+          />
+
           <Card>
             <CardContent className="p-5">
               <h2 className="pb-1 text-base font-semibold tracking-tight">
