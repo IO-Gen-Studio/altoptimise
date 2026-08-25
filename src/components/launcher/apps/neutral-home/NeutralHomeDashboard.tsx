@@ -1159,6 +1159,7 @@ export function NeutralHomeDashboard({
             weatherDays={weatherDays}
             hddBase={hddBase}
             weatherNote={weatherNote}
+            expandAll={printing}
           />
 
           <Card>
