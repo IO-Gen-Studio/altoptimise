@@ -1403,21 +1403,6 @@ export function NeutralHomeDashboard({
               classes={classes}
             />
           ) : null}
-
-          <NeutralHomeZones
-            circuits={circuits}
-            classes={classes}
-            roomMap={bundle.roomMap}
-            siteId={siteId}
-            band={{
-              min: settings?.comfort_min_c ?? DEFAULT_BAND.min,
-              max: settings?.comfort_max_c ?? DEFAULT_BAND.max,
-            }}
-            temperaturePeriodId={period.source_temperature_filename ? period.id : null}
-            weatherDays={weatherDays}
-            hddBase={hddBase}
-            weatherNote={weatherNote}
-          />
         </>
       )}
     </div>
