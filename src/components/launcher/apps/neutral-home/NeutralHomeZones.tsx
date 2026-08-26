@@ -22,7 +22,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { loadNhRoomHours, type NhRoomMap } from "@/lib/neutral-home.functions";
+import { loadNhRoomDays, type NhRoomMap } from "@/lib/neutral-home.functions";
 import type { CircuitRecord } from "@/lib/neutral-home/analytics";
 import type { ComfortBand, RoomHourRow } from "@/lib/neutral-home/temp-analytics";
 import {
@@ -108,7 +108,7 @@ export function NeutralHomeZones({
       return;
     }
     let cancelled = false;
-    loadNhRoomHours({ data: { periodId: temperaturePeriodId } })
+    loadNhRoomDays({ data: { periodId: temperaturePeriodId } })
       .then((r) => {
         if (!cancelled) setRows(r);
       })
