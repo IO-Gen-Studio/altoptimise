@@ -612,8 +612,9 @@ function ComfortScore({ inBand, total }: { inBand: number; total: number }) {
         />
       </div>
       <div className="pt-1 text-[11px] text-muted-foreground">
-        {rating} · {num(inBand)} of {num(total)} readings in band
+        {rating} · {num(inBand)} of {num(total)} days in band
       </div>
+
     </div>
   );
 }
