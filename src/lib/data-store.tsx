@@ -420,30 +420,41 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
     consumptionLoadVersion.current = version;
     await refreshMetadata();
 
-    // Consumption is large (48-value arrays × tens of thousands of rows).
-    // If we already have rows on screen (e.g. hydrated from IndexedDB cache),
-    // keep them visible untouched and only swap in the fresh dataset once the
-    // full fetch completes — otherwise partial pages would wipe out the cached
-    // view and make dashboards look like they are constantly reloading.
-    let hasExisting = false;
-    let cachedCount = 0;
+    // Consumption is large (48-value arrays × ~190k rows). Downloading it in
+    // full on every visit was by far the heaviest thing this app did, so the
+    // cached copy is treated as authoritative and only *changed* rows are
+    // pulled, using the server `updated_at` watermark. A full download happens
+    // only on a device's first load, or if rows were deleted server-side.
+    let existing: ConsumptionRow[] = [];
     setState((s) => {
-      hasExisting = s.consumption.length > 0;
-      cachedCount = s.consumption.length;
+      existing = s.consumption;
       return s;
     });
+    const watermark = existing.length > 0 ? cacheWatermark(existing) : null;
+    const hasExisting = existing.length > 0;
 
-    // Cheap freshness probe: if the server row count matches what we already
-    // hydrated from the IndexedDB cache, the heavy paginated fetch is pure
-    // waste — skip it entirely so repeat loads are instant.
-    if (hasExisting) {
+    if (hasExisting && watermark) {
       const serverCount = await fetchConsumptionCount();
       if (consumptionLoadVersion.current !== version) return;
-      if (serverCount != null && serverCount === cachedCount) return;
+      const changed = await fetchConsumption(watermark);
+      if (consumptionLoadVersion.current !== version) return;
+      const merged = mergeConsumption(existing, changed);
+      // Row count agreeing means nothing was deleted behind our back, so the
+      // incremental merge is a faithful copy of the server state.
+      if (serverCount == null || serverCount === merged.length) {
+        if (changed.length > 0) {
+          setState((s) => {
+            const next = { ...s, consumption: merged };
+            scheduleCacheSave(next);
+            return next;
+          });
+        }
+        return;
+      }
     }
 
     const accumulated: ConsumptionRow[] = [];
-    void fetchConsumption((pageRows, pageIndex) => {
+    void fetchConsumption(null, (pageRows, pageIndex) => {
       if (consumptionLoadVersion.current !== version) return;
       accumulated.push(...pageRows);
       // Only stream progressive updates when there is nothing on screen yet.
@@ -459,6 +470,7 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
         });
       }
     });
+
   }, [refreshMetadata, scheduleCacheSave]);
 
   // Load on mount + whenever auth state changes. Hydrate from IndexedDB cache
