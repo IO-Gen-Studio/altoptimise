@@ -55,7 +55,10 @@ export interface ConsumptionRow {
   interval_date: string; // YYYY-MM-DD
   half_hourly_values: (number | null)[]; // 48 slots
   meter_display_name?: string | null;
+  /** Server watermark used for incremental sync; absent on locally-created rows. */
+  updated_at?: string;
 }
+
 
 export type SchemaLabels = Record<string, string>;
 
