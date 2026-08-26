@@ -427,6 +427,44 @@ export const loadNhRoomHours = createServerFn({ method: "POST" })
 
   });
 
+/**
+ * Daily roll-up of room temperatures, aggregated in Postgres. Dashboard views
+ * only ever plot daily averages, so pulling ~24× fewer rows than the hourly
+ * loader keeps cloud egress (and load time) down. Rows are shaped like
+ * RoomHourRow with hour_ts pinned to midnight so existing analytics reuse.
+ */
+export const loadNhRoomDays = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ periodId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }): Promise<RoomHourRow[]> => {
+    const { data: rows, error } = await context.supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .rpc("nh_room_days" as any, { _period_id: data.periodId });
+    if (error) throw new Error(error.message);
+    const list = (rows ?? []) as unknown as Array<{
+      room_name: string;
+      day: string;
+      temp_min: number | null;
+      temp_avg: number | null;
+      temp_max: number | null;
+      set_temp_avg: number | null;
+      on_share: number | null;
+      reading_count: number;
+    }>;
+    return list.map((r) => ({
+      period_id: data.periodId,
+      room_name: r.room_name,
+      hour_ts: `${r.day}T00:00:00.000Z`,
+      temp_min: r.temp_min == null ? null : Number(r.temp_min),
+      temp_avg: r.temp_avg == null ? null : Number(r.temp_avg),
+      temp_max: r.temp_max == null ? null : Number(r.temp_max),
+      set_temp_avg: r.set_temp_avg == null ? null : Number(r.set_temp_avg),
+      on_share: r.on_share == null ? null : Number(r.on_share),
+      reading_count: Number(r.reading_count ?? 0),
+    }));
+  });
+
+
 const RoomMapInput = z.object({
   organization_id: z.string().uuid(),
   site_id: z.string().uuid(),
