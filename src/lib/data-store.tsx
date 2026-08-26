@@ -292,7 +292,17 @@ async function fetchAll(): Promise<State> {
   return s;
 }
 
-async function fetchConsumption(onPage?: (rows: ConsumptionRow[], pageIndex: number) => void): Promise<ConsumptionRow[]> {
+// Only the columns the app actually renders — `created_at` and other unused
+// fields would otherwise inflate every page of this (large) table.
+const CONSUMPTION_COLUMNS =
+  "id,organization_id,building_id,original_org_unit_name,meter_name,meter_factor," +
+  "variable_code,variable_name,variable_category,interval_date,half_hourly_values," +
+  "meter_display_name,updated_at";
+
+async function fetchConsumption(
+  since: string | null,
+  onPage?: (rows: ConsumptionRow[], pageIndex: number) => void,
+): Promise<ConsumptionRow[]> {
     const PAGE = 1000;
     let lastId: string | null = null;
     const all: Record<string, unknown>[] = [];
@@ -300,14 +310,15 @@ async function fetchConsumption(onPage?: (rows: ConsumptionRow[], pageIndex: num
     while (true) {
       let query = supabase
         .from("consumption_rows")
-        .select("*")
+        .select(CONSUMPTION_COLUMNS)
         .order("id")
         .limit(PAGE);
+      if (since) query = query.gt("updated_at", since);
       if (lastId) query = query.gt("id", lastId);
       const { data, error } = await query;
       if (error) { console.error("consumption fetch", error); break; }
       if (!data || data.length === 0) break;
-      const pageRows = data as Record<string, unknown>[];
+      const pageRows = data as unknown as Record<string, unknown>[];
       all.push(...pageRows);
       pageIndex += 1;
       onPage?.(pageRows.map(rowFromDb), pageIndex);
@@ -323,6 +334,24 @@ async function fetchConsumptionCount(): Promise<number | null> {
   if (error) { console.error("consumption count", error); return null; }
   return count ?? null;
 }
+
+/** Highest server watermark across cached rows, or null if any row predates it. */
+function cacheWatermark(rows: ConsumptionRow[]): string | null {
+  let max: string | null = null;
+  for (const r of rows) {
+    if (!r.updated_at) return null;
+    if (max === null || r.updated_at > max) max = r.updated_at;
+  }
+  return max;
+}
+
+function mergeConsumption(existing: ConsumptionRow[], changed: ConsumptionRow[]): ConsumptionRow[] {
+  if (changed.length === 0) return existing;
+  const byId = new Map(existing.map((r) => [r.id, r]));
+  for (const r of changed) byId.set(r.id, r);
+  return Array.from(byId.values());
+}
+
 
 function rowFromDb(r: Record<string, unknown>): ConsumptionRow {
   return {
