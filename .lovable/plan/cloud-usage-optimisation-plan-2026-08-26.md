@@ -12,6 +12,7 @@ So the credits go on compute hours + egress from re-reading a 222 MB table clien
 ## The fix, in priority order
 
 ### 1. Stop shipping the whole consumption table to the browser
+
 Replace the "load everything into React state" model with server-side aggregation:
 
 - Add Postgres aggregate functions (called through server functions) that return **only what each mini-app charts**: daily/meter totals, day-night splits, baseload percentiles, league-table rollups, validation flags. These return hundreds of rows instead of ~190,000.
@@ -19,24 +20,29 @@ Replace the "load everything into React state" model with server-side aggregatio
 - Raw half-hourly rows are fetched only for the single meter/date window a user actually opens.
 
 ### 2. Make the cache authoritative instead of re-downloading
+
 - Keep the IndexedDB cache, but revalidate with a cheap `max(updated_at)` watermark per organisation and fetch **only rows changed since** the cached watermark, instead of the current row-count probe followed by a full re-download.
 - Requires an `updated_at` column (with trigger) on `consumption_rows` if not already reliable.
 
 ### 3. Index the access paths the new queries use
+
 - `(organization_id, interval_date)`, `(organization_id, meter_name, interval_date)` on `consumption_rows`.
 - `(period_id, hour_ts)` on `neutral_home_room_hours`.
 This turns the current sequential scans into index scans and cuts per-call time sharply.
 
 ### 4. Aggregate the temperature reads
-- Roll `neutral_home_room_hours` up to per-room-per-day in SQL for the dashboard views; keep hourly rows only for the heatmap of the selected zone/month.
+
+- Roll `neutral_home_room_hours` up to per-room-per-day in SQL for the dashboard views; keep hourly rows only for the heatmap of the selected zone/month. - remove the heat maps on the dashboard. These are no longer required so we can add further optimisation on the app. 
 
 ### 5. Retention and cron hygiene (storage + write volume)
+
 - Trim `energy_price_sync_log` to the last 14 days, and log only failures plus one daily success summary.
 - Keep `energy_unit_rates` for a rolling window (e.g. 120 days) and drop older rates; the pricing app never charts beyond that.
 - Reduce the Agile price sync from every 30 minutes to hourly (with one extra run in the 16:00-18:00 UK window where the day-ahead prices publish). Same freshness, roughly a third of the writes.
 - Reclaim space with a `VACUUM`/reindex pass after the pruning migration.
 
 ### 6. Guardrails so it does not regress
+
 - Lint-level rule of thumb documented in `AGENTS.md`: no unbounded `select("*")` against `consumption_rows` or `neutral_home_room_hours` from client code.
 - A small "data volume" note in Settings showing row counts and last sync, so growth is visible.
 
