@@ -22,7 +22,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { loadNhRoomHours, type NhRoomMap } from "@/lib/neutral-home.functions";
+import { loadNhRoomDays, type NhRoomMap } from "@/lib/neutral-home.functions";
 import type { CircuitRecord } from "@/lib/neutral-home/analytics";
 import type { ComfortBand, RoomHourRow } from "@/lib/neutral-home/temp-analytics";
 import {
@@ -108,7 +108,7 @@ export function NeutralHomeZones({
       return;
     }
     let cancelled = false;
-    loadNhRoomHours({ data: { periodId: temperaturePeriodId } })
+    loadNhRoomDays({ data: { periodId: temperaturePeriodId } })
       .then((r) => {
         if (!cancelled) setRows(r);
       })
@@ -612,8 +612,9 @@ function ComfortScore({ inBand, total }: { inBand: number; total: number }) {
         />
       </div>
       <div className="pt-1 text-[11px] text-muted-foreground">
-        {rating} · {num(inBand)} of {num(total)} readings in band
+        {rating} · {num(inBand)} of {num(total)} days in band
       </div>
+
     </div>
   );
 }

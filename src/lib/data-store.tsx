@@ -55,7 +55,10 @@ export interface ConsumptionRow {
   interval_date: string; // YYYY-MM-DD
   half_hourly_values: (number | null)[]; // 48 slots
   meter_display_name?: string | null;
+  /** Server watermark used for incremental sync; absent on locally-created rows. */
+  updated_at?: string;
 }
+
 
 export type SchemaLabels = Record<string, string>;
 
@@ -289,7 +292,17 @@ async function fetchAll(): Promise<State> {
   return s;
 }
 
-async function fetchConsumption(onPage?: (rows: ConsumptionRow[], pageIndex: number) => void): Promise<ConsumptionRow[]> {
+// Only the columns the app actually renders — `created_at` and other unused
+// fields would otherwise inflate every page of this (large) table.
+const CONSUMPTION_COLUMNS =
+  "id,organization_id,building_id,original_org_unit_name,meter_name,meter_factor," +
+  "variable_code,variable_name,variable_category,interval_date,half_hourly_values," +
+  "meter_display_name,updated_at";
+
+async function fetchConsumption(
+  since: string | null,
+  onPage?: (rows: ConsumptionRow[], pageIndex: number) => void,
+): Promise<ConsumptionRow[]> {
     const PAGE = 1000;
     let lastId: string | null = null;
     const all: Record<string, unknown>[] = [];
@@ -297,14 +310,15 @@ async function fetchConsumption(onPage?: (rows: ConsumptionRow[], pageIndex: num
     while (true) {
       let query = supabase
         .from("consumption_rows")
-        .select("*")
+        .select(CONSUMPTION_COLUMNS)
         .order("id")
         .limit(PAGE);
+      if (since) query = query.gt("updated_at", since);
       if (lastId) query = query.gt("id", lastId);
       const { data, error } = await query;
       if (error) { console.error("consumption fetch", error); break; }
       if (!data || data.length === 0) break;
-      const pageRows = data as Record<string, unknown>[];
+      const pageRows = data as unknown as Record<string, unknown>[];
       all.push(...pageRows);
       pageIndex += 1;
       onPage?.(pageRows.map(rowFromDb), pageIndex);
@@ -320,6 +334,24 @@ async function fetchConsumptionCount(): Promise<number | null> {
   if (error) { console.error("consumption count", error); return null; }
   return count ?? null;
 }
+
+/** Highest server watermark across cached rows, or null if any row predates it. */
+function cacheWatermark(rows: ConsumptionRow[]): string | null {
+  let max: string | null = null;
+  for (const r of rows) {
+    if (!r.updated_at) return null;
+    if (max === null || r.updated_at > max) max = r.updated_at;
+  }
+  return max;
+}
+
+function mergeConsumption(existing: ConsumptionRow[], changed: ConsumptionRow[]): ConsumptionRow[] {
+  if (changed.length === 0) return existing;
+  const byId = new Map(existing.map((r) => [r.id, r]));
+  for (const r of changed) byId.set(r.id, r);
+  return Array.from(byId.values());
+}
+
 
 function rowFromDb(r: Record<string, unknown>): ConsumptionRow {
   return {
@@ -388,30 +420,41 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
     consumptionLoadVersion.current = version;
     await refreshMetadata();
 
-    // Consumption is large (48-value arrays × tens of thousands of rows).
-    // If we already have rows on screen (e.g. hydrated from IndexedDB cache),
-    // keep them visible untouched and only swap in the fresh dataset once the
-    // full fetch completes — otherwise partial pages would wipe out the cached
-    // view and make dashboards look like they are constantly reloading.
-    let hasExisting = false;
-    let cachedCount = 0;
+    // Consumption is large (48-value arrays × ~190k rows). Downloading it in
+    // full on every visit was by far the heaviest thing this app did, so the
+    // cached copy is treated as authoritative and only *changed* rows are
+    // pulled, using the server `updated_at` watermark. A full download happens
+    // only on a device's first load, or if rows were deleted server-side.
+    let existing: ConsumptionRow[] = [];
     setState((s) => {
-      hasExisting = s.consumption.length > 0;
-      cachedCount = s.consumption.length;
+      existing = s.consumption;
       return s;
     });
+    const watermark = existing.length > 0 ? cacheWatermark(existing) : null;
+    const hasExisting = existing.length > 0;
 
-    // Cheap freshness probe: if the server row count matches what we already
-    // hydrated from the IndexedDB cache, the heavy paginated fetch is pure
-    // waste — skip it entirely so repeat loads are instant.
-    if (hasExisting) {
+    if (hasExisting && watermark) {
       const serverCount = await fetchConsumptionCount();
       if (consumptionLoadVersion.current !== version) return;
-      if (serverCount != null && serverCount === cachedCount) return;
+      const changed = await fetchConsumption(watermark);
+      if (consumptionLoadVersion.current !== version) return;
+      const merged = mergeConsumption(existing, changed);
+      // Row count agreeing means nothing was deleted behind our back, so the
+      // incremental merge is a faithful copy of the server state.
+      if (serverCount == null || serverCount === merged.length) {
+        if (changed.length > 0) {
+          setState((s) => {
+            const next = { ...s, consumption: merged };
+            scheduleCacheSave(next);
+            return next;
+          });
+        }
+        return;
+      }
     }
 
     const accumulated: ConsumptionRow[] = [];
-    void fetchConsumption((pageRows, pageIndex) => {
+    void fetchConsumption(null, (pageRows, pageIndex) => {
       if (consumptionLoadVersion.current !== version) return;
       accumulated.push(...pageRows);
       // Only stream progressive updates when there is nothing on screen yet.
@@ -427,6 +470,7 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
         });
       }
     });
+
   }, [refreshMetadata, scheduleCacheSave]);
 
   // Load on mount + whenever auth state changes. Hydrate from IndexedDB cache

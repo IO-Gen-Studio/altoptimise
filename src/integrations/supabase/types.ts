@@ -85,6 +85,7 @@ export type Database = {
           meter_name: string
           organization_id: string
           original_org_unit_name: string
+          updated_at: string
           variable_category: string
           variable_code: string
           variable_name: string
@@ -100,6 +101,7 @@ export type Database = {
           meter_name: string
           organization_id: string
           original_org_unit_name?: string
+          updated_at?: string
           variable_category?: string
           variable_code?: string
           variable_name?: string
@@ -115,6 +117,7 @@ export type Database = {
           meter_name?: string
           organization_id?: string
           original_org_unit_name?: string
+          updated_at?: string
           variable_category?: string
           variable_code?: string
           variable_name?: string
@@ -1618,6 +1621,20 @@ export type Database = {
         Returns: boolean
       }
       is_manager: { Args: { _user_id: string }; Returns: boolean }
+      nh_room_days: {
+        Args: { _period_id: string }
+        Returns: {
+          day: string
+          on_share: number
+          reading_count: number
+          room_name: string
+          set_temp_avg: number
+          temp_avg: number
+          temp_max: number
+          temp_min: number
+        }[]
+      }
+      prune_energy_history: { Args: never; Returns: undefined }
       refresh_meter_registry_cache_one: {
         Args: { _organization_id: string; _raw_meter_name: string }
         Returns: undefined

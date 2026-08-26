@@ -111,11 +111,27 @@ async function logSync(
   error?: string,
 ) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  // Successes are logged at most once per product/region/day; failures always.
+  // Logging every 30-minute success grew this table without adding signal.
+  if (status === "ok") {
+    const since = new Date();
+    since.setUTCHours(0, 0, 0, 0);
+    const { count } = await supabaseAdmin
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .from("energy_price_sync_log" as any)
+      .select("id", { count: "exact", head: true })
+      .eq("product_code", productCode)
+      .eq("region_code", region)
+      .eq("status", "ok")
+      .gte("created_at", since.toISOString());
+    if ((count ?? 0) > 0) return;
+  }
   await supabaseAdmin
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .from("energy_price_sync_log" as any)
     .insert({ product_code: productCode, region_code: region, rows_written: rows, status, error: error ?? null });
 }
+
 
 /** Every region referenced by a building or organisation default. */
 export async function activeRegions(): Promise<string[]> {
