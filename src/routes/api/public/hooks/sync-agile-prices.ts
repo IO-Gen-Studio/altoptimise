@@ -12,6 +12,10 @@ export const Route = createFileRoute("/api/public/hooks/sync-agile-prices")({
           if (!isAuthorizedCronRequest(request)) {
             return Response.json({ error: "Unauthorized" }, { status: 401 });
           }
+          const { isFeatureEnabledServer } = await import("@/lib/app-features.server");
+          if (!(await isFeatureEnabledServer("agile-pricing"))) {
+            return Response.json({ ok: true, skipped: "agile-pricing disabled" });
+          }
           const { syncAllPrices } = await import("@/lib/pricing.server");
           const results = await syncAllPrices();
           const rows = results.reduce((a, r) => a + r.rows, 0);
