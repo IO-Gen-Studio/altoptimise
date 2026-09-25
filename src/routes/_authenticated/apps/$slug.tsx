@@ -1,5 +1,7 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
-import { ArrowLeft, Lock } from "lucide-react";
+import { ArrowLeft, Lock, PowerOff } from "lucide-react";
+
+import { useAppFeatures } from "@/lib/app-features";
 
 import { AppShell } from "@/components/launcher/AppShell";
 import { Button } from "@/components/ui/button";
@@ -45,7 +47,9 @@ export const Route = createFileRoute("/_authenticated/apps/$slug")({
 function AppView() {
   const { app } = Route.useLoaderData();
   const { persona, appAccess } = useLauncher();
+  const { isEnabled, isLoading: featuresLoading } = useAppFeatures();
   const allowed = canAccess(app, persona.role, appAccess);
+  const deactivated = !featuresLoading && !isEnabled(app.slug);
 
   return (
     <AppShell>
