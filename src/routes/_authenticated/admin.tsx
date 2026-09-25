@@ -9,6 +9,7 @@ import { OrganisationsPanel } from "@/components/admin/OrganisationsPanel";
 import { SchemaLabelsEditor } from "@/components/admin/SchemaLabelsEditor";
 import { RefrigerationPanel } from "@/components/admin/RefrigerationPanel";
 import { AppOrderPanel } from "@/components/admin/AppOrderPanel";
+import { AppFeaturePanel } from "@/components/admin/AppFeaturePanel";
 import { AppShell } from "@/components/launcher/AppShell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -73,7 +74,10 @@ function AdminPage() {
               <SchemaLabelsEditor />
             </TabsContent>
             <TabsContent value="refrigeration"><RefrigerationPanel /></TabsContent>
-            <TabsContent value="apps"><AppOrderPanel /></TabsContent>
+            <TabsContent value="apps" className="space-y-6">
+              <AppFeaturePanel />
+              <AppOrderPanel />
+            </TabsContent>
           </Tabs>
         )}
       </div>
