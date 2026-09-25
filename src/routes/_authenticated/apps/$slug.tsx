@@ -82,6 +82,22 @@ function AppView() {
               </Button>
             </CardContent>
           </Card>
+        ) : deactivated ? (
+          <Card className="border-dashed">
+            <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
+              <div className="grid h-12 w-12 place-items-center rounded-full bg-muted">
+                <PowerOff className="h-5 w-5 text-muted-foreground" />
+              </div>
+              <h2 className="text-lg font-semibold">{app.name} is switched off</h2>
+              <p className="max-w-sm text-sm text-muted-foreground">
+                This app has been deactivated, so it isn't running or updating. A super admin can
+                switch it back on in Settings under Apps. Your saved data is untouched.
+              </p>
+              <Button asChild size="sm" variant="outline" className="mt-2">
+                <Link to="/dashboard">Return to launcher</Link>
+              </Button>
+            </CardContent>
+          </Card>
         ) : app.slug === "baseload" ? (
           <BaseloadApp />
         ) : app.slug === "sustainability" ? (
