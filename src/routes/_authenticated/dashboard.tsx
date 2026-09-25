@@ -23,6 +23,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { APPS, canAccess, ROLE_LABEL, useLauncher, type MiniApp } from "@/lib/launcher-context";
 import { useAppOrder, useAppVisibility } from "@/lib/app-order";
+import { useAppFeatures } from "@/lib/app-features";
 import { useEffect, useMemo, useState } from "react";
 import { loadNeutralHome } from "@/lib/neutral-home.functions";
 import { computeKpis } from "@/lib/neutral-home/analytics";
@@ -74,8 +75,9 @@ function LauncherHome() {
   const { persona, org, appAccess } = useLauncher();
   const { orderedApps } = useAppOrder();
   const { isHidden } = useAppVisibility();
+  const { isEnabled } = useAppFeatures();
   const visibleApps = orderedApps.filter(
-    (a) => !isHidden(a.id) && canAccess(a, persona.role, appAccess),
+    (a) => !isHidden(a.id) && isEnabled(a.slug) && canAccess(a, persona.role, appAccess),
   );
   const { consumption } = useConsumption();
   const { organisations } = useOrganisations();
