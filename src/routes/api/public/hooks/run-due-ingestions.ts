@@ -11,6 +11,10 @@ export const Route = createFileRoute("/api/public/hooks/run-due-ingestions")({
         if (!isAuthorizedCronRequest(request)) {
           return Response.json({ error: "Unauthorized" }, { status: 401 });
         }
+        const { isFeatureEnabledServer } = await import("@/lib/app-features.server");
+        if (!(await isFeatureEnabledServer("scheduled-ingestion"))) {
+          return Response.json({ ok: true, skipped: "scheduled-ingestion disabled" });
+        }
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const now = new Date();
         const hhmm = `${String(now.getUTCHours()).padStart(2, "0")}:${String(now.getUTCMinutes()).padStart(2, "0")}`;
