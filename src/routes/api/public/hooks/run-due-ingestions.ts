@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-// Called by pg_cron every minute. Runs any enabled ingestion schedule whose
-// scheduled_time (UTC HH:mm) matches the current minute and hasn't been
-// successfully synced today.
+// Called by pg_cron once daily (03:30 UTC). Runs every enabled ingestion
+// schedule whose scheduled_time (UTC HH:mm) has already passed today and
+// which hasn't been successfully synced today.
 export const Route = createFileRoute("/api/public/hooks/run-due-ingestions")({
   server: {
     handlers: {
@@ -25,7 +25,7 @@ export const Route = createFileRoute("/api/public/hooks/run-due-ingestions")({
           .from("ingestion_schedules" as any)
           .select("id, scheduled_time, enabled, last_synced_at, last_status")
           .eq("enabled", true)
-          .eq("scheduled_time", hhmm);
+          .lte("scheduled_time", hhmm);
         if (error) return Response.json({ error: error.message }, { status: 500 });
 
         type Row = { id: string; last_synced_at: string | null; last_status: string | null };
